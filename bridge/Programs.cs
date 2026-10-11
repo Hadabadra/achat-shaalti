@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Management;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -29,6 +30,7 @@ public static class Programs
     };
 
     private static DateTime _graceUntil = DateTime.MinValue;
+    private static DateTime _lastLaunchAt = DateTime.MinValue;
 
     public sealed class Entry
     {
@@ -144,6 +146,7 @@ public static class Programs
         if (!File.Exists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);
 
         _graceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
+        _lastLaunchAt = DateTime.UtcNow;
         using (var started = Process.Start(new ProcessStartInfo(e.Path)
         {
             UseShellExecute = true,
@@ -389,22 +392,89 @@ public static class Programs
         try
         {
             using var p = Process.GetProcessById((int)foregroundPid);
-            string fg = p.ProcessName.ToLowerInvariant();
-            var list = Load();
-            if (list.Any(e => ProcNames(e).Contains(fg))) return true;
-
-            string exe = null;
-            try { exe = p.MainModule?.FileName; } catch { /* תהליך מוגבה או ללא גישה */ }
-            if (!string.IsNullOrEmpty(exe))
-                foreach (var e in list)
-                {
-                    if (exe.Equals(e.Path, StringComparison.OrdinalIgnoreCase)) return true;
-                    string dir = System.IO.Path.GetDirectoryName(e.Path);
-                    if (!BroadDir(dir) && exe.StartsWith(dir.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) return true;
-                }
-            return IsLaunchedTree((int)foregroundPid);
+            if (MatchesList(p, Load())) return true;
+            if (IsLaunchedTree((int)foregroundPid)) return true;
+            // תוכנה שהחלון שלה שייך לתהליך אחר מהקובץ שהופעל (מפעיל נפרד, תהליך עזר, מופע יחיד):
+            // כל תהליך חדש שנפתח בדקות שאחרי הפתיחה דרך הגשר, שאינו מעטפת/מנהל מערכת/אוצריא/הגשר
+            return !IsOwnOrBlocked(p) && IsNewAfterLaunch(p);
         }
         catch { return false; }
+    }
+
+    /// <summary>האם התהליך הוא תוכנה מהרשימה: לפי שם תהליך, קובץ הפעלה מלא, או תיקיית ההתקנה (לא רחבה)</summary>
+    private static bool MatchesList(Process p, IEnumerable<Entry> list)
+    {
+        string fg = p.ProcessName.ToLowerInvariant();
+        if (list.Any(e => ProcNames(e).Contains(fg))) return true;
+        string exe = null;
+        try { exe = p.MainModule?.FileName; } catch { /* תהליך מוגבה או ללא גישה */ }
+        if (string.IsNullOrEmpty(exe)) return false;
+        foreach (var e in list)
+        {
+            if (exe.Equals(e.Path, StringComparison.OrdinalIgnoreCase)) return true;
+            string dir = System.IO.Path.GetDirectoryName(e.Path);
+            if (!BroadDir(dir) && exe.StartsWith(dir.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>אוצריא, הגשר, מעטפות ומנהלי מערכת: לעולם לא "תוכנה שנפתחה"</summary>
+    private static bool IsOwnOrBlocked(Process p)
+    {
+        if (p.Id == Environment.ProcessId) return true;
+        string n = p.ProcessName;
+        if (Blocked.Contains(n)) return true;
+        string otz = System.IO.Path.GetFileNameWithoutExtension(Kiosk.OtzariaPath() ?? "otzaria");
+        return n.Equals(otz, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool StartedAfterLaunch(Process p)
+    {
+        if (_lastLaunchAt == DateTime.MinValue) return false;
+        try { return p.StartTime.ToUniversalTime() >= _lastLaunchAt.AddSeconds(-3); }
+        catch { return false; } // תהליך מוגבה: אין גישה לזמן ההתחלה
+    }
+
+    /// <summary>תהליך שהתחיל בין 3 שניות לפני הפתיחה דרך הגשר לבין 90 שניות אחריה</summary>
+    private static bool IsNewAfterLaunch(Process p)
+    {
+        if (!StartedAfterLaunch(p)) return false;
+        try { return p.StartTime.ToUniversalTime() <= _lastLaunchAt.AddSeconds(90); }
+        catch { return false; }
+    }
+
+    private delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc cb, IntPtr l);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr h, uint cmd);
+    [DllImport("user32.dll")] private static extern int GetWindowTextLength(IntPtr h);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+
+    /// <summary>
+    /// מחפש חלון ראשי גלוי (עם כותרת, בלי בעלים) של תהליך שהוא התוכנה שנפתחה: מהרשימה, או חדש אחרי הפתיחה
+    /// (כולל תהליכי בן). כך מוצאים את החלון גם כשהוא לא שייך לתהליך עם שם הקובץ שהופעל.
+    /// </summary>
+    private static IntPtr FindLaunchedWindow(int session, Entry e)
+    {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((h, _) =>
+        {
+            if (!IsWindowVisible(h) || GetWindow(h, 4 /* GW_OWNER */) != IntPtr.Zero || GetWindowTextLength(h) == 0) return true;
+            GetWindowThreadProcessId(h, out uint pid);
+            try
+            {
+                using var p = Process.GetProcessById((int)pid);
+                if (p.SessionId != session || IsOwnOrBlocked(p)) return true;
+                if (MatchesList(p, new[] { e }) || (StartedAfterLaunch(p) && (IsNewAfterLaunch(p) || IsLaunchedTree((int)pid))))
+                {
+                    found = h;
+                    return false;
+                }
+            }
+            catch { /* תהליך נסגר או ללא גישה */ }
+            return true;
+        }, IntPtr.Zero);
+        return found;
     }
 
     /// <summary>מביא את חלון התוכנה שנפתחה לחזית (עד כ-20 שניות; תוכנות כבדות נפתחות לאט)</summary>
@@ -429,6 +499,16 @@ public static class Programs
                             return;
                         }
                     }
+                // החלון שייך לתהליך אחר מהקובץ שהופעל (מפעיל נפרד): מחפשים לפי החלונות הגלויים
+                IntPtr w = FindLaunchedWindow(session, e);
+                if (w != IntPtr.Zero)
+                {
+                    Kiosk.BringToFront(w);
+                    Thread.Sleep(600);
+                    Kiosk.BringToFront(w);
+                    Config.Log("programs focus: החלון נמצא לפי תהליך חדש ולא לפי שם הקובץ (" + e.Name + ")");
+                    return;
+                }
             }
             catch (Exception ex) { Config.Log("programs focus: " + ex.Message); }
         }

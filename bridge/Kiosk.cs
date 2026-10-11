@@ -283,6 +283,7 @@ public static class Kiosk
             _watchdog?.Dispose();
             _watchdog = null;
             Tray.Invoke(RemoveHook);
+            RestoreWindowFrame();
             ClearRegistry();
             StartExplorer();
             Tray.SetKioskState(false);
@@ -407,8 +408,47 @@ public static class Kiosk
         }
     }
 
-    private const uint SwpNoZOrder = 0x0004, SwpNoActivate = 0x0010;
+    private const uint SwpNoZOrder = 0x0004, SwpNoActivate = 0x0010, SwpNoMove = 0x0002, SwpNoSize = 0x0001, SwpFrameChanged = 0x0020;
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hWnd);
+
+    private static IntPtr _fsHwnd = IntPtr.Zero;
+    private static long _fsOrigStyle;
+
+    /// <summary>
+    /// מסך מלא אמיתי של אוצריא בנעילה: מסיר כותרת ומסגרת וממלא את כל המסך. אם אוצריא כבר ללא מסגרת
+    /// (מסך מלא שלה עצמה) לא נוגעים בה. המסגרת המקורית מוחזרת ביציאה מהנעילה. כיבוי: kiosk.fullscreenOtzaria=false.
+    /// </summary>
+    private static void MakeFullscreen(IntPtr hwnd)
+    {
+        const int GwlStyle = -16;
+        const long WsCaption = 0xC00000, WsThickFrame = 0x40000;
+        long style = GetWindowLongPtr(hwnd, GwlStyle).ToInt64();
+        if ((style & (WsCaption | WsThickFrame)) == 0) return;
+        _fsHwnd = hwnd;
+        _fsOrigStyle = style;
+        SetWindowLongPtr(hwnd, GwlStyle, new IntPtr(style & ~(WsCaption | WsThickFrame)));
+        var b = System.Windows.Forms.Screen.FromHandle(hwnd).Bounds;
+        SetWindowPos(hwnd, IntPtr.Zero, b.Left, b.Top, b.Width, b.Height, SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
+        LogThrottled("fullscreen", "watchdog: אוצריא עברה למסך מלא (הוסרו כותרת ומסגרת)", 300);
+    }
+
+    /// <summary>מחזיר לחלון אוצריא את הכותרת והמסגרת שהוסרו במסך המלא</summary>
+    private static void RestoreWindowFrame()
+    {
+        try
+        {
+            if (_fsHwnd == IntPtr.Zero || !IsWindow(_fsHwnd)) return;
+            SetWindowLongPtr(_fsHwnd, -16, new IntPtr(_fsOrigStyle));
+            SetWindowPos(_fsHwnd, IntPtr.Zero, 0, 0, 0, 0, SwpNoZOrder | SwpNoActivate | SwpNoMove | SwpNoSize | SwpFrameChanged);
+            ShowWindow(_fsHwnd, 9 /* SW_RESTORE */);
+            ShowWindow(_fsHwnd, 3 /* SW_MAXIMIZE */);
+        }
+        catch (Exception ex) { Config.Log("kiosk restore frame: " + ex.Message); }
+        finally { _fsHwnd = IntPtr.Zero; }
+    }
 
     private static int _watchBusy;
 
@@ -453,6 +493,7 @@ public static class Kiosk
             // אוצריא תמיד ממוקסמת: בלי מזעור, בלי חלון קטן, ובלי חור במקום שורת המשימות
             if (IsIconic(hwnd)) ShowWindow(hwnd, 9 /* SW_RESTORE */);
             if (Config.Get("kiosk.maximizeOtzaria", true)) FitToScreen(hwnd);
+            if (Config.Get("kiosk.fullscreenOtzaria", true)) MakeFullscreen(hwnd);
 
             GetWindowThreadProcessId(GetForegroundWindow(), out uint fgPid);
             if (fgPid == otz.Id || fgPid == Environment.ProcessId) return;
@@ -503,9 +544,36 @@ public static class Kiosk
         try
         {
             GetWindowThreadProcessId(GetForegroundWindow(), out uint pid);
-            return pid != 0 && pid != (uint)Environment.ProcessId && Programs.ShouldYieldTo(pid);
+            if (pid == 0 || pid == (uint)Environment.ProcessId || IsOtzariaPid(pid)) return false;
+            return Programs.ShouldYieldTo(pid);
         }
         catch { return false; }
+    }
+
+    private static bool IsOtzariaPid(uint pid)
+    {
+        try
+        {
+            using var p = Process.GetProcessById((int)pid);
+            string path = OtzariaPath();
+            string name = string.IsNullOrEmpty(path) ? "otzaria" : Path.GetFileNameWithoutExtension(path);
+            return p.ProcessName.Equals(name, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>חזרה לאוצריא מתוכנה מותרת (Ctrl+Alt+O)</summary>
+    private static void ReturnToOtzaria()
+    {
+        try
+        {
+            int session = Process.GetCurrentProcess().SessionId;
+            string path = OtzariaPath();
+            string name = string.IsNullOrEmpty(path) ? "otzaria" : Path.GetFileNameWithoutExtension(path);
+            var otz = Process.GetProcessesByName(name).FirstOrDefault(p => p.SessionId == session);
+            if (otz != null && otz.MainWindowHandle != IntPtr.Zero) BringToFront(otz.MainWindowHandle);
+        }
+        catch (Exception ex) { Config.Log("return to otzaria: " + ex.Message); }
     }
 
     private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -522,6 +590,12 @@ public static class Kiosk
                 (ctrl && vk == 0x1B);                     // Ctrl+Esc
             // Alt+F4 עובד בתוכנה מותרת שנמצאת בחזית, כדי שאפשר לסגור אותה ולחזור לאוצריא
             if (block && alt && vk == 0x73 && ForegroundIsAllowedProgram()) block = false;
+            // Ctrl+Alt+O: חזרה לאוצריא מתוכנה מותרת (רק כשתוכנה מותרת בחזית; באוצריא עצמה המקשים עוברים הלאה)
+            if (ctrl && alt && vk == 0x4F && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104) && ForegroundIsAllowedProgram())
+            {
+                Task.Run(ReturnToOtzaria);
+                return (IntPtr)1;
+            }
             if (block) return (IntPtr)1;
         }
         return CallNextHookEx(_hook, nCode, wParam, lParam);
