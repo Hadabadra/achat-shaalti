@@ -47,9 +47,13 @@ public static class Installer
 
         if (showMessage)
         {
+            bool canInstall = plugins > 0 && OtzariaProtocolRegistered();
             string msg = Lang.T("גשר אוצריא הותקן ויעלה אוטומטית עם כניסה ל-Windows.",
                 "Otzaria Bridge is installed and will start automatically when you sign in to Windows.");
-            if (plugins > 0)
+            if (canInstall)
+                msg += Lang.T("\n\nעכשיו אוצריא תיפתח ותציע להתקין את התוספים \"סייר קבצים\" ו\"הגדרות מערכת\" — אשרו בחלון ההתקנה של אוצריא.",
+                       "\n\nOtzaria will now open and offer to install the \"File Explorer\" and \"System Settings\" plugins — confirm in Otzaria's install window.");
+            else if (plugins > 0)
                 msg += Lang.T("\n\nבתיקייה שנפתחה נמצאים התוספים \"סייר קבצים\" ו\"הגדרות מערכת\". " +
                        "יש להתקין אותם מתוך אוצריא (התקנת תוסף מקובץ).",
                        "\n\nThe folder that opened contains the \"File Explorer\" and \"System Settings\" plugins. " +
@@ -59,8 +63,42 @@ public static class Installer
             else
                 MessageBox.Show(msg, "גשר אוצריא", MessageBoxButtons.OK, MessageBoxIcon.Information,
                     MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
-            if (plugins > 0) OpenPluginsFolder();
+            if (canInstall) InstallPluginsInOtzaria();
+            else if (plugins > 0) OpenPluginsFolder();
         }
+    }
+
+    /// <summary>האם אוצריא רשמה את סכמת otzaria:// (היא עושה זאת בעלייה הראשונה שלה)</summary>
+    private static bool OtzariaProtocolRegistered()
+    {
+        try
+        {
+            using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Classes\otzaria\shell\open\command")
+                          ?? Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(@"otzaria\shell\open\command");
+            return k?.GetValue("") is string v && v.Length > 0;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>פותח באוצריא את זרימת ההתקנה של כל תוסף (otzaria://plugin/install-local), אחד אחרי השני.
+    /// אוצריא מציגה את בקשת אישור ההרשאות; המשתמש מאשר בעצמו.</summary>
+    public static void InstallPluginsInOtzaria()
+    {
+        var files = Directory.Exists(PluginsDir) ? Directory.GetFiles(PluginsDir, "*.otzplugin") : Array.Empty<string>();
+        Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+        new Thread(() =>
+        {
+            foreach (var f in files)
+            {
+                try
+                {
+                    string uri = "otzaria://plugin/install-local?path=" + Uri.EscapeDataString(Path.GetFullPath(f));
+                    Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+                }
+                catch (Exception ex) { Config.Log("install-local: " + ex.Message); }
+                Thread.Sleep(6000);
+            }
+        }) { IsBackground = true }.Start();
     }
 
     /// <summary>פורס את קובצי ה-.otzplugin המוטמעים לתיקיית plugins</summary>

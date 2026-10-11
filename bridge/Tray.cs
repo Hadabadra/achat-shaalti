@@ -4,7 +4,7 @@ namespace OtzariaBridge;
 public static class Tray
 {
     private static NotifyIcon _icon;
-    private static ToolStripMenuItem _status, _exit, _plugins, _lang;
+    private static ToolStripMenuItem _status, _exit, _plugins, _install, _lang;
     private static ContextMenuStrip _menu;
     private static Control _invoker;
 
@@ -17,9 +17,10 @@ public static class Tray
         var menu = _menu = new ContextMenuStrip();
         _status = new ToolStripMenuItem("") { Enabled = false };
         _plugins = new ToolStripMenuItem("", null, (_, _) => Installer.OpenPluginsFolder());
+        _install = new ToolStripMenuItem("", null, (_, _) => { Installer.DeployPlugins(); Installer.InstallPluginsInOtzaria(); });
         _lang = new ToolStripMenuItem("", null, (_, _) => { Lang.Set(Lang.En ? "he" : "en"); ApplyTexts(); });
         _exit = new ToolStripMenuItem("", null, (_, _) => Application.ExitThread());
-        menu.Items.AddRange(new ToolStripItem[] { _status, _plugins, _lang, new ToolStripSeparator(), _exit });
+        menu.Items.AddRange(new ToolStripItem[] { _status, _install, _plugins, _lang, new ToolStripSeparator(), _exit });
 
         _icon = new NotifyIcon
         {
@@ -40,6 +41,7 @@ public static class Tray
         if (_menu == null) return;
         _menu.RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
         _plugins.Text = Lang.T("פתח את תיקיית התוספים", "Open the plugins folder");
+        _install.Text = Lang.T("התקן/עדכן את התוספים באוצריא", "Install/update the plugins in Otzaria");
         _lang.Text = Lang.T("English", "עברית");
         _exit.Text = Lang.T("יציאה", "Exit");
         UpdateStatus();

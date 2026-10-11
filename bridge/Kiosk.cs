@@ -146,6 +146,8 @@ public static class Kiosk
             Release();
             throw;
         }
+        Config.Set("kiosk.confirmed", true);
+        Config.Save();
         return new { active = true };
     }
 
@@ -204,7 +206,17 @@ public static class Kiosk
 
     public static void RestoreOnStartup()
     {
-        if (IsActive) Apply();
+        if (!IsActive) return;
+        // נעילה חוזרת בעלייה רק אם הופעלה בהצלחה. מצב שנשמר מהפעלה שנכשלה (גרסאות 0.0.x שמרו
+        // "פעיל" לפני ההחלה) מנוקה, כדי שהפעלת הגשר לא תנעל את המחשב בהפתעה.
+        if (!Config.Get("kiosk.confirmed", false))
+        {
+            Config.Log("kiosk: מצב נעילה לא מאושר מהפעלה קודמת — מנוקה בעלייה");
+            Release();
+            return;
+        }
+        try { Apply(); }
+        catch (Exception ex) { Config.Log("kiosk restore: " + ex.Message); Release(); }
     }
 
     private static bool _taskMgrByPolicy;
@@ -254,6 +266,7 @@ public static class Kiosk
         lock (Gate)
         {
             Config.Set("kiosk.active", false);
+            Config.Set("kiosk.confirmed", false);
             Config.Set("kiosk.strict", false);
             Config.Save();
             _watchdog?.Dispose();
