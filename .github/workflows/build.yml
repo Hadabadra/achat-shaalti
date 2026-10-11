@@ -73,6 +73,49 @@ jobs:
           "do=$($do.ToString().ToLower())" >> $env:GITHUB_OUTPUT
           Write-Host "version=$ver tag=$tag exists=$exists release=$do"
 
+      - name: הערות שחרור מתוך CHANGELOG.md
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          $ver = $env:TAG.TrimStart('v')
+          $lines = Get-Content CHANGELOG.md -Encoding UTF8
+          $start = [Array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -like "## $ver *" -or $l -eq "## $ver" })
+          $section = @()
+          if ($start -ge 0) {
+            for ($i = $start + 1; $i -lt $lines.Length; $i++) {
+              if ($lines[$i] -like '## *' -or $lines[$i] -like '# *' -or $lines[$i] -eq '---') { break }
+              $section += $lines[$i]
+            }
+          }
+          $notes = @(
+            "## מה חדש בגרסה $ver"
+            ($section -join "`n").Trim()
+            ""
+            "## התקנה"
+            "1. מורידים את **OtzariaBridge.exe** (למטה) ומפעילים פעם אחת: הגשר מותקן, עולה אוטומטית עם Windows, ופותח את תיקיית התוספים."
+            "2. באוצריא: התקנת תוסף מקובץ → **file-explorer.otzplugin** ו-**system-settings.otzplugin**."
+            ""
+            "> ⚠️ גרסת ניסיון — עדיין לא נבדקה על מחשבי Windows אמיתיים. לא להפעיל *נעילה קפדנית* לפני שרושמים את קוד השחזור."
+            ""
+            "## קבצים"
+            "| קובץ | מה זה |"
+            "|---|---|"
+            "| ``OtzariaBridge.exe`` | גשר אוצריא — תוכנת הרקע ל-Windows |"
+            "| ``file-explorer.otzplugin`` | תוסף סייר קבצים |"
+            "| ``system-settings.otzplugin`` | תוסף הגדרות מערכת |"
+            ""
+            "## שימושי"
+            "- אנגלית: תפריט המגש → English, או ``OtzariaBridge.exe --lang en``"
+            "- ביטול נעילה בחירום: ``OtzariaBridge.exe --unlock <קוד שחזור>``"
+            "- הסרה: ``OtzariaBridge.exe --uninstall``"
+            "- הערות ותקלות: כפתור **שליחת הערה** בשני התוספים"
+            "- כל הגרסאות: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)"
+          )
+          $notes -join "`n" | Set-Content release-notes.md -Encoding UTF8
+          Get-Content release-notes.md
+
       # גרסה חדשה ב-OtzariaBridge.csproj (תג שעוד לא קיים) = Release אוטומטי
       - name: Release
         if: steps.rel.outputs.do == 'true'
@@ -82,26 +125,17 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: כלי מערכת לאוצריא ${{ steps.rel.outputs.tag }} (ניסיון)
           prerelease: true
+          body_path: release-notes.md
           files: |
             out/OtzariaBridge.exe
             bridge/plugins/system-settings.otzplugin
             bridge/plugins/file-explorer.otzplugin
-          body: |
-            **גשר אוצריא** + **סייר קבצים** + **הגדרות מערכת** — גרסת ניסיון.
 
-            1. מורידים את `OtzariaBridge.exe` ומפעילים פעם אחת: הגשר מותקן, עולה עם Windows, ופותח את תיקיית התוספים.
-            2. מתקינים את שני קובצי ה-`.otzplugin` מתוך אוצריא (התקנת תוסף מקובץ).
-
-            ⚠️ עדיין לא נבדק על מחשבי Windows אמיתיים. לא להפעיל "נעילה קפדנית" לפני שרושמים את קוד השחזור.
-
-            * אנגלית: תפריט המגש → English, או `OtzariaBridge.exe --lang en`.
-            * ביטול נעילה בחירום: `OtzariaBridge.exe --unlock <קוד שחזור>`
-            * הסרה: `OtzariaBridge.exe --uninstall`
-            * הערות ותקלות: כפתור "שליחת הערה" בשני התוספים.
-            * מה חדש: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/CHANGELOG.md)
-
-            ---
-            **Otzaria Bridge + File Explorer + System Settings** — trial release. Run `OtzariaBridge.exe` once, then install both `.otzplugin` files from inside Otzaria. Not yet tested on real Windows machines.
+      - name: עדכון הערות של Release קיים
+        if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --notes-file release-notes.md
 
   plugins:
     name: ולידציה, צילומים ופרסום לחנות
