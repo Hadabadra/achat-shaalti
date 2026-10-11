@@ -358,25 +358,57 @@ public static class Kiosk
     private struct NativeRect { public int Left, Top, Right, Bottom; }
 
     private static DateTime _lastFit = DateTime.MinValue;
+    private static int _fitFails;
+    private static DateTime _fitPausedUntil = DateTime.MinValue;
+
+    /// <summary>רושם ליומן הודעה אבחונית לכל היותר פעם בכל כמה שניות לכל מפתח, כדי לא להציף את היומן</summary>
+    private static readonly System.Collections.Generic.Dictionary<string, DateTime> _logTimes = new();
+    private static void LogThrottled(string key, string msg, int seconds)
+    {
+        var now = DateTime.UtcNow;
+        if (_logTimes.TryGetValue(key, out var t) && (now - t).TotalSeconds < seconds) return;
+        _logTimes[key] = now;
+        Config.Log(msg);
+    }
 
     /// <summary>
     /// מוודא שחלון אוצריא ממלא את כל המסך. אם הוא לא ממוקסם — ממקסם. אם הוא ממוקסם אבל עדיין משאיר
-    /// פס ריק (אזור העבודה לא התעדכן אחרי סגירת שורת המשימות) — משחזר וממקסם מחדש, לכל היותר פעם ב-8 שניות.
+    /// פס ריק (אזור העבודה לא התעדכן אחרי סגירת שורת המשימות) — מותח את החלון ישירות לגבולות המסך (ואם זה לא עזר,
+    /// משחזר וממקסם), לכל היותר פעם ב-8 שניות, ואחרי 3 ניסיונות כושלים רצופים משהה את הנסיון ל-5 דקות (כדי שלא ירצד). סבילות של 16 פיקסלים:
+    /// חלון ממוקסם עשוי להיות קטן או גדול במעט מגבולות המסך (מסגרת, DPI) וזה אינו "פס ריק".
     /// חלון במסך מלא של אוצריא עצמה (מכסה את כל המסך) לא נוגעים בו.
     /// </summary>
     private static void FitToScreen(IntPtr hwnd)
     {
-        const int SwRestore = 9, SwMaximize = 3;
+        const int SwRestore = 9, SwMaximize = 3, Tol = 16;
         if (!GetWindowRect(hwnd, out var r)) return;
         var b = System.Windows.Forms.Screen.FromHandle(hwnd).Bounds;
-        bool covers = r.Left <= b.Left + 1 && r.Top <= b.Top + 1 && r.Right >= b.Right - 1 && r.Bottom >= b.Bottom - 1;
-        if (covers) return;
+        bool covers = r.Left <= b.Left + Tol && r.Top <= b.Top + Tol && r.Right >= b.Right - Tol && r.Bottom >= b.Bottom - Tol;
+        if (covers) { _fitFails = 0; return; }
         if (!IsZoomed(hwnd)) { ShowWindow(hwnd, SwMaximize); return; }
+        if (DateTime.UtcNow < _fitPausedUntil) return;
         if ((DateTime.UtcNow - _lastFit).TotalSeconds < 8) return;
         _lastFit = DateTime.UtcNow;
-        ShowWindow(hwnd, SwRestore);
-        ShowWindow(hwnd, SwMaximize);
+        if (++_fitFails > 3)
+        {
+            _fitPausedUntil = DateTime.UtcNow.AddMinutes(5);
+            _fitFails = 0;
+            Config.Log($"watchdog: מיקסום חוזר לא עזר (חלון {r.Left},{r.Top},{r.Right},{r.Bottom} מול מסך {b.Left},{b.Top},{b.Right},{b.Bottom}); מושהה 5 דקות");
+            return;
+        }
+        LogThrottled("fit", $"watchdog: ממלא את המסך (חלון {r.Left},{r.Top},{r.Right},{r.Bottom} מול מסך {b.Left},{b.Top},{b.Right},{b.Bottom})", 60);
+        // קודם מותחים ישירות לגבולות המסך (בלי שחזור-ומקסום שמרצד); רק אם זה לא עזר בניסיון הקודם — שחזור ומקסום
+        if (_fitFails <= 1)
+            SetWindowPos(hwnd, IntPtr.Zero, b.Left, b.Top, b.Width, b.Height, SwpNoZOrder | SwpNoActivate);
+        else
+        {
+            ShowWindow(hwnd, SwRestore);
+            ShowWindow(hwnd, SwMaximize);
+        }
     }
+
+    private const uint SwpNoZOrder = 0x0004, SwpNoActivate = 0x0010;
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
     private static int _watchBusy;
 
@@ -388,7 +420,14 @@ public static class Kiosk
             int session = Process.GetCurrentProcess().SessionId;
             foreach (var p in Process.GetProcessesByName("explorer"))
             {
-                try { if (p.SessionId == session) p.Kill(); } catch { }
+                try
+                {
+                    if (p.SessionId != session) continue;
+                    p.Kill();
+                    // אם Windows מרימה את explorer מחדש, שורת המשימות מהבהבת בכל מחזור; היומן יראה את זה
+                    LogThrottled("explorer", "watchdog: explorer נסגר (אם ההודעה חוזרת כל דקה — Windows מרימה אותו מחדש)", 60);
+                }
+                catch { }
             }
 
             // אם המדיניות לא נכתבה (אין הרשאה) — סוגרים את מנהל המשימות כשהוא נפתח (מה שאפשר בלי הרשאות מנהל)
@@ -418,6 +457,12 @@ public static class Kiosk
             GetWindowThreadProcessId(GetForegroundWindow(), out uint fgPid);
             if (fgPid == otz.Id || fgPid == Environment.ProcessId) return;
             if (Programs.ShouldYieldTo(fgPid)) return; // תוכנה מותרת (רשימה מוגדרת בסיסמה) בחזית
+            try
+            {
+                using var fgp = Process.GetProcessById((int)fgPid);
+                LogThrottled("fg:" + fgp.ProcessName, "watchdog: מחזיר את אוצריא לחזית מהתהליך " + fgp.ProcessName, 60);
+            }
+            catch { }
             if (!SetForegroundWindow(hwnd)) SwitchToThisWindow(hwnd, true);
         }
         catch (Exception ex) { Config.Log("watchdog: " + ex.Message); }

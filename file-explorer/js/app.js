@@ -43,10 +43,19 @@
   /* ---------- פתיחת קישור והעתקה ללוח ---------- */
   async function openUrl(url) {
     if (!window.Otzaria) { ui.toast('בתוך אוצריא הקישור ייפתח בדפדפן', 'info'); return; }
-    try {
-      var r = await window.Otzaria.call('app.openUrl', { url: url });
-      if (r && r.success === false) ui.toast('לא ניתן לפתוח את הקישור', 'error');
-    } catch (e) { ui.toast('לא ניתן לפתוח את הקישור', 'error'); }
+    /* שם הקריאה המתועד הוא app.openUrl; app.open_url הוא גיבוי למקרה שהגרסה של אוצריא מכירה רק אותו */
+    var names = ['app.openUrl', 'app.open_url'], lastErr = '';
+    for (var i = 0; i < names.length; i++) {
+      try {
+        var r = await window.Otzaria.call(names[i], { url: url });
+        if (!(r && r.success === false)) return;
+        lastErr = names[i] + ': ' + ((r && (r.error || r.message)) || 'success=false');
+      } catch (e) { lastErr = names[i] + ': ' + ((e && e.message) || e); }
+    }
+    try { console.warn('openUrl failed', lastErr); } catch (e) { /* אין קונסול */ }
+    /* גיבוי: מעתיקים את הקישור ללוח, כדי שאפשר להדביק אותו בדפדפן */
+    var ok = await copyText(url);
+    ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + url, 'error');
   }
   async function copyText(text) {
     try {

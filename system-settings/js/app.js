@@ -16,10 +16,17 @@
         var ok = await SS.copyText(url);
         ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + url, 'error');
       };
-      try {
-        var r = await window.Otzaria.call('app.openUrl', { url: url });
-        if (r && r.success === false) await failed();
-      } catch (e) { await failed(); }
+      /* שם הקריאה המתועד הוא app.openUrl; app.open_url הוא גיבוי למקרה שהגרסה של אוצריא מכירה רק אותו */
+      var names = ['app.openUrl', 'app.open_url'], lastErr = '';
+      for (var i = 0; i < names.length; i++) {
+        try {
+          var r = await window.Otzaria.call(names[i], { url: url });
+          if (!(r && r.success === false)) return;
+          lastErr = names[i] + ': ' + ((r && (r.error || r.message)) || 'success=false');
+        } catch (e) { lastErr = names[i] + ': ' + ((e && e.message) || e); }
+      }
+      try { console.warn('openUrl failed', lastErr); } catch (e) { /* אין קונסול */ }
+      await failed();
     } else {
       ui.toast('בתוך אוצריא הקישור ייפתח בדפדפן', 'info');
     }
