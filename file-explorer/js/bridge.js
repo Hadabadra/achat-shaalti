@@ -135,7 +135,9 @@
   };
 
   /* ===== ספק קבצים מבוסס גשר ===== */
-  var KNOWN_ICON = { desktop: 'desktop', documents: 'documents', downloads: 'downloads', pictures: 'pictures', music: 'music', videos: 'videos', home: 'home' };
+  var KNOWN_ICON = { desktop: 'desktop', documents: 'documents', downloads: 'downloads', pictures: 'pictures', music: 'music', videos: 'videos', home: 'home', recycle: 'trash' };
+  /* נתיב וירטואלי לסל המיחזור (אינו נתיב Windows אמיתי) */
+  var RECYCLE_PATH = '::recycle';
 
   FX.BridgeProvider = {
     kind: 'bridge',
@@ -159,6 +161,7 @@
       var known = (d && d.known || []).map(function (k) {
         return { id: k.id, name: FX.t ? FX.t(k.name) : k.name, path: k.path, icon: KNOWN_ICON[k.id] || 'folder' };
       });
+      known.push({ id: 'recycle', name: FX.t ? FX.t('סל המיחזור') : 'סל המיחזור', path: RECYCLE_PATH, icon: KNOWN_ICON.recycle });
       return { drives: drives, known: known };
     },
 
@@ -167,6 +170,18 @@
       if (!path) {
         var r = await FX.BridgeProvider.roots();
         return { path: '', parent: null, entries: r.drives, isRoot: true, known: r.known };
+      }
+      if (path === RECYCLE_PATH) {
+        var rb = await Bridge.call('/recycle/list', {}, { timeoutMs: 60000 });
+        return {
+          path: RECYCLE_PATH, parent: '', recycle: true,
+          entries: (rb && rb.items || []).map(function (x) {
+            return {
+              name: x.name, path: RECYCLE_PATH + '/' + x.id, type: x.type === 'dir' ? 'dir' : 'file',
+              size: x.size, modified: x.deleted, ext: x.ext, recycleId: x.id, origPath: x.originalPath
+            };
+          })
+        };
       }
       var d = await Bridge.call('/fs/list', { path: path, showHidden: !!opts.showHidden }, { timeoutMs: 60000 });
       return {
@@ -206,6 +221,15 @@
     },
     remove: function (paths, permanent) {
       return Bridge.call('/fs/delete', { paths: paths, permanent: !!permanent }, { timeoutMs: 120000 });
+    },
+    recycleRestore: function (ids) {
+      return Bridge.call('/recycle/restore', { ids: ids, conflict: 'rename' }, { timeoutMs: 120000 });
+    },
+    recycleDelete: function (ids) {
+      return Bridge.call('/recycle/delete', { ids: ids }, { timeoutMs: 120000 });
+    },
+    recycleEmpty: function () {
+      return Bridge.call('/recycle/empty', {}, { timeoutMs: 120000 });
     },
     read: async function (entry) {
       var d = await Bridge.call('/fs/read', { path: entry.path, maxBytes: 5242880 }, { timeoutMs: 60000 });

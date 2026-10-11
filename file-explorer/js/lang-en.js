@@ -156,6 +156,22 @@
     'Shift+Delete מוחק לצמיתות.': 'Shift+Delete deletes permanently.',
     'מחיקה לצמיתות': 'Delete permanently',
     'מוחק…': 'Deleting…',
+    'סל המיחזור': 'Recycle Bin',
+    'סל המיחזור ריק': 'The Recycle Bin is empty',
+    'תאריך מחיקה': 'Date deleted',
+    'מיקום מקורי': 'Original location',
+    'שחזור': 'Restore',
+    'ריקון סל המיחזור': 'Empty Recycle Bin',
+    'ריקון הסל': 'Empty the bin',
+    'משחזר…': 'Restoring…',
+    'מרוקן…': 'Emptying…',
+    'סל המיחזור רוקן': 'The Recycle Bin was emptied',
+    'השחזור נכשל': 'Restore failed',
+    'ריקון הסל נכשל': 'Emptying the bin failed',
+    'אין חיפוש בסל המיחזור': 'Search is not available in the Recycle Bin',
+    'כדי לפתוח פריט יש לשחזר אותו קודם': 'Restore an item first to open it',
+    'מסל המיחזור. לא ניתן לשחזר אותם.': 'from the Recycle Bin. They cannot be restored.',
+    'כל הפריטים שבסל המיחזור יימחקו': 'All items in the Recycle Bin will be deleted',
     'המחיקה נכשלה': 'Delete failed',
     'הפתיחה נכשלה': 'Open failed',
     'אין אפשרות לפתוח קובץ זה': 'This file cannot be opened',
@@ -302,8 +318,8 @@
     [/^(.*) \(([\d,.]+) בתים\)$/, '$1 ($2 bytes)'],
     [/^נגזרו ([\d,.]+) פריטים$/, 'Cut $1 items'],
     [/^הועתקו ([\d,.]+) פריטים$/, 'Copied $1 items'],
-    [/^(הועתקו|הועברו|נמחקו|הועברו לסל המיחזור) ([\d,.]+) פריטים(?:, ([\d,.]+) דולגו)?(?:\. נכשלו ([\d,.]+): (.*))?$/, function (m) {
-      var verb = { 'הועתקו': 'Copied', 'הועברו': 'Moved', 'נמחקו': 'Deleted', 'הועברו לסל המיחזור': 'Moved to Recycle Bin' }[m[1]];
+    [/^(הועתקו|הועברו|נמחקו|שוחזרו|הועברו לסל המיחזור) ([\d,.]+) פריטים(?:, ([\d,.]+) דולגו)?(?:\. נכשלו ([\d,.]+): (.*))?$/, function (m) {
+      var verb = { 'הועתקו': 'Copied', 'הועברו': 'Moved', 'נמחקו': 'Deleted', 'שוחזרו': 'Restored', 'הועברו לסל המיחזור': 'Moved to Recycle Bin' }[m[1]];
       return verb + ' ' + m[2] + ' items' + (m[3] ? ', ' + m[3] + ' skipped' : '') + (m[4] ? '. ' + m[4] + ' failed: ' + t(m[5]) : '');
     }],
     [/^([\d,.]+) מהפריטים כבר קיימים בתיקייה הזו \(למשל$/, '$1 of the items already exist in this folder (for example'],

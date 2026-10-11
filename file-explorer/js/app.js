@@ -11,7 +11,7 @@
 
   var LS = 'fx.view';
   var S = {
-    prov: null, path: '', isRoot: true, known: [], entries: [], view: [],
+    prov: null, path: '', isRoot: true, recycle: false, known: [], entries: [], view: [],
     sel: {}, anchor: -1, focus: -1,
     back: [], fwd: [],
     sort: { key: 'name', dir: 'asc' }, showHidden: false,
@@ -35,7 +35,7 @@
     try {
       var v = JSON.parse(localStorage.getItem(LS) || '{}');
       v.sort = S.sort; v.showHidden = S.showHidden;
-      if (S.prov) v['last.' + S.prov.kind] = S.path;
+      if (S.prov) v['last.' + S.prov.kind] = S.recycle ? '' : S.path;
       localStorage.setItem(LS, JSON.stringify(v));
     } catch (e) { /* אחסון לא זמין */ }
   }
@@ -212,6 +212,7 @@
     if (push && !S.prov.same(prev, r.path)) { S.back.push(prev); S.fwd = []; }
     S.path = r.path;
     S.isRoot = !!r.isRoot;
+    S.recycle = !!r.recycle;
     S.parent = r.parent;
     S.truncated = !!r.truncated;
     var ents = r.entries || [];
@@ -236,6 +237,7 @@
   function goUp() {
     if (S.search) { exitSearch(); return; }
     if (S.isRoot) return;
+    if (S.recycle) { go(''); return; }
     var par = S.prov.parentOf(S.path);
     go(par == null ? '' : par);
   }
@@ -258,6 +260,12 @@
       updateNavBtns();
       return;
     }
+    if (S.recycle) {
+      c.innerHTML = '<button class="fx-crumb" data-path="">' + FX.esc(S.prov.rootLabel) + '</button><span class="fx-crumb-sep">' + ic('chevron') + '</span>' +
+        '<span class="fx-crumb-static">' + ic('trash') + 'סל המיחזור</span>';
+      updateNavBtns();
+      return;
+    }
     var segs = S.prov.segments(S.path);
     c.innerHTML = segs.map(function (s, i) {
       return (i ? '<span class="fx-crumb-sep">' + ic('chevron') + '</span>' : '') +
@@ -271,7 +279,7 @@
     $('fx-up').disabled = S.isRoot && !S.search;
   }
   function editPath() {
-    if (!S.prov.caps.editPath || S.search) return;
+    if (!S.prov.caps.editPath || S.search || S.recycle) return;
     var c = $('fx-crumbs');
     c.innerHTML = '<input class="input fx-path-input" dir="ltr" value="' + FX.esc(S.path) + '" aria-label="נתיב">';
     var inp = c.querySelector('input');
@@ -300,10 +308,10 @@
   function renderHead() {
     $('fx-head').innerHTML = COLS.map(function (c) {
       var on = S.sort.key === c.key;
-      return '<button class="fx-col fx-col-' + c.key + (on ? ' on' : '') + '" data-sort="' + c.key + '">' + c.label +
+      return '<button class="fx-col fx-col-' + c.key + (on ? ' on' : '') + '" data-sort="' + c.key + '">' + (S.recycle && c.key === 'date' ? 'תאריך מחיקה' : c.label) +
         (on ? '<span class="fx-sort-dir">' + (S.sort.dir === 'asc' ? '▲' : '▼') + '</span>' : '') + '</button>';
-    }).join('') + (S.search ? '<span class="fx-col fx-col-where">מיקום</span>' : '');
-    $('fx-head').classList.toggle('with-where', !!S.search);
+    }).join('') + (S.search ? '<span class="fx-col fx-col-where">מיקום</span>' : S.recycle ? '<span class="fx-col fx-col-where">מיקום מקורי</span>' : '');
+    $('fx-head').classList.toggle('with-where', !!S.search || S.recycle);
   }
 
   function rowHtml(e, i) {
@@ -317,6 +325,9 @@
     if (S.search) {
       var par = S.prov.parentOf(e.path);
       where = '<span class="fx-cell fx-cell-where" title="' + FX.esc(S.prov.displayPath(par)) + '">' + FX.esc(S.prov.displayPath(par)) + '</span>';
+    } else if (S.recycle) {
+      var orig = S.prov.parentOf(e.origPath || '') || '';
+      where = '<span class="fx-cell fx-cell-where" title="' + FX.esc(e.origPath || '') + '">' + FX.esc(orig) + '</span>';
     }
     return '<div class="fx-row' + (S.sel[e.path] ? ' sel' : '') + (i === S.focus ? ' focus' : '') + (cut ? ' cut' : '') + (e.hidden ? ' hid' : '') +
       '" role="option" aria-selected="' + (S.sel[e.path] ? 'true' : 'false') + '" data-i="' + i + '" draggable="false">' +
@@ -329,7 +340,7 @@
   function renderList() {
     renderHead();
     var list = $('fx-list');
-    list.classList.toggle('with-where', !!S.search);
+    list.classList.toggle('with-where', !!S.search || S.recycle);
     var src = S.search ? S.search.hits : S.entries;
     if (S.isRoot && !S.search) S.view = src.slice();
     else S.view = FX.sortEntries(src, S.sort.key, S.sort.dir);
@@ -337,6 +348,7 @@
       var msg;
       if (S.search) msg = S.search.done ? 'לא נמצאו תוצאות' : 'מחפש…';
       else if (S.isRoot && S.prov.kind === 'fallback') msg = 'עדיין לא נוספו תיקיות. לחצו על "הוספת תיקייה" כדי לבחור תיקייה לעבודה.';
+      else if (S.recycle) msg = 'סל המיחזור ריק';
       else msg = 'התיקייה ריקה';
       list.innerHTML = '<div class="fx-empty">' + ic(S.search ? 'search' : 'folderOpen') + '<span>' + FX.esc(msg) + '</span>' +
         (S.isRoot && !S.search && S.prov.caps.addFolder ? '<button class="btn btn-primary" data-add="1">' + ic('plus') + 'הוספת תיקייה</button>' : '') + '</div>';
@@ -441,14 +453,26 @@
     { id: 'saveCopy', icon: 'downloads', label: 'שמירת עותק', cap: 'saveCopy' },
     { sep: true },
     { id: 'rename', icon: 'rename', label: 'שינוי שם', cap: 'rename', key: 'F2' },
-    { id: 'delete', icon: 'trash', label: 'מחיקה', key: 'Delete' },
+    { id: 'delete', icon: 'trash', label: 'מחיקה', key: 'Delete', bin: true },
+    { id: 'restore', icon: 'back', label: 'שחזור', binOnly: true },
+    { id: 'emptyBin', icon: 'trash', label: 'ריקון סל המיחזור', binOnly: true },
     { sep: true },
     { id: 'open', icon: 'open', label: 'פתיחה', key: 'Enter' },
     { id: 'reveal', icon: 'reveal', label: 'הצגה בסייר של Windows', cap: 'reveal' },
     { id: 'props', icon: 'info', label: 'מאפיינים', cap: 'properties', key: 'Alt+Enter' }
   ];
-  function inFolder() { return !S.isRoot && !S.search; }
+  function inFolder() { return !S.isRoot && !S.search && !S.recycle; }
+  function recycleCmdState(id) {
+    var n = selected().length;
+    switch (id) {
+      case 'restore': return { on: n > 0 };
+      case 'delete': return { on: n > 0 };
+      case 'emptyBin': return { on: S.entries.length > 0 };
+    }
+    return { on: false };
+  }
   function cmdState(id) {
+    if (S.recycle) return recycleCmdState(id);
     var p = S.prov, sel = selected(), n = sel.length;
     var hasDrive = sel.some(function (e) { return e.type === 'drive' || e.approvedRoot; });
     switch (id) {
@@ -470,6 +494,8 @@
     if (!S.prov) return;
     var bar = $('fx-cmds');
     bar.innerHTML = CMDS.filter(function (c) {
+      if (S.recycle) return !c.sep && !!(c.bin || c.binOnly);
+      if (c.binOnly) return false;
       if (c.sep) return true;
       if (c.cap === 'saveCopy') return !!S.prov.caps.saveCopy;
       if (c.cap === 'reveal') return !!S.prov.caps.reveal;
@@ -479,12 +505,18 @@
       var st = cmdState(c.id);
       var tip = c.label + (c.key ? ' (' + c.key + ')' : '') + (!st.on && st.why ? ' — ' + st.why : '');
       return '<button class="btn btn-text fx-cmd" data-cmd="' + c.id + '" title="' + FX.esc(tip) + '"' + (st.on ? '' : ' disabled') + '>' +
-        ic(c.icon) + '<span>' + c.label + '</span></button>';
+        ic(c.icon) + '<span>' + (S.recycle && c.id === 'delete' ? 'מחיקה לצמיתות' : c.label) + '</span></button>';
     }).join('');
   }
   function run(id, ev) {
     var st = cmdState(id);
     if (!st.on) { if (st.why) ui.toast(st.why, 'info'); return; }
+    if (S.recycle) {
+      if (id === 'restore') return restoreSel();
+      if (id === 'delete') return purgeSel();
+      if (id === 'emptyBin') return emptyBin();
+      return;
+    }
     switch (id) {
       case 'newFolder': return newItem(true);
       case 'newFile': return newItem(false);
@@ -640,6 +672,45 @@
     await reloadSelect([r.path || S.prov.join(S.path, r.name)]);
   }
 
+  /* ---------- סל המיחזור: שחזור, מחיקה לצמיתות וריקון ---------- */
+  function binIds(sel) { return sel.map(function (e) { return e.recycleId; }); }
+  async function restoreSel() {
+    var sel = selected();
+    busy(true, 'משחזר…');
+    try {
+      var r = await S.prov.recycleRestore(binIds(sel));
+      var failed = (r && r.failed) || [];
+      reportBatch(r, 'שוחזרו', (r && r.restored != null) ? r.restored : sel.length - failed.length);
+    } catch (e) { opError(e, 'השחזור נכשל'); }
+    busy(false);
+    refresh();
+  }
+  async function purgeSel() {
+    var sel = selected();
+    var what = sel.length === 1 ? '<b>' + FX.esc(sel[0].name) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
+    var ok = await ui.confirm('מחיקה לצמיתות', '<p>' + what + ' יימחקו <b>לצמיתות</b> מסל המיחזור. לא ניתן לשחזר אותם.</p>', 'מחיקה לצמיתות', 'danger');
+    if (!ok) return;
+    busy(true, 'מוחק…');
+    try {
+      var r = await S.prov.recycleDelete(binIds(sel));
+      var failed = (r && r.failed) || [];
+      reportBatch(r, 'נמחקו', (r && r.deleted != null) ? r.deleted : sel.length - failed.length);
+    } catch (e) { opError(e, 'המחיקה נכשלה'); }
+    busy(false);
+    refresh();
+  }
+  async function emptyBin() {
+    var ok = await ui.confirm('ריקון סל המיחזור', '<p>כל הפריטים שבסל המיחזור יימחקו <b>לצמיתות</b>. לא ניתן לשחזר אותם.</p>', 'ריקון הסל', 'danger');
+    if (!ok) return;
+    busy(true, 'מרוקן…');
+    try {
+      await S.prov.recycleEmpty();
+      ui.toast('סל המיחזור רוקן', 'success');
+    } catch (e) { opError(e, 'ריקון הסל נכשל'); }
+    busy(false);
+    refresh();
+  }
+
   async function del(permanent) {
     var sel = selected();
     var p = S.prov;
@@ -775,6 +846,7 @@
   }
   async function openEntry(e) {
     if (!e) return;
+    if (S.recycle) { ui.toast('כדי לפתוח פריט יש לשחזר אותו קודם', 'info'); return; }
     if (e.type === 'dir' || e.type === 'drive') { go(e.path); return; }
     var ext = FX.extOf(e.name);
     var o = opts();
@@ -897,6 +969,7 @@
   function runSearch(q) {
     q = String(q || '').trim();
     if (!q) { if (S.search) exitSearch(); return; }
+    if (S.recycle) { ui.toast('אין חיפוש בסל המיחזור', 'info'); return; }
     cancelSearch();
     var root = S.search ? S.search.root : S.path;
     var content = S.prov.caps.contentSearch && $('fx-content').checked;
@@ -948,6 +1021,7 @@
     if (S.prov.caps.reveal && sel.length) items.push('reveal');
     if (!sel.length && inFolder()) items.push('newFolder', 'newFile');
     items.push('props');
+    if (S.recycle) items = sel.length ? ['restore', 'delete'] : ['emptyBin'];
     var html = items.map(function (id) {
       var c = CMDS.find(function (k) { return k.id === id; });
       var st = cmdState(id);
