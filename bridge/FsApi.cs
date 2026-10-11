@@ -63,7 +63,7 @@ public static class FsApi
     private static bool Exists(string p) => File.Exists(p) || Directory.Exists(p);
 
     /// <summary>אזורים מוגנים: מחיקה, העברה ושינוי שם אסורים</summary>
-    private static void EnsureNotProtected(string p)
+    internal static void EnsureNotProtected(string p)
     {
         string full = Path.GetFullPath(p).TrimEnd('\\');
         string root = Path.GetPathRoot(full)?.TrimEnd('\\') ?? "";
@@ -92,7 +92,7 @@ public static class FsApi
             throw BridgeException.Forbidden("אזור מוגן: Program Files");
     }
 
-    private static string UniqueName(string dir, string name)
+    internal static string UniqueName(string dir, string name)
     {
         string baseName = Path.GetFileNameWithoutExtension(name);
         string ext = Path.GetExtension(name);

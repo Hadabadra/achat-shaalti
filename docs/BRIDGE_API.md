@@ -44,6 +44,18 @@
 אזורים מוגנים: מחיקה/העברה/שינוי שם של `C:\Windows`, `C:\Program Files*`, `C:\ProgramData`,
 שורש כונן, ותיקיית הגשר עצמה — `forbidden`.
 
+## סל המיחזור — /recycle/*
+
+הסל של המשתמש הנוכחי בכל הכוננים הקבועים והנתיקים (`\$Recycle.Bin\<SID>`: קובצי `$I` למטא-נתונים ו-`$R` לתוכן).
+מזהה פריט (`id`) הוא `<אות כונן>:<שם קובץ $I>` ומאומת בגשר — לא ניתן להצביע על נתיב כלשהו מחוץ לסל.
+
+| נתיב | גוף | data |
+|---|---|---|
+| `/recycle/list` | `{}` | `{ items: [{ id, name, originalPath, size, deleted (ISO UTC), type: "dir"\|"file", ext, drive }] }` — החדש ראשון |
+| `/recycle/restore` | `{ ids: [id], conflict?: "rename"\|"skip" }` | `{ restored, skipped, failed: [{id, message}] }` — משחזר למיקום המקורי (יוצר תיקיות חסרות). אם השם תפוס: `rename` (ברירת מחדל) = "שם (2).ext", או `skip`. לא משחזר לאזורים מוגנים |
+| `/recycle/delete` | `{ ids: [id] }` | `{ deleted, failed }` — מחיקה לצמיתות של פריטים נבחרים מהסל |
+| `/recycle/empty` | `{}` | `{ emptied: true }` — ריקון כל הסל (`SHEmptyRecycleBin`, בלי חלונות אישור; האישור הוא בתוסף) |
+
 ## מערכת — /sys/*
 
 | נתיב | גוף | data |

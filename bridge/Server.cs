@@ -49,6 +49,7 @@ public static class Server
     public static int Start()
     {
         FsApi.Register();
+        RecycleApi.Register();
         SysApi.Register();
         Kiosk.Register();
 
