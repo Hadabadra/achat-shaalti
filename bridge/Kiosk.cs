@@ -249,8 +249,54 @@ public static class Kiosk
         openSections = OpenSections,
         allSections = AllSections,
         warnings = Warnings(),
+        schedule = new { enabled = ScheduleEnabled, start = ScheduleStart, end = ScheduleEnd },
+        activatedBy = Config.Get<string>("kiosk.activatedBy", "manual"),
         hard = HardLock.Status(),
     };
+
+    // ---------- תזמון נעילה לפי שעות ----------
+
+    public static bool ScheduleEnabled => Config.Get("kiosk.schedule.enabled", false);
+    public static string ScheduleStart => Config.Get<string>("kiosk.schedule.start", "20:00");
+    public static string ScheduleEnd => Config.Get<string>("kiosk.schedule.end", "02:00");
+
+    private static System.Threading.Timer _schedTimer;
+
+    /// <summary>
+    /// מפעיל ומכבה את הנעילה אוטומטית לפי חלון שעות. רץ רק כשרכיב ההקשחה אינו זמין —
+    /// כשהוא מותקן הוא מקור האמת ומתזמן בעצמו (HardLockService.Tick), והגשר רק מסנכרן אחריו.
+    /// </summary>
+    public static void StartScheduler()
+    {
+        _schedTimer ??= new System.Threading.Timer(
+            _ => { try { ScheduleTick(); } catch (Exception ex) { Config.Log("schedule: " + ex.Message); } },
+            null, 3000, 30000);
+    }
+
+    private static void ScheduleTick()
+    {
+        if (HardLock.Available) return; // כשיש שירות — הוא המתזמן
+        // תזמון כבוי נחשב כמו "מחוץ לחלון": נעילה שהתזמון הפעיל תבוטל כשמכבים את התזמון
+        bool inWindow = ScheduleEnabled && Sched.InWindow(ScheduleStart, ScheduleEnd, DateTime.Now);
+        if (inWindow && !IsActive)
+        {
+            if (!HasPassword) { LogThrottled("schedNoPw", "schedule: אין סיסמת נעילה — התזמון לא הופעל", 3600); return; }
+            string otz = OtzariaPath();
+            if (string.IsNullOrEmpty(otz) || !File.Exists(otz))
+            { LogThrottled("schedNoOtz", "schedule: אוצריא לא נמצאה — התזמון לא הופעל", 3600); return; }
+            Config.Log($"schedule: בתוך חלון הנעילה ({ScheduleStart}–{ScheduleEnd}) — הנעילה מופעלת");
+            Config.Set("kiosk.activatedBy", "schedule");
+            Config.Set("kiosk.active", true);
+            Config.Set("kiosk.confirmed", true);
+            Config.Save();
+            try { Apply(); } catch (Exception ex) { Config.Log("schedule apply: " + ex.Message); Release(); }
+        }
+        else if (!inWindow && IsActive && Config.Get<string>("kiosk.activatedBy", "manual") == "schedule")
+        {
+            Config.Log("schedule: מחוץ לחלון הנעילה — הנעילה מבוטלת אוטומטית");
+            Release();
+        }
+    }
 
     /// <summary>רכיב ההקשחה אומר "נעול" (למשל אחרי עריכת config.json או בחשבון Windows אחר) — נועלים גם כאן</summary>
     public static void ForceActivate(string servicePath)
@@ -314,6 +360,7 @@ public static class Kiosk
         Config.Set("kiosk.strict", strict);
         Config.Set("kiosk.blockTaskManager", blockTm);
         Config.Set("kiosk.active", true);
+        Config.Set("kiosk.activatedBy", "manual"); // נעילה ידנית לא תבוטל אוטומטית בסוף חלון התזמון
         Config.Save();
         try { Apply(); }
         catch
@@ -368,8 +415,35 @@ public static class Kiosk
             if (p.Length > 0 && !File.Exists(p)) throw BridgeException.NotFound("הקובץ לא נמצא: " + p);
             Config.Set("kiosk.otzariaPath", p);
         }
+        bool schedChanged = false;
+        if (b.TryGetProperty("schedule", out var sch) && sch.ValueKind == JsonValueKind.Object)
+        {
+            if (sch.Has("enabled")) Config.Set("kiosk.schedule.enabled", sch.Bool("enabled"));
+            string ss = sch.Str("start");
+            if (ss != null)
+            {
+                if (!Sched.IsValid(ss)) throw BridgeException.BadRequest("שעת התחלה אינה תקינה (HH:MM)");
+                Config.Set("kiosk.schedule.start", ss);
+            }
+            string se = sch.Str("end");
+            if (se != null)
+            {
+                if (!Sched.IsValid(se)) throw BridgeException.BadRequest("שעת סיום אינה תקינה (HH:MM)");
+                Config.Set("kiosk.schedule.end", se);
+            }
+            schedChanged = true;
+        }
         Config.Save();
         if (IsActive) { Apply(); Overlay.ShowSideBar(); }
+        if (schedChanged)
+        {
+            // כשרכיב ההקשחה מותקן הוא המתזמן — מעבירים אליו את החלון; אחרת הגשר מתזמן מיד
+            if (HardLock.Available)
+                try { HardLock.SetSchedule(b.Str("password"), ScheduleEnabled, ScheduleStart, ScheduleEnd); }
+                catch (Exception ex) { Config.Log("hardlock schedule: " + ex.Message); }
+            else
+                try { ScheduleTick(); } catch (Exception ex) { Config.Log("schedule: " + ex.Message); }
+        }
         return Status();
     }
 
