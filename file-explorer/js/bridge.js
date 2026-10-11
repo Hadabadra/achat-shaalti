@@ -21,11 +21,32 @@
     throw FX.OpError('unreachable', 'תשובה לא צפויה מ-network.fetchStream');
   }
 
+
+  /* ---------- צימוד לגשר (3.0.0, בעיה #2): מפתח אקראי שהגשר נותן אחרי אישור המשתמש ---------- */
+  var TOKEN_KEY = 'bridgeToken';
+  var token = null, tokenLoaded = false, pairing = null;
+  async function hostCall(method, params) {
+    var r = await window.Otzaria.call(method, params || {});
+    if (r && r.success === false) throw new Error((r.error && r.error.message) || method);
+    return r && Object.prototype.hasOwnProperty.call(r, 'data') ? r.data : r;
+  }
+  async function loadToken() {
+    if (tokenLoaded) return token;
+    tokenLoaded = true;
+    try { var v = await hostCall('storage.get', { key: TOKEN_KEY }); token = typeof v === 'string' && v.length >= 32 ? v : null; }
+    catch (e) { token = null; }
+    return token;
+  }
+  async function saveToken(t) {
+    token = t;
+    try { await hostCall('storage.set', { key: TOKEN_KEY, value: t }); } catch (e) { /* נשאר בזיכרון */ }
+  }
+
   function buildParams(port, path, body, timeoutMs, method) {
     var p = {
       url: HOST + port + path,
       method: method || 'POST',
-      headers: { 'X-Otzaria-Bridge': '1' },
+      headers: token ? { 'X-Otzaria-Bridge': '1', 'X-Otzaria-Token': token } : { 'X-Otzaria-Bridge': '1' },
       timeoutMs: Math.min(Math.max(timeoutMs || 30000, 1000), 120000)
     };
     if (p.method === 'POST') {
@@ -72,6 +93,7 @@
 
     /* סריקת הפורטים ב-GET /health; מחזיר מידע או null */
     probe: async function () {
+      await loadToken();
       var tries = PORTS.map(function (port) {
         return request(port, '/health', null, { method: 'GET', timeoutMs: 2500 })
           .then(function (d) { return d && d.name === 'otzaria-bridge' ? { port: port, info: d } : null; })
@@ -90,14 +112,33 @@
       return null;
     },
 
+    /* בקשת צימוד: הגשר מציג חלון אישור במחשב (עד 2 דקות) */
+    pair: async function () {
+      if (pairing) return pairing;
+      pairing = (async function () {
+        FX.ui && FX.ui.toast(window.I18N && window.I18N.isEn() ? 'Approve the connection in the window that opened on the computer' : 'יש לאשר את החיבור בחלון שנפתח במחשב', 'info');
+        var d = await request(Bridge.port, '/pair/request', { client: 'file-explorer', name: 'סייר קבצים' }, { timeoutMs: 130000 });
+        await saveToken(d.token);
+      })();
+      try { await pairing; } finally { pairing = null; }
+    },
+
     call: async function (path, body, opts) {
       if (!Bridge.port) throw FX.OpError('unreachable', 'הגשר אינו מחובר');
-      return request(Bridge.port, path, body, opts);
+      await loadToken();
+      try { return await request(Bridge.port, path, body, opts); }
+      catch (e) {
+        if (!e || e.code !== 'unpaired') throw e;
+        await Bridge.pair();
+        return request(Bridge.port, path, body, opts);
+      }
     },
 
     /* זרם NDJSON: onItem נקרא לכל שורה. isCancelled מאפשר יציאה מוקדמת שמבטלת את הבקשה */
     stream: async function (path, body, onItem, isCancelled, opts) {
       if (!Bridge.port) throw FX.OpError('unreachable', 'הגשר אינו מחובר');
+      await loadToken();
+      if (!token) await Bridge.pair();
       opts = opts || {};
       var it = await openStream(buildParams(Bridge.port, path, body, opts.timeoutMs || 120000));
       var pending = '', status = 0, ok = true, errText = '', cancelled = false;

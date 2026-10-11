@@ -15,9 +15,32 @@
     return e;
   }
 
+
+  /* ---------- צימוד לגשר (3.0.0, בעיה #2): מפתח אקראי שהגשר נותן אחרי אישור המשתמש ---------- */
+  var TOKEN_KEY = 'bridgeToken';
+  var token = null, tokenLoaded = false, pairing = null;
+  async function hostCall(method, params) {
+    var r = await window.Otzaria.call(method, params || {});
+    if (r && r.success === false) throw new Error((r.error && r.error.message) || method);
+    return r && Object.prototype.hasOwnProperty.call(r, 'data') ? r.data : r;
+  }
+  async function loadToken() {
+    if (tokenLoaded) return token;
+    tokenLoaded = true;
+    try { var v = await hostCall('storage.get', { key: TOKEN_KEY }); token = typeof v === 'string' && v.length >= 32 ? v : null; }
+    catch (e) { token = null; }
+    return token;
+  }
+  async function saveToken(t) {
+    token = t;
+    try { await hostCall('storage.set', { key: TOKEN_KEY, value: t }); } catch (e) { /* נשאר בזיכרון */ }
+  }
+
   /* ---------- real transport ---------- */
   async function rawRequest(url, method, bodyObj, timeoutMs) {
-    var params = { url: url, method: method, headers: HEADERS, timeoutMs: timeoutMs || 15000 };
+    var headers = Object.assign({}, HEADERS);
+    if (token) headers['X-Otzaria-Token'] = token;
+    var params = { url: url, method: method, headers: headers, timeoutMs: timeoutMs || 15000 };
     if (method !== 'GET') params.body = JSON.stringify(bodyObj || {});
     var it = window.Otzaria.call('network.fetchStream', params);
     if (it && typeof it.then === 'function') it = await it;
@@ -53,6 +76,7 @@
       for (var i = 0; i < PORTS.length; i++) {
         var p = PORTS[i];
         try {
+          await loadToken();
           var r = await rawRequest("http://127.0.0.1:" + p + "/health", "GET", null, 1500);
           if (r.json && r.json.ok && r.json.data && r.json.data.name === 'otzaria-bridge') {
             real.port = p;
@@ -63,8 +87,30 @@
       real.port = null;
       return null;
     },
+    /* בקשת צימוד: הגשר מציג חלון אישור במחשב (עד 2 דקות) */
+    async pair() {
+      if (pairing) return pairing;
+      pairing = (async function () {
+        var r = await rawRequest("http://127.0.0.1:" + real.port + "/pair/request", "POST",
+          { client: 'system-settings', name: 'הגדרות מערכת' }, 130000);
+        if (!r.json.ok) { var er = r.json.error || {}; throw BridgeError(er.code || 'forbidden', er.message || '', r.status); }
+        await saveToken(r.json.data.token);
+      })();
+      try { await pairing; } finally { pairing = null; }
+    },
     async call(path, body, opts) {
       if (!real.port) throw BridgeError('offline', 'bridge not connected');
+      await loadToken();
+      var res = await real.callOnce(path, body, opts);
+      if (res.unpaired) {
+        SS.bridge.onPairing && SS.bridge.onPairing(true);
+        try { await real.pair(); } finally { SS.bridge.onPairing && SS.bridge.onPairing(false); }
+        res = await real.callOnce(path, body, opts);
+      }
+      if (res.error) throw res.error;
+      return res.data;
+    },
+    async callOnce(path, body, opts) {
       var timeout = (opts && opts.timeoutMs) || 15000;
       var r;
       try {
@@ -73,9 +119,10 @@
         if (e.code === 'transport') SS.bridge.onLost && SS.bridge.onLost();
         throw e;
       }
-      if (r.json.ok) return r.json.data;
+      if (r.json.ok) return { data: r.json.data };
       var err = r.json.error || {};
-      throw BridgeError(err.code || 'internal', err.message || '', r.status);
+      if (err.code === 'unpaired') return { unpaired: true };
+      return { error: BridgeError(err.code || 'internal', err.message || '', r.status) };
     }
   };
 
@@ -213,7 +260,7 @@
       if (M.kiosk.active && b.action !== 'lock') throw mockErr('locked', 'הפעולה חסומה במצב נעילה');
       return { ok: true };
     },
-    '/kiosk/status': function () { return clone(M.kiosk); },
+    '/kiosk/status': function () { return Object.assign(clone(M.kiosk), { hard: clone(M.hard) }); },
     '/kiosk/set-password': function (b) {
       if (!b.newPassword || b.newPassword.length < 4) throw mockErr('bad_request', 'הסיסמה חייבת להכיל לפחות 4 תווים');
       if (M.kiosk.hasPassword) {
@@ -367,17 +414,30 @@
     return { current: M.defLang, methods: [{ id: '040D:0002040D', lang: 'he', name: 'עברית' }, { id: '0409:00000409', lang: 'en-US', name: 'English (United States)' }] };
   };
   mockRoutes['/sys/keyboard/default-language/set'] = function (b) { M.defLang = b.id; return mockRoutes['/sys/keyboard/default-language/get'](); };
-  mockRoutes['/sys/update-check'] = function () {
-    return { current: '2.0.0', latest: '2.0.0', newer: false, canInstall: false, url: 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest' };
+  M.hard = { installed: false, running: false, configured: false, active: false, blockUsbStorage: false, version: null, needsUpdate: false, sessions: 1 };
+  M.pairs = [{ id: 'a1b2c3', client: 'system-settings', name: 'הגדרות מערכת', created: '2026-10-12T02:10:00', lastUsed: '2026-10-12T02:10:00' },
+    { id: 'd4e5f6', client: 'file-explorer', name: 'סייר קבצים', created: '2026-10-12T02:11:00', lastUsed: '2026-10-12T02:11:00' }];
+  mockRoutes['/pair/list'] = function () { return { clients: clone(M.pairs) }; };
+  mockRoutes['/pair/revoke'] = function (b) { M.pairs = M.pairs.filter(function (c) { return c.id !== b.id; }); return { clients: clone(M.pairs) }; };
+  mockRoutes['/kiosk/hard/status'] = function () { return clone(M.hard); };
+  mockRoutes['/kiosk/hard/install'] = function (b) {
+    checkPw(b.password, false);
+    M.hard = { installed: true, running: true, configured: true, active: M.kiosk.active, blockUsbStorage: false, version: '3.0.0', needsUpdate: false, sessions: 1 };
+    return clone(M.hard);
   };
-  mockRoutes['/sys/update-install'] = function () { return { started: false, message: 'הגשר מעודכן (2.0.0)' }; };
+  mockRoutes['/kiosk/hard/settings'] = function (b) { checkPw(b.password, false); M.hard.blockUsbStorage = !!b.blockUsbStorage; return clone(M.hard); };
+  mockRoutes['/kiosk/hard/uninstall'] = function (b) { checkPw(b.password, true); M.hard = { installed: false, running: false, configured: false, active: false, blockUsbStorage: false, version: null, needsUpdate: false, sessions: 1 }; return clone(M.hard); };
+  mockRoutes['/sys/update-check'] = function () {
+    return { current: '3.0.0', latest: '3.0.0', newer: false, canInstall: false, url: 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest' };
+  };
+  mockRoutes['/sys/update-install'] = function () { return { started: false, message: 'הגשר מעודכן (3.0.0)' }; };
 
   var mock = {
     port: 47917,
     async probe() {
       await delay(250);
       if (/[?&]offline=1/.test(location.search)) return null;
-      return { name: 'otzaria-bridge', version: '2.0.0', port: 47917, kioskActive: M.kiosk.active, platform: 'windows' };
+      return { name: 'otzaria-bridge', version: '3.0.0', port: 47917, auth: 'token', paired: true, kioskActive: M.kiosk.active, platform: 'windows' };
     },
     async call(path, body) {
       await delay(180);
@@ -393,6 +453,7 @@
     isMock: !window.Otzaria,
     health: null,
     onLost: null,
+    onPairing: null,
     get port() { return impl.port; },
     async probe() {
       var h = await impl.probe();

@@ -1,11 +1,11 @@
 # פרומפט להמשך עבודה (להדבקה בשיחה חדשה)
 
 ```
-המשך כלי מערכת לאוצריא אחרי גרסה 2.0.0.
+המשך כלי מערכת לאוצריא אחרי גרסה 3.0.0.
 ריפו: e0548433917-gif/otzaria-system-tools (ענף main).
 
 התחלה:
-- שכפל עם --depth 1 וקרא docs/ROADMAP.md (הסעיף "להמשך"), docs/PROGRESS.md ו-docs/KNOWLEDGE.md.
+- שכפל עם --depth 1 וקרא docs/ROADMAP.md (הסעיף "להמשך"), docs/PROGRESS.md, docs/KNOWLEDGE.md ו-docs/HARDLOCK.md.
 - בנייה מקומית של הגשר: ראו KNOWLEDGE.md ("קומפילציה מקומית").
 
 כללים:

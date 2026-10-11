@@ -5,7 +5,7 @@ namespace OtzariaBridge;
 public static class Tray
 {
     private static NotifyIcon _icon;
-    private static ToolStripMenuItem _status, _exit, _plugins, _install, _lang, _about;
+    private static ToolStripMenuItem _status, _exit, _plugins, _install, _lang, _about, _unpair;
     private static ContextMenuStrip _menu;
     private static Control _invoker;
 
@@ -22,7 +22,14 @@ public static class Tray
         _lang = new ToolStripMenuItem("", null, (_, _) => { Lang.Set(Lang.En ? "he" : "en"); ApplyTexts(); });
         _exit = new ToolStripMenuItem("", null, (_, _) => Application.ExitThread());
         _about = new ToolStripMenuItem("", null, (_, _) => AboutForm.Open());
-        menu.Items.AddRange(new ToolStripItem[] { _status, _about, _install, _plugins, _lang, new ToolStripSeparator(), _exit });
+        _unpair = new ToolStripMenuItem("", null, (_, _) =>
+        {
+            if (Kiosk.IsActive) return;
+            if (MessageBox.Show(Lang.T("לנתק את כל התוספים מהגשר? בפתיחה הבאה כל תוסף יבקש אישור מחדש.", "Disconnect all plugins from the bridge? Each plugin will ask for approval again."),
+                    Lang.T("גשר אוצריא", "Otzaria Bridge"), MessageBoxButtons.YesNo) == DialogResult.Yes)
+                Pairing.RevokeAll();
+        });
+        menu.Items.AddRange(new ToolStripItem[] { _status, _about, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
 
         _icon = new NotifyIcon
         {
@@ -59,6 +66,7 @@ public static class Tray
         _about.Text = Lang.T("אודות ועדכונים…", "About and updates…");
         _install.Text = Lang.T("התקן/עדכן את התוספים באוצריא", "Install/update the plugins in Otzaria");
         _lang.Text = Lang.T("English", "עברית");
+        _unpair.Text = Lang.T("ניתוק כל התוספים המחוברים", "Disconnect all connected plugins");
         _exit.Text = Lang.T("יציאה", "Exit");
         UpdateStatus();
     }
@@ -131,7 +139,7 @@ internal sealed class AboutForm : Form
         var logo = new PictureBox { Image = new Icon(Overlay.AppIcon(), 64, 64).ToBitmap(), SizeMode = PictureBoxSizeMode.CenterImage, Height = 76, Dock = DockStyle.Top };
         var title = new Label { Text = Lang.T("גשר אוצריא", "Otzaria Bridge"), Font = new Font("Segoe UI Semibold", 16f), Height = 38, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         var ver = new Label { Text = Lang.T("גרסה ", "Version ") + Program.Version + " · " + Lang.T("חד בדרא", "Chad Bedra"), Height = 26, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.DimGray };
-        var ded = new Label { Text = "לעילוי נשמת הנערה הצדקנית\nאסתר גיטה בת רבי מיכאל שלום הלוי שיבדלט\"א\nתהא נשמתה צרורה בצרור החיים. תנצב\"ה", Height = 66, Font = new Font("Segoe UI", 10.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(90, 70, 40) };
+        var ded = new Label { Text = "לעילוי נשמת הנערה הצדקנית\nאסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט\"א\nתהא נשמתה צרורה בצרור החיים. תנצב\"ה", Height = 66, Font = new Font("Segoe UI", 10.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(90, 70, 40) };
         var link = new LinkLabel { Text = Lang.T("עמוד ההוצאות ויומן השינויים", "Releases page and changelog"), Height = 28, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         link.LinkClicked += (_, _) => OpenUrl(UpdateApi.AllReleasesUrl);
 

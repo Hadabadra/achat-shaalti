@@ -1,7 +1,7 @@
 {
   "id": "com.chadbedera.systemsettings",
   "name": "הגדרות מערכת",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה, מקלדת, עכבר, מדפסות, USB, רשת, ומצב נעילה ללימוד. דורש את גשר אוצריא.",
   "author": "חד בדרא",
   "homepage": "https://github.com/e0548433917-gif/otzaria-system-tools",

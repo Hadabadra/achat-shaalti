@@ -156,6 +156,9 @@ public static class Installer
     /// <summary>מחזיר הודעת שגיאה, או null בהצלחה</summary>
     public static string Uninstall(string password)
     {
+        // רכיב ההקשחה (אם מותקן) מוסר קודם, עם אותה סיסמה
+        string herr = HardLock.UninstallWithPassword(password);
+        if (herr != null) return herr;
         string err = Kiosk.ReleaseForUninstall(password);
         if (err != null) return err;
 

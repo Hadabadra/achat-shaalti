@@ -94,3 +94,10 @@
 - **תאריך עברי:** ב-C# `CultureInfo("he-IL")` עם `HebrewCalendar`; ב-JS `Intl.DateTimeFormat('he-IL-u-ca-hebrew')`.
 - **תוכנות תורה:** נתיבים ידועים ב-`Programs.KnownList`; אם לא נמצאו — חיפוש לפי שם קובץ בכוננים (עומק 4, עד 8 שניות, מטמון 10 דקות).
 - **מיזוג בקשות מיזוג:** מיזוג ישיר דרך ה-API (`PUT /pulls/N/merge`) עובד; בהתנגשות מיישמים ידנית.
+
+## נלמד ב-3.0.0
+- **צימוד:** אין צורך שהתוסף יקרא סוד מקובץ. הגשר נותן מפתח אחרי אישור בחלון, והתוסף שומר אותו ב-`storage.set` (מפתח `bridgeToken`). כל בקשה שולחת `X-Otzaria-Token`; `unpaired` (401) = לבקש צימוד ולנסות שוב. `/health` פתוח ומחזיר `auth:"token"` ו-`paired`.
+- **רכיב השירות:** אותו exe עם `--service` (ServiceBase מ-`System.ServiceProcess.ServiceController`) ו-`--install-service` (מורץ עם `Verb=runas`). צינור עם `NamedPipeServerStreamAcl.Create`. הפעלת הגשר בחשבון משתמש: `WTSEnumerateSessions` → `WTSQueryUserToken` → `CreateProcessAsUser` על `winsta0\default`. קובץ השירות חייב לשבת ב-Program Files (אסור להריץ כ-SYSTEM קובץ שהמשתמש יכול להחליף), ולכן עדכון השירות דורש UAC.
+- **בלי שירות מותקן** לא ממתינים לצינור: `HardLock.ServiceStatus` בודק קודם את רשימת השירותים (מטמון של 30 שניות).
+- פירוט מלא: `docs/HARDLOCK.md`.
+

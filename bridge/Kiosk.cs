@@ -148,6 +148,8 @@ public static class Kiosk
                 int secs = (int)Math.Ceiling((_lockoutUntil - DateTime.UtcNow).TotalSeconds);
                 throw new BridgeException("wrong_password", $"יותר מדי ניסיונות שגויים. נסו שוב בעוד {secs} שניות", 429);
             }
+            // כשרכיב ההקשחה מותקן — הוא מקור האמת לסיסמה (עריכת config.json לא עוזרת)
+            if (HardLock.Available) { HardLock.Verify(password, allowRecovery); return; }
             bool ok = Matches(password, "kiosk.passwordHash", "kiosk.salt") ||
                       (allowRecovery && Matches(NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt"));
             if (ok)
@@ -199,7 +201,34 @@ public static class Kiosk
         openSections = OpenSections,
         allSections = AllSections,
         warnings = Warnings(),
+        hard = HardLock.Status(),
     };
+
+    /// <summary>רכיב ההקשחה אומר "נעול" (למשל אחרי עריכת config.json או בחשבון Windows אחר) — נועלים גם כאן</summary>
+    public static void ForceActivate(string servicePath)
+    {
+        if (string.IsNullOrEmpty(OtzariaPath()) && !string.IsNullOrEmpty(servicePath) && File.Exists(servicePath))
+            Config.Set("kiosk.otzariaPath", servicePath);
+        string otz = OtzariaPath();
+        if (string.IsNullOrEmpty(otz) || !File.Exists(otz))
+        {
+            // בלי אוצריא בחשבון הזה לא נועלים (אחרת לא היה נשאר שום ממשק) — רק מתעדים
+            LogThrottled("noOtz", "hardlock: נעילה מוקשחת פעילה, אבל אוצריא לא נמצאה בחשבון הזה — הנעילה לא הוחלה", 300);
+            return;
+        }
+        Config.Log("hardlock: הנעילה הוחלה לפי רכיב ההקשחה");
+        Config.Set("kiosk.active", true);
+        Config.Set("kiosk.confirmed", true);
+        Config.Save();
+        try { Apply(); } catch (Exception ex) { Config.Log("hardlock apply: " + ex.Message); }
+    }
+
+    /// <summary>הנעילה בוטלה ברכיב ההקשחה (למשל בקוד שחזור) — משחררים גם כאן</summary>
+    public static void ReleaseFromService()
+    {
+        Config.Log("hardlock: הנעילה בוטלה ברכיב ההקשחה");
+        Release();
+    }
 
     private static object SetPassword(JsonElement b)
     {
@@ -207,6 +236,7 @@ public static class Kiosk
         if (newPassword.Length < 4) throw BridgeException.BadRequest("הסיסמה חייבת להכיל לפחות 4 תווים");
         string recovery = null;
         if (HasPassword) Verify(b.Str("oldPassword"), allowRecovery: true);
+        if (HasPassword && HardLock.Available) HardLock.SetPassword(b.Str("oldPassword"), newPassword);
         else
         {
             recovery = NewRecoveryCode();
@@ -241,12 +271,18 @@ public static class Kiosk
         }
         Config.Set("kiosk.confirmed", true);
         Config.Save();
+        if (HardLock.Available)
+        {
+            try { HardLock.Enable(b.Str("password"), otz); }
+            catch (Exception ex) { Config.Log("hardlock enable: " + ex.Message); }
+        }
         return new { active = true };
     }
 
     private static object Disable(JsonElement b)
     {
         Verify(b.Str("password"), allowRecovery: true);
+        if (HardLock.Available) HardLock.Disable(b.Str("password"));
         Release();
         return new { active = false };
     }
@@ -316,7 +352,7 @@ public static class Kiosk
         try
         {
             bool safeMode = SystemInformation.BootMode != BootMode.Normal;
-            bool locked = IsActive && Config.Get("kiosk.confirmed", false) && !safeMode;
+            bool locked = ((IsActive && Config.Get("kiosk.confirmed", false)) || HardLock.ServiceActive) && !safeMode;
             if (safeMode && IsActive)
             {
                 Config.Log("kiosk: מצב בטוח — הנעילה מבוטלת לעלייה הזו");
@@ -347,6 +383,7 @@ public static class Kiosk
 
     public static void RestoreOnStartup()
     {
+        if (!IsActive && HardLock.ServiceActive) { ForceActivate(null); return; }
         if (!IsActive) return;
         // נעילה חוזרת בעלייה רק אם הופעלה בהצלחה. מצב שנשמר מהפעלה שנכשלה (גרסאות 0.0.x שמרו
         // "פעיל" לפני ההחלה) מנוקה, כדי שהפעלת הגשר לא תנעל את המחשב בהפתעה.

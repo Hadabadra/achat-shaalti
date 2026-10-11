@@ -5,7 +5,7 @@
   var t = function (s) { return I.t(s); };
   I.add({
     'לעילוי נשמת הנערה הצדקנית': 'In loving memory of the righteous young woman',
-    'אסתר גיטה בת רבי מיכאל שלום הלוי שיבדלט"א': 'Esther Gitta, daughter of Rabbi Michael Shalom HaLevi, may he live long',
+    'אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א': 'Esther Gitta Diner, daughter of Rabbi Michael Shalom HaLevi, may he live long',
     'תהא נשמתה צרורה בצרור החיים. תנצב"ה': 'May her soul be bound up in the bond of eternal life.',
     'בדיקת עדכון': 'Check for updates',
     'בדיקה חוזרת': 'Check again',

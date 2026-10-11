@@ -56,6 +56,8 @@ public static class Server
         DeviceApi.Register();
         MoreApi.Register();
         Kiosk.Register();
+        Pairing.Register();
+        HardLock.Register();
 
         int port = FindPort();
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory });
@@ -119,6 +121,8 @@ public static class Server
                     port = Program.Port,
                     kioskActive = Kiosk.IsActive,
                     platform = "windows",
+                    auth = "token",
+                    paired = Pairing.IsValid(req.Headers[Pairing.TokenHeader].ToString()),
                 });
                 return;
             }
@@ -128,6 +132,15 @@ public static class Server
 
             using var doc = await ReadBody(req);
             var body = doc.RootElement;
+
+            // בעיה #2: בקשת צימוד היא הנקודה היחידה שפתוחה בלי מפתח; היא מציגה חלון אישור למשתמש
+            if (path.Equals("/pair/request", StringComparison.OrdinalIgnoreCase))
+            {
+                await WriteOk(ctx, await Pairing.Request(body));
+                return;
+            }
+            if (!Pairing.IsValid(req.Headers[Pairing.TokenHeader].ToString()))
+                throw new BridgeException("unpaired", "התוסף אינו מצומד לגשר. יש לאשר את החיבור בחלון שנפתח במחשב", 401);
 
             if (path.Equals("/fs/search", StringComparison.OrdinalIgnoreCase))
             {

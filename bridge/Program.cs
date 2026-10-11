@@ -7,7 +7,7 @@ namespace OtzariaBridge;
 
 public static class Program
 {
-    public const string Version = "2.0.0";
+    public const string Version = "3.0.0";
     public static int Port { get; set; }
 
     [DllImport("kernel32.dll")] private static extern bool AttachConsole(int pid);
@@ -24,11 +24,20 @@ public static class Program
 
         try
         {
+            // רכיב ההקשחה (שירות Windows, SYSTEM) — בעיה #1
+            if (Has("--service"))
+            {
+                System.ServiceProcess.ServiceBase.Run(new HardLockService());
+                return 0;
+            }
+            if (Has("--install-service")) return HardLock.InstallService();
+
             Lang.FromArgs(args);
             if (Has("--unlock"))
             {
                 AttachConsole(-1);
                 bool ok = Kiosk.EmergencyUnlock(Arg("--unlock") ?? "");
+                ok = HardLock.EmergencyDisable(Arg("--unlock") ?? "") || ok;
                 Console.WriteLine(ok ? Lang.T("הנעילה בוטלה.", "Lock mode turned off.") : Lang.T("קוד שחזור שגוי.", "Wrong recovery code."));
                 return ok ? 0 : 2;
             }
@@ -58,6 +67,7 @@ public static class Program
             Tray.Init();
             Port = Server.Start();
             Kiosk.RestoreOnStartup();
+            HardLock.StartSync();
             Tray.Run();
             Server.Stop();
             return 0;

@@ -28,10 +28,12 @@
     found = found.filter(function (f) {
       return !progs.some(function (p) { return p.path.toLowerCase() === f.path.toLowerCase(); });
     });
-    render(body, st, progs, found);
+    var pairs = [];
+    try { pairs = (await SS.bridge.call('/pair/list', {})).clients || []; } catch (e) { pairs = []; }
+    render(body, st, progs, found, pairs);
   }
 
-  function render(body, st, progs, found) {
+  function render(body, st, progs, found, pairs) {
     var active = !!st.active;
     var html =
       '<div class="status-card ' + (active ? 'active' : '') + '">' +
@@ -94,6 +96,8 @@
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
       html += programsCard(progs, found, !!st.autoTorah);
+      html += hardCard(st.hard || {});
+      html += pairCard(pairs);
       html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
         '<p class="muted">בחלון „ביטול נעילה” אפשר להקליד גם את <b>קוד השחזור</b> שקיבלתם בהגדרת הסיסמה. במקרה חירום אפשר להריץ משורת הפקודה:</p>' +
         '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock &lt;קוד-שחזור&gt;</code>' +
@@ -102,6 +106,7 @@
 
     body.innerHTML = html;
     wire(body, st, progs, found);
+    wireHard(body, st, pairs);
   }
 
   function wire(body, st, progs, found) {
@@ -240,6 +245,91 @@
       ui.toast('הסיסמה עודכנה', 'success');
       load(body);
     }
+  }
+
+  /* ---------- נעילה מוקשחת (3.0.0, בעיה #1) ---------- */
+  function hardCard(h) {
+    var state = !h.installed ? 'לא מותקן' : !h.running ? 'מותקן אבל לא רץ' :
+      (h.active ? 'פעיל — הנעילה מוקשחת' : 'מותקן, ממתין להפעלת הנעילה') + (h.version ? ' · גרסה ' + ui.esc(h.version) : '');
+    var actions = !h.installed
+      ? '<button class="btn btn-primary" data-act="hard-install">' + ui.icon('shield') + 'התקנה</button>'
+      : (h.needsUpdate || !h.running ? '<button class="btn btn-tonal" data-act="hard-install">' + ui.icon('shield') + 'עדכון</button>' : '') +
+        '<button class="btn btn-tonal" data-act="hard-settings">' + ui.icon('edit') + 'הגדרות</button>' +
+        '<button class="btn btn-tonal" data-act="hard-remove">' + ui.icon('close') + 'הסרה</button>';
+    return '<div class="card"><div class="card-title">נעילה מוקשחת (רכיב שירות)</div>' +
+      '<p class="muted">רכיב אופציונלי שרץ ברקע בהרשאות מערכת. הוא שומר את הסיסמה ואת מצב הנעילה במקום שהתלמיד אינו יכול לשנות, ' +
+      'מפעיל את הגשר מחדש אם נסגר (גם בחשבון Windows אחר), מחזיר את חסימת מנהל המשימות ועורך הרישום אם נמחקה, ויכול לחסום התקני אחסון USB. ' +
+      'ההתקנה דורשת אישור מנהל פעם אחת.</p>' +
+      '<div class="setting-row"><div class="setting-text"><b>מצב</b><span class="muted">' + state +
+      (h.blockUsbStorage ? ' · אחסון USB חסום' : '') + '</span></div>' + actions + '</div>' +
+      '<p class="muted small">הרכיב אינו משנה את הכניסה ל-Windows ואינו רץ במצב בטוח, כך שאינו יכול להשבית את המחשב. ' +
+      'גם הוא אינו מחליף סיסמת BIOS. פרטים: docs/HARDLOCK.md במאגר.</p></div>';
+  }
+
+  function pairCard(pairs) {
+    var rows = pairs.map(function (c) {
+      return '<div class="setting-row"><div class="setting-text"><b>' + ui.esc(c.name || c.client) + '</b><span class="muted">חובר: ' +
+        ui.esc((c.created || '').replace('T', ' ')) + ' · שימוש אחרון: ' + ui.esc((c.lastUsed || '').replace('T', ' ')) + '</span></div>' +
+        '<button class="btn btn-tonal" data-act="unpair-' + ui.esc(c.id) + '">' + ui.icon('close') + 'ניתוק</button></div>';
+    }).join('');
+    return '<div class="card"><div class="card-title">תוספים מחוברים לגשר</div>' +
+      '<p class="muted">מגרסה 3.0 רק תוסף שאושר בחלון של הגשר יכול להשתמש בו. תוכנה אחרת במחשב לא יכולה לגשת לקבצים ולהגדרות בלי אישור כזה.</p>' +
+      (rows || '<p class="muted">אין תוספים מחוברים.</p>') + '</div>';
+  }
+
+  function wireHard(body, st, pairs) {
+    function on(act, fn) { var b = body.querySelector('[data-act="' + act + '"]'); if (b) b.addEventListener('click', fn); }
+    var h = st.hard || {};
+    on('hard-install', async function () {
+      var ok = await ui.dialog({
+        title: h.installed ? 'עדכון רכיב ההקשחה' : 'התקנת נעילה מוקשחת', icon: 'shield',
+        body: '<p class="muted">אחרי ההקלדה Windows תבקש אישור מנהל. אחרי האישור הרכיב יותקן ויפעל ברקע. הסיסמה וקוד השחזור הנוכחיים יישארו בתוקף.</p>',
+        fields: [{ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }],
+        actions: [{ label: 'ביטול', value: false }, { label: h.installed ? 'עדכון' : 'התקנה', value: true, kind: 'primary' }],
+        validate: function (x) { return x.pw ? '' : 'יש להקליד את סיסמת הנעילה'; },
+        onSubmit: async function (x) { await SS.bridge.call('/kiosk/hard/install', { password: x.pw }, { timeoutMs: 200000 }); return true; }
+      });
+      if (ok) { ui.toast('רכיב ההקשחה מותקן', 'success'); load(body); }
+    });
+    on('hard-settings', async function () {
+      var ok = await ui.dialog({
+        title: 'הגדרות נעילה מוקשחת', icon: 'shield',
+        fields: [
+          { name: 'usb', type: 'checkbox', label: 'חסימת התקני אחסון USB בזמן נעילה', value: !!h.blockUsbStorage, hint: 'דיסק-און-קי וכוננים חיצוניים לא ייטענו. עכבר, מקלדת ומדפסת ממשיכים לעבוד. התקן שכבר מחובר נשאר עד שמוציאים אותו' },
+          { name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }
+        ],
+        actions: [{ label: 'ביטול', value: false }, { label: 'שמירה', value: true, kind: 'primary' }],
+        validate: function (x) { return x.pw ? '' : 'יש להקליד את סיסמת הנעילה'; },
+        onSubmit: async function (x) { await SS.bridge.call('/kiosk/hard/settings', { password: x.pw, blockUsbStorage: !!x.usb }); return true; }
+      });
+      if (ok) { ui.toast('ההגדרות נשמרו', 'success'); load(body); }
+    });
+    on('hard-remove', async function () {
+      var ok = await ui.dialog({
+        title: 'הסרת רכיב ההקשחה', icon: 'close',
+        body: '<p class="muted">הנעילה הרגילה תמשיך לעבוד. החסימות שהרכיב הוסיף יבוטלו.</p>',
+        fields: [{ name: 'pw', label: 'סיסמת נעילה או קוד שחזור', type: 'password', dir: 'ltr' }],
+        actions: [{ label: 'ביטול', value: false }, { label: 'הסרה', value: true, kind: 'danger' }],
+        validate: function (x) { return x.pw ? '' : 'יש להקליד סיסמה'; },
+        onSubmit: async function (x) { await SS.bridge.call('/kiosk/hard/uninstall', { password: x.pw }); return true; }
+      });
+      if (ok) { ui.toast('רכיב ההקשחה הוסר', 'success'); load(body); }
+    });
+    (pairs || []).forEach(function (c) {
+      on('unpair-' + c.id, async function () {
+        var x = { pw: '' };
+        if (st.active) {
+          var ok = await ui.dialog({
+            title: 'ניתוק תוסף', icon: 'close', fields: [{ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }],
+            actions: [{ label: 'ביטול', value: false }, { label: 'ניתוק', value: true, kind: 'danger' }],
+            onSubmit: async function (v) { x = v; return true; }
+          });
+          if (!ok) return;
+        } else if (!(await ui.confirm('ניתוק תוסף', 'בפתיחה הבאה התוסף יבקש אישור מחדש.', 'ניתוק'))) return;
+        try { await SS.bridge.call('/pair/revoke', { id: c.id, password: x.pw }); load(body); }
+        catch (e) { ui.error(e); }
+      });
+    });
   }
 
   var SECTION_NAMES = {

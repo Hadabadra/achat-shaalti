@@ -4,7 +4,7 @@
   var SS = (window.SS = window.SS || {});
   var ui = SS.ui;
   SS.sections = SS.sections || [];
-  SS.VERSION = '2.0.0';
+  SS.VERSION = '3.0.0';
   SS.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
 
   var state = { current: null, connected: false, probeTimer: null, suspended: false, booted: false };
@@ -239,6 +239,9 @@
   }
   SS.reprobe = connect;
 
+  SS.bridge.onPairing = function (on) {
+    if (on) SS.ui.toast(window.I18N && window.I18N.isEn() ? 'Approve the connection in the window that opened on the computer' : 'יש לאשר את החיבור בחלון שנפתח במחשב', 'info');
+  };
   SS.bridge.onLost = function () {
     if (!state.connected) return;
     SS.bridge.probe().then(function (h) { if (!h) showOffline(); else setStatus(true); });

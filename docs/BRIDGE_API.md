@@ -164,3 +164,25 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 ### נעילה — שדות חדשים ב-`/kiosk/status` וב-`/kiosk/settings`
 `readOnly`, `clock`, `clockPosition` (bottom-left/bottom-right/top-left/top-right), `restScreen`, `fullscreenOtzaria`, `openSections` (מתוך `allSections`), `warnings` (`admin`).
 בזמן נעילה, כל פעולת שינוי של הגדרה שלא ב-`openSections` מחזירה `locked` (423) — נאכף ב-`Server.Handle` לפי `Kiosk.SectionOf`.
+
+## נוסף בגרסה 3.0.0 (פירוט: docs/HARDLOCK.md)
+### צימוד — חובה מ-3.0.0
+כל בקשה, חוץ מ-`GET /health` ו-`POST /pair/request`, חייבת כותרת `X-Otzaria-Token: <token>`. בלעדיה מתקבלת השגיאה `401` עם הקוד `unpaired`.
+
+| נקודת קצה | גוף | תשובה |
+|---|---|---|
+| `/pair/request` | `{ client, name }` | `{ token }`. הבקשה ממתינה לאישור בחלון של הגשר (עד 2 דקות). שגיאות: `forbidden` (נדחה), `busy`, `too_many` |
+| `/pair/list` | `{}` | `{ clients: [{ id, client, name, created, lastUsed }] }` |
+| `/pair/revoke` | `{ id, password? }` | `{ clients }`. בזמן נעילה נדרשת סיסמה |
+
+`/health` מחזיר גם את השדות `auth: "token"` ו-`paired` (האם המפתח שנשלח תקין).
+
+### נעילה מוקשחת — /kiosk/hard/*
+| נקודת קצה | גוף | תשובה |
+|---|---|---|
+| `/kiosk/hard/status` | `{}` | `{ installed, running, configured, active, blockUsbStorage, version, needsUpdate, sessions }` |
+| `/kiosk/hard/install` | `{ password }` | סטטוס. מציג UAC; הקוד `cancelled` אם לא אושר. משמש גם לעדכון השירות |
+| `/kiosk/hard/settings` | `{ password, blockUsbStorage }` | סטטוס |
+| `/kiosk/hard/uninstall` | `{ password }` | סטטוס. מתקבל גם קוד שחזור |
+
+`/kiosk/status` כולל גם את השדה `hard`, באותו מבנה כמו `/kiosk/hard/status`.
