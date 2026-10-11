@@ -70,6 +70,8 @@
     device: '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M11 18h2"/>',
     plug2: '<path d="M8 12h8M12 8v8"/>',
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+    usb: '<path d="M12 3v14"/><path d="M12 7l4 2.5v2M12 11l-4 2v2"/><circle cx="12" cy="19" r="2"/><rect x="15" y="11.5" width="2" height="2"/><circle cx="8" cy="16" r="1.2"/>',
+    keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     bridge: '<path d="M2.5 17h19M4 17v-4M20 17v-4M2.5 13c3.5 0 6-4 9.5-4s6 4 9.5 4M8 17v-5.5M16 17v-5.5M12 17V9"/>'
   };
   ui.icon = function (name, cls) {

@@ -277,12 +277,56 @@
     }
   };
 
+
+  /* ---------- mock: USB, keyboard, energy (browser preview) ---------- */
+  M.usb = [
+    { letter: 'E:', label: 'ספריית תורה', model: 'SanDisk Ultra USB 3.0', fs: 'NTFS', sizeBytes: 64e9, freeBytes: 21e9, ready: true },
+    { letter: 'F:', label: '', model: 'Kingston DataTraveler', fs: 'FAT32', sizeBytes: 16e9, freeBytes: 15e9, ready: true }
+  ];
+  M.kb = { layouts: [{ id: '0002040D', name: 'עברית (ישראל) — עברית', lang: 'he' }, { id: '00020409', name: 'English (United States) — US', lang: 'en' }],
+    current: '0002040D', delay: 1, speed: 31, stickyKeys: false, stickyHotkey: true, filterKeys: false, toggleKeys: false, capsLock: false, numLock: true,
+    backlight: { supported: true, name: 'Keyboard Backlight', enabled: true, brightness: 60, vendor: 'Mock', model: 'Preview' } };
+  M.energy = { battery: { percent: 64, charging: false, saverOn: false, minutesLeft: 190 },
+    plans: [{ id: 'a1841308-3541-4fab-bc81-f71556f20b4a', name: 'חיסכון בחשמל', active: false }, { id: '381b4222-f694-41f0-9685-ff5bb260df2e', name: 'מאוזן', active: true }, { id: '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c', name: 'ביצועים גבוהים', active: false }],
+    screenOff: { ac: 600, dc: 300 }, sleepAfter: { ac: 1800, dc: 900 }, saverThreshold: 20 };
+  mockRoutes['/sys/usb/list'] = function () { return { drives: clone(M.usb) }; };
+  mockRoutes['/sys/usb/eject'] = function (b) {
+    var i = M.usb.findIndex(function (d) { return d.letter === b.letter; });
+    if (i < 0) throw mockErr('not_found', 'הכונן ' + b.letter + ' אינו התקן USB מחובר');
+    if (b.letter === 'F:' && !M.usbTried) { M.usbTried = true; throw mockErr('busy', 'הכונן בשימוש. סגרו קבצים ותוכנות שפתוחים ממנו (כולל חלונות סייר) ונסו שוב.'); }
+    M.usb.splice(i, 1);
+    return { ok: true, letter: b.letter, ejected: true };
+  };
+  function kbGet() { var k = clone(M.kb); delete k.backlight; return k; }
+  mockRoutes['/sys/keyboard/get'] = function () { return kbGet(); };
+  mockRoutes['/sys/keyboard/set'] = function (b) {
+    ['delay', 'speed', 'stickyKeys', 'stickyHotkey', 'filterKeys', 'toggleKeys', 'capsLock', 'numLock'].forEach(function (k) { if (b[k] !== undefined) M.kb[k] = b[k]; });
+    if (b.layout) M.kb.current = b.layout;
+    return kbGet();
+  };
+  mockRoutes['/sys/keyboard/backlight/get'] = function () { return clone(M.kb.backlight); };
+  mockRoutes['/sys/keyboard/backlight/set'] = function (b) {
+    if (b.enabled !== undefined) M.kb.backlight.enabled = b.enabled;
+    if (b.brightness !== undefined) M.kb.backlight.brightness = Math.round(b.brightness);
+    return clone(M.kb.backlight);
+  };
+  mockRoutes['/sys/energy/get'] = function () { return clone(M.energy); };
+  mockRoutes['/sys/energy/set'] = function (b) {
+    if (b.plan) M.energy.plans.forEach(function (p) { p.active = p.id === b.plan; });
+    if (b.screenOffAc !== undefined) M.energy.screenOff.ac = b.screenOffAc;
+    if (b.screenOffDc !== undefined) M.energy.screenOff.dc = b.screenOffDc;
+    if (b.sleepAfterAc !== undefined) M.energy.sleepAfter.ac = b.sleepAfterAc;
+    if (b.sleepAfterDc !== undefined) M.energy.sleepAfter.dc = b.sleepAfterDc;
+    if (b.saverThreshold !== undefined) M.energy.saverThreshold = Math.round(b.saverThreshold);
+    return clone(M.energy);
+  };
+
   var mock = {
     port: 47917,
     async probe() {
       await delay(250);
       if (/[?&]offline=1/.test(location.search)) return null;
-      return { name: 'otzaria-bridge', version: '1.6.0', port: 47917, kioskActive: M.kiosk.active, platform: 'windows' };
+      return { name: 'otzaria-bridge', version: '1.7.0', port: 47917, kioskActive: M.kiosk.active, platform: 'windows' };
     },
     async call(path, body) {
       await delay(180);

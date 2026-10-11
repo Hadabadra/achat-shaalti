@@ -84,6 +84,14 @@
 | `/sys/wifi/networks` | `{}` | `{ connected: string\|null, networks: [{ ssid, signal (0-100), secured, connected, known }] }` |
 | `/sys/wifi/connect` | `{ ssid, password? }` | `{ connected }` |
 | `/sys/wifi/disconnect` | `{}` | `{ ok }` |
+| `/sys/usb/list` | `{}` | `{ drives: [{ letter, label, model, fs, sizeBytes, freeBytes, ready }] }` |
+| `/sys/usb/eject` | `{ letter }` | `{ ok, letter, ejected }`. שגיאות: `busy` (הכונן בשימוש), `forbidden` (נדרשות הרשאות מנהל), `not_found` |
+| `/sys/keyboard/get` | `{}` | `{ layouts: [{id, name, lang}], current, delay: 0-3, speed: 0-31, stickyKeys, stickyHotkey, filterKeys, toggleKeys, capsLock, numLock }` |
+| `/sys/keyboard/set` | כל תת-קבוצה של השדות מ-get, ו-`layout` (מזהה פריסה) | אותו מבנה כמו get |
+| `/sys/keyboard/backlight/get` | `{}` | `{ supported, name, enabled, brightness: 0-100, vendor, model }` |
+| `/sys/keyboard/backlight/set` | `{ enabled?, brightness? }` | אותו מבנה כמו get. `unsupported` אם אין מקלדת תומכת |
+| `/sys/energy/get` | `{}` | `{ battery: {percent, charging, saverOn, minutesLeft} \| null, plans: [{id, name, active}], screenOff: {ac, dc} \| null, sleepAfter: {ac, dc} \| null, saverThreshold \| null }` (זמנים בשניות, 0 = לעולם לא) |
+| `/sys/energy/set` | `{ plan?, screenOffAc?, screenOffDc?, sleepAfterAc?, sleepAfterDc?, saverThreshold? (0-100) }` | אותו מבנה כמו get |
 | `/sys/power` | `{ action: "sleep"\|"restart"\|"shutdown"\|"lock" }` | `{ ok }` |
 
 | `/sys/update-check` | `{ force?: false }` | `{ current, latest, tag, newer: bool, url, releasesUrl }` — משווה לגרסה האחרונה של הגשר בעמוד ההוצאות בגיטהאב (תוצאה נשמרת 10 דקות). הגשר לא מוריד ולא מחליף את עצמו. אין חיבור לאינטרנט → `internal` (502) |

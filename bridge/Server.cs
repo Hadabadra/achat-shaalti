@@ -53,6 +53,7 @@ public static class Server
         OcrApi.Register();
         UpdateApi.Register();
         SysApi.Register();
+        DeviceApi.Register();
         Kiosk.Register();
 
         int port = FindPort();
