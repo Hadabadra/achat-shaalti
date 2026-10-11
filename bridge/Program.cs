@@ -45,6 +45,9 @@ public static class Program
                 return 0;
             }
 
+            // לפני הכול: אם אין נעילה פעילה — שולחן העבודה חייב לעלות (בעיה #8)
+            Kiosk.BootGuard();
+
             using var mutex = new Mutex(true, @"Local\OtzariaBridge", out bool first);
             if (!first) return 0;
 
@@ -62,6 +65,8 @@ public static class Program
         catch (Exception ex)
         {
             Config.Log("fatal: " + ex);
+            // קריסה בעלייה לא משאירה מסך שחור: אם אין נעילה פעילה, מחזירים את שולחן העבודה
+            try { if (!Kiosk.IsActive) Kiosk.BootGuard(); } catch { }
             return 1;
         }
     }

@@ -215,6 +215,45 @@ public static class Kiosk
 
     // ---------- החלה ושחרור ----------
 
+    /// <summary>
+    /// הגנת עלייה (בעיה #8, "מסך שחור אחרי הפעלה מחדש"): רצה בתחילת כל הפעלה של הגשר, לפני כל דבר אחר.
+    /// אם אין נעילה פעילה ומאושרת, או שהמחשב עלה במצב בטוח — מוחקים כל שארית של הנעילה ברישום
+    /// (מעטפת Shell שמפנה לגשר, חסימת מנהל המשימות) ומוודאים ש-explorer רץ, כדי ששולחן העבודה תמיד יעלה.
+    /// </summary>
+    public static void BootGuard()
+    {
+        try
+        {
+            bool safeMode = SystemInformation.BootMode != BootMode.Normal;
+            bool locked = IsActive && Config.Get("kiosk.confirmed", false) && !safeMode;
+            if (safeMode && IsActive)
+            {
+                Config.Log("kiosk: מצב בטוח — הנעילה מבוטלת לעלייה הזו");
+                Config.Set("kiosk.active", false);
+                Config.Set("kiosk.confirmed", false);
+                Config.Save();
+            }
+            if (locked) return;
+            bool hadShell = ShellPointsToBridge();
+            ClearRegistry();
+            if (hadShell) Config.Log("kiosk: נמצאה מעטפת Shell שמפנה לגשר בלי נעילה פעילה — נמחקה, ו-explorer מופעל");
+            // כשהגשר עצמו הופעל כמעטפת אין explorer כלל; בעלייה רגילה (Run) explorer כבר רץ ולא נוגעים בו
+            if (hadShell || Process.GetProcessesByName("explorer").Length == 0) StartExplorer();
+        }
+        catch (Exception ex) { Config.Log("boot guard: " + ex.Message); StartExplorer(); }
+    }
+
+    private static bool ShellPointsToBridge()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(WinlogonKey);
+            string v = k?.GetValue("Shell") as string;
+            return !string.IsNullOrEmpty(v) && v.IndexOf("OtzariaBridge", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+        catch { return false; }
+    }
+
     public static void RestoreOnStartup()
     {
         if (!IsActive) return;
@@ -282,22 +321,26 @@ public static class Kiosk
             Config.Save();
             _watchdog?.Dispose();
             _watchdog = null;
+            // ממתינים שסבב שומר שכבר רץ יסתיים, כדי שלא יסגור את explorer מיד אחרי שהופעל מחדש
+            for (int i = 0; i < 30 && Volatile.Read(ref _watchBusy) == 1; i++) Thread.Sleep(100);
             Tray.Invoke(RemoveHook);
             RestoreWindowFrame();
             ClearRegistry();
             StartExplorer();
             Tray.SetKioskState(false);
+            // בדיקה שנייה אחרי כמה שניות: אם explorer עדיין לא עלה, מפעילים שוב
+            System.Threading.Tasks.Task.Delay(4000).ContinueWith(_ => { if (!IsActive) StartExplorer(); });
         }
     }
 
     private static void ClearRegistry()
     {
-        try
-        {
-            using (var k = Registry.CurrentUser.OpenSubKey(PoliciesKey, true)) k?.DeleteValue("DisableTaskMgr", false);
-            using (var k = Registry.CurrentUser.OpenSubKey(WinlogonKey, true)) k?.DeleteValue("Shell", false);
-        }
-        catch (Exception ex) { Config.Log("kiosk clear: " + ex.Message); }
+        // כל מפתח בנפרד: כישלון במדיניות (מפתח נעול) לא ימנע את מחיקת המעטפת, שהיא הקריטית
+        try { using var k = Registry.CurrentUser.OpenSubKey(WinlogonKey, true); k?.DeleteValue("Shell", false); }
+        catch (Exception ex) { Config.Log("kiosk clear shell: " + ex.Message); }
+        try { using var k = Registry.CurrentUser.OpenSubKey(PoliciesKey, true); k?.DeleteValue("DisableTaskMgr", false); }
+        catch (Exception ex) { Config.Log("kiosk clear policy: " + ex.Message); }
+        if (ShellPointsToBridge()) Config.Log("kiosk clear: אזהרה — המעטפת עדיין מפנה לגשר");
     }
 
     private static void StartExplorer()
