@@ -19,7 +19,11 @@
     catch (e) { body.innerHTML = ui.errorBox(e); return; }
     if (SS.bridge.health) { SS.bridge.health.kioskActive = !!st.active; SS.setStatus(true); }
     var progs = [], found = [];
-    try { progs = (await SS.bridge.call('/kiosk/programs')).programs || []; } catch (e) { progs = []; }
+    try {
+      var pr = await SS.bridge.call('/kiosk/programs');
+      progs = pr.programs || [];
+      st.autoTorah = !!pr.autoTorah;
+    } catch (e) { progs = []; }
     try { found = (await SS.bridge.call('/kiosk/programs/detect')).found || []; } catch (e) { found = []; }
     found = found.filter(function (f) {
       return !progs.some(function (p) { return p.path.toLowerCase() === f.path.toLowerCase(); });
@@ -69,7 +73,7 @@
         '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
-      html += programsCard(progs, found);
+      html += programsCard(progs, found, !!st.autoTorah);
       html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
         '<p class="muted">בחלון „ביטול נעילה” אפשר להקליד גם את <b>קוד השחזור</b> שקיבלתם בהגדרת הסיסמה. במקרה חירום אפשר להריץ משורת הפקודה:</p>' +
         '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock &lt;קוד-שחזור&gt;</code>' +
@@ -108,6 +112,7 @@
     on('chpw', function () { changePw(body); });
     on('settings', function () { editSettings(body, st); });
     on('prog-add', function () { addProgram(body, {}); });
+    on('prog-auto', function () { toggleAuto(body, !!st.autoTorah); });
     found.forEach(function (f, i) {
       on('prog-found-' + i, function () { addProgram(body, f); });
     });
@@ -239,18 +244,21 @@
     if (ok) { ui.toast('ההגדרות נשמרו', 'success'); load(body); }
   }
 
-  function programsCard(progs, found) {
+  function programsCard(progs, found, autoTorah) {
     var rows = progs.map(function (p) {
-      return '<div class="setting-row"><div class="setting-text"><b>' + ui.esc(p.name) + '</b>' +
+      return '<div class="setting-row"><div class="setting-text"><b>' + ui.esc(p.name) + '</b>' + (p.auto ? ' <span class="muted small">(זוהתה אוטומטית)</span>' : '') +
         '<span class="muted path"><bdi dir="ltr">' + ui.esc(p.path) + '</bdi>' + (p.exists ? '' : ' · הקובץ לא נמצא') + '</span></div>' +
         '<button class="btn btn-tonal" data-act="prog-open-' + ui.esc(p.id) + '"' + (p.exists ? '' : ' disabled') + '>' + ui.icon('computer') + 'פתיחה</button>' +
-        '<button class="btn btn-tonal" data-act="prog-del-' + ui.esc(p.id) + '" aria-label="הסרה">' + ui.icon('close') + '</button></div>';
+        (p.auto ? '' : '<button class="btn btn-tonal" data-act="prog-del-' + ui.esc(p.id) + '" aria-label="הסרה">' + ui.icon('close') + '</button>') + '</div>';
     }).join('');
     var suggest = found.map(function (f, i) {
       return '<button class="btn btn-tonal" data-act="prog-found-' + i + '">' + ui.icon('edit') + 'הוספת ' + ui.esc(f.name) + '</button>';
     }).join('');
     return '<div class="card"><div class="card-title">תוכנות מותרות לפתיחה</div>' +
       '<p class="muted">תוכנות לימוד (כתבי הקודש, אוצר החכמה, בר אילן, Word ועוד) שאפשר לפתוח מכאן גם בזמן נעילה. ההוספה וההסרה דורשות את סיסמת הנעילה. בסיום העבודה סוגרים את התוכנה וחוזרים לאוצריא.</p>' +
+      '<div class="setting-row"><div class="setting-text"><b>זיהוי אוטומטי של תוכנות תורניות</b><span class="muted">' +
+        (autoTorah ? 'דולק: תוכנות תורניות ו-Word שמותקנות במחשב נוספות לרשימה מעצמן.' : 'כבוי: אפשר להדליק כדי שהתוכנות התורניות ו-Word יתווספו לרשימה אוטומטית.') + '</span></div>' +
+        '<button class="btn ' + (autoTorah ? 'btn-tonal' : 'btn-primary') + '" data-act="prog-auto">' + ui.icon(autoTorah ? 'unlock' : 'check') + (autoTorah ? 'כיבוי הזיהוי' : 'הדלקה') + '</button></div>' +
       (rows || '<p class="muted">עדיין לא הוגדרו תוכנות.</p>') +
       '<div class="row-actions"><button class="btn btn-tonal" data-act="prog-add">' + ui.icon('edit') + 'הוספת תוכנה</button>' + suggest + '</div></div>';
   }
@@ -284,6 +292,23 @@
       }
     });
     if (ok) { ui.toast('התוכנה נוספה', 'success'); load(body); }
+  }
+
+  async function toggleAuto(body, current) {
+    var ok = await ui.dialog({
+      title: current ? 'כיבוי הזיהוי האוטומטי' : 'הדלקת הזיהוי האוטומטי', icon: 'computer',
+      body: '<p>' + (current
+        ? 'התוכנות שזוהו אוטומטית יוסרו מהרשימה ולא יהיה אפשר לפתוח אותן בזמן נעילה (תוכנות שהוספתם ידנית יישארו).'
+        : 'הגשר יחפש במחשב תוכנות תורניות (אוצר החכמה, בר אילן, כתבי הקודש ועוד) ואת Word, ויוסיף אותן לרשימה המותרת בזמן נעילה.') + '</p>',
+      fields: [{ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }],
+      actions: [{ label: 'ביטול', value: false }, { label: current ? 'כיבוי הזיהוי' : 'הדלקה', value: true, kind: 'primary' }],
+      validate: function (x) { return x.pw ? '' : 'יש להקליד את סיסמת הנעילה'; },
+      onSubmit: async function (x) {
+        await SS.bridge.call('/kiosk/programs/auto', { password: x.pw, enabled: !current }, { timeoutMs: 30000 });
+        return true;
+      }
+    });
+    if (ok) { ui.toast(current ? 'הזיהוי האוטומטי כובה' : 'הזיהוי האוטומטי הודלק', 'success'); load(body); }
   }
 
   async function removeProgram(body, p) {

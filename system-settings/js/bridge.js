@@ -119,6 +119,7 @@
       allowOpenExtensions: ['pdf', 'txt']
     },
     programs: [],
+    autoTorah: false,
     password: null,
     recovery: null,
     fails: 0,
@@ -245,7 +246,16 @@
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
       return clone(M.kiosk);
     },
-    '/kiosk/programs': function () { return { programs: clone(M.programs) }; },
+    '/kiosk/programs': function () {
+      var list = clone(M.programs);
+      if (M.autoTorah) list.push({ id: 'auto-0001', name: 'Word', path: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE', procs: [], exists: true, auto: true });
+      return { autoTorah: !!M.autoTorah, programs: list };
+    },
+    '/kiosk/programs/auto': function (b) {
+      checkPw(b.password, false);
+      M.autoTorah = !!b.enabled;
+      return { autoTorah: M.autoTorah };
+    },
     '/kiosk/programs/detect': function () {
       return { found: [{ name: 'Word', path: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE', procs: 'WINWORD' }] };
     },

@@ -92,10 +92,11 @@
 
 | נקודת קצה | גוף | תשובה |
 |---|---|---|
-| `/kiosk/programs` | `{}` | `{ programs: [{ id, name, path, procs: [], exists }] }` |
+| `/kiosk/programs` | `{}` | `{ autoTorah, programs: [{ id, name, path, procs: [], exists, auto }] }` |
 | `/kiosk/programs/launch` | `{ id }` | `{ opened: true }` — פותח ומביא את החלון לחזית. בלי סיסמה (הפתיחה מוגבלת לרשימה) |
 | `/kiosk/programs/add` | `{ password, name, path, procs? }` | `{ programs }` — `path` מלא לקובץ `exe`; `procs` = שמות תהליכים נוספים (מופרדים בפסיק) |
 | `/kiosk/programs/remove` | `{ password, id }` | `{ programs }` |
+| `/kiosk/programs/auto` | `{ password, enabled }` | `{ autoTorah, programs }` — זיהוי אוטומטי של תוכנות תורניות ו-Word (ברירת מחדל: כבוי, `kiosk.autoTorahPrograms`). הסריקה לפי רשימת התוכנות המותקנות ב-Windows (שם תצוגה עם מילות מפתח; אפשר להרחיב ב-`kiosk.autoTorahKeywords`). תוצאות מסומנות `auto: true`, מזהה `auto-…`, ואי אפשר להסיר אותן ידנית |
 | `/kiosk/programs/detect` | `{}` | `{ found: [{ name, path, procs }] }` — הצעות לפי הרישום של Windows (כרגע: Word) |
 
 - בזמן שתוכנה מהרשימה בחזית (לפי שם הקובץ או `procs`), המעקב של הנעילה לא מחזיר את אוצריא לחזית. אחרי הפתיחה יש 15 שניות חסד.

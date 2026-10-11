@@ -15,6 +15,8 @@ namespace OtzariaBridge;
 public static class Programs
 {
     private const string Key = "kiosk.programs";
+    private const string AutoKey = "kiosk.autoTorahPrograms";
+    private const string KeywordsKey = "kiosk.autoTorahKeywords";
     private const int MaxPrograms = 20;
     private const int GraceSeconds = 15;
 
@@ -33,7 +35,21 @@ public static class Programs
         public string Name = "";
         public string Path = "";
         public string[] Procs = Array.Empty<string>();
+        public bool Auto;
     }
+
+    // מילות מפתח לזיהוי תוכנות תורניות בשמות התוכנות המותקנות (אפשר להרחיב ב-kiosk.autoTorahKeywords)
+    private static readonly string[] TorahKeywords =
+    {
+        "אוצר החכמה", "אוצר הספרים", "בר אילן", "בר-אילן", "כתבי הקודש", "ספריא",
+        "otzar hachochma", "otzar hasfarim", "bar-ilan", "bar ilan", "responsa", "kitvei hakodesh",
+    };
+
+    private static readonly object AutoGate = new();
+    private static List<Entry> _autoCache = new();
+    private static DateTime _autoAt = DateTime.MinValue;
+
+    public static bool AutoEnabled => Config.Get(AutoKey, false);
 
     public static void Register()
     {
@@ -42,11 +58,22 @@ public static class Programs
         Server.Route("/kiosk/programs/add", Add);
         Server.Route("/kiosk/programs/remove", Remove);
         Server.Route("/kiosk/programs/detect", _ => Detect());
+        Server.Route("/kiosk/programs/auto", SetAuto);
     }
 
     // ---------- אחסון ----------
 
+    /// <summary>הרשימה המלאה: ידנית + (אם הזיהוי האוטומטי דולק) תוכנות תורניות שזוהו</summary>
     public static List<Entry> Load()
+    {
+        var list = LoadManual();
+        if (AutoEnabled)
+            foreach (var a in DetectAuto())
+                if (!list.Any(x => x.Path.Equals(a.Path, StringComparison.OrdinalIgnoreCase))) list.Add(a);
+        return list;
+    }
+
+    private static List<Entry> LoadManual()
     {
         var list = new List<Entry>();
         foreach (var s in Config.GetList(Key))
@@ -87,6 +114,7 @@ public static class Programs
 
     private static object ListResult() => new
     {
+        autoTorah = AutoEnabled,
         programs = Load().Select(e => new
         {
             id = e.Id,
@@ -94,8 +122,18 @@ public static class Programs
             path = e.Path,
             procs = e.Procs,
             exists = File.Exists(e.Path),
+            auto = e.Auto,
         }).ToArray()
     };
+
+    private static object SetAuto(JsonElement b)
+    {
+        Kiosk.RequirePassword(b.Str("password"));
+        Config.Set(AutoKey, JsonValue.Create(b.Bool("enabled")));
+        Config.Save();
+        lock (AutoGate) _autoAt = DateTime.MinValue; // סריקה מחדש
+        return ListResult();
+    }
 
     private static object Launch(JsonElement b)
     {
@@ -135,9 +173,9 @@ public static class Programs
             procs.Add(n);
         }
 
-        var list = Load();
+        var list = LoadManual();
         if (list.Count >= MaxPrograms) throw BridgeException.BadRequest("אפשר להגדיר עד " + MaxPrograms + " תוכנות");
-        if (list.Any(x => x.Path.Equals(path, StringComparison.OrdinalIgnoreCase)))
+        if (Load().Any(x => x.Path.Equals(path, StringComparison.OrdinalIgnoreCase)))
             throw BridgeException.Exists("התוכנה כבר ברשימה");
 
         list.Add(new Entry
@@ -155,7 +193,9 @@ public static class Programs
     {
         Kiosk.RequirePassword(b.Str("password"));
         string id = b.Req("id");
-        var list = Load();
+        if (id.StartsWith("auto-", StringComparison.Ordinal))
+            throw BridgeException.BadRequest("תוכנה שזוהתה אוטומטית אי אפשר להסיר. כבו את הזיהוי האוטומטי");
+        var list = LoadManual();
         if (list.RemoveAll(x => x.Id == id) == 0) throw BridgeException.NotFound("התוכנה אינה ברשימה");
         Save(list);
         return ListResult();
@@ -185,6 +225,85 @@ public static class Programs
                 catch { }
             }
         return null;
+    }
+
+    // ---------- זיהוי אוטומטי של תוכנות תורניות ----------
+
+    private static List<Entry> DetectAuto()
+    {
+        lock (AutoGate)
+        {
+            if ((DateTime.UtcNow - _autoAt).TotalSeconds < 60) return _autoCache;
+            var found = new List<Entry>();
+            try
+            {
+                string word = AppPath("WINWORD.EXE");
+                if (word != null) AddAuto(found, "Word", word, new[] { "WINWORD" });
+
+                var keywords = TorahKeywords.Concat(Config.GetList(KeywordsKey)).Select(k => k.ToLowerInvariant()).ToArray();
+                foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
+                    foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+                    {
+                        try
+                        {
+                            using var bk = RegistryKey.OpenBaseKey(hive, view);
+                            using var root = bk.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
+                            if (root == null) continue;
+                            foreach (string sub in root.GetSubKeyNames())
+                            {
+                                using var k = root.OpenSubKey(sub);
+                                string display = (k?.GetValue("DisplayName") as string)?.Trim();
+                                if (string.IsNullOrEmpty(display)) continue;
+                                string low = display.ToLowerInvariant();
+                                if (!keywords.Any(low.Contains)) continue;
+                                string exe = ResolveExe(k);
+                                if (exe != null) AddAuto(found, display, exe, Array.Empty<string>());
+                            }
+                        }
+                        catch { }
+                    }
+            }
+            catch (Exception ex) { Config.Log("programs auto-detect: " + ex.Message); }
+            _autoCache = found;
+            _autoAt = DateTime.UtcNow;
+            return _autoCache;
+        }
+    }
+
+    private static void AddAuto(List<Entry> list, string name, string path, string[] procs)
+    {
+        if (Blocked.Contains(System.IO.Path.GetFileNameWithoutExtension(path))) return;
+        if (list.Any(x => x.Path.Equals(path, StringComparison.OrdinalIgnoreCase))) return;
+        string hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(path.ToLowerInvariant()))).Substring(0, 8).ToLowerInvariant();
+        list.Add(new Entry { Id = "auto-" + hash, Name = name, Path = path, Procs = procs, Auto = true });
+    }
+
+    /// <summary>קובץ ההפעלה של תוכנה מותקנת: לפי DisplayIcon, ואם אין — קובץ exe הגדול בתיקיית ההתקנה</summary>
+    private static string ResolveExe(RegistryKey k)
+    {
+        string icon = k.GetValue("DisplayIcon") as string;
+        if (!string.IsNullOrWhiteSpace(icon))
+        {
+            var m = Regex.Match(icon, "^\\s*\"?([^\",]+\\.exe)", RegexOptions.IgnoreCase);
+            if (m.Success && File.Exists(m.Groups[1].Value) && !IsHelperExe(m.Groups[1].Value)) return m.Groups[1].Value;
+        }
+        string loc = (k.GetValue("InstallLocation") as string)?.Trim().Trim('"');
+        if (!string.IsNullOrEmpty(loc) && Directory.Exists(loc))
+        {
+            try
+            {
+                return Directory.EnumerateFiles(loc, "*.exe", SearchOption.TopDirectoryOnly)
+                    .Where(f => !IsHelperExe(f)).OrderByDescending(f => new FileInfo(f).Length).FirstOrDefault();
+            }
+            catch { }
+        }
+        return null;
+    }
+
+    private static bool IsHelperExe(string path)
+    {
+        string n = System.IO.Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+        return n.StartsWith("unins") || n.StartsWith("uninstall") || n.StartsWith("setup") || n.StartsWith("update") || n.StartsWith("vc_redist");
     }
 
     // ---------- שילוב עם השומר של הנעילה ----------
