@@ -26,7 +26,7 @@ public static class Tray
         {
             if (Kiosk.IsActive) return;
             if (MessageBox.Show(Lang.T("לנתק את כל התוספים מהגשר? בפתיחה הבאה כל תוסף יבקש אישור מחדש.", "Disconnect all plugins from the bridge? Each plugin will ask for approval again."),
-                    Lang.T("גשר אוצריא", "Otzaria Bridge"), MessageBoxButtons.YesNo) == DialogResult.Yes)
+                    Lang.T("תורת אסתר", "Torat Esther"), MessageBoxButtons.YesNo) == DialogResult.Yes)
                 Pairing.RevokeAll();
         });
         menu.Items.AddRange(new ToolStripItem[] { _status, _about, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
@@ -34,7 +34,7 @@ public static class Tray
         _icon = new NotifyIcon
         {
             Icon = LoadIcon(),
-            Text = Lang.T("גשר אוצריא", "Otzaria Bridge"),
+            Text = Lang.T("תורת אסתר", "Torat Esther"),
             ContextMenuStrip = menu,
             Visible = true,
         };
@@ -46,7 +46,7 @@ public static class Tray
             try
             {
                 var i = await UpdateApi.Check(false);
-                if (i.Newer) Invoke(() => _icon.ShowBalloonTip(8000, Lang.T("גשר אוצריא", "Otzaria Bridge"),
+                if (i.Newer) Invoke(() => _icon.ShowBalloonTip(8000, Lang.T("תורת אסתר", "Torat Esther"),
                     Lang.T("גרסה " + i.Latest + " זמינה. לחצו לעדכון.", "Version " + i.Latest + " is available. Click to update."), ToolTipIcon.Info));
             }
             catch { }
@@ -137,7 +137,7 @@ internal sealed class AboutForm : Form
         Padding = new Padding(20);
 
         var logo = new PictureBox { Image = new Icon(Overlay.AppIcon(), 64, 64).ToBitmap(), SizeMode = PictureBoxSizeMode.CenterImage, Height = 76, Dock = DockStyle.Top };
-        var title = new Label { Text = Lang.T("גשר אוצריא", "Otzaria Bridge"), Font = new Font("Segoe UI Semibold", 16f), Height = 38, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
+        var title = new Label { Text = Lang.T("תורת אסתר", "Torat Esther"), Font = new Font("Segoe UI Semibold", 16f), Height = 38, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         var ver = new Label { Text = Lang.T("גרסה ", "Version ") + Program.Version + " · " + Lang.T("תורת אסתר", "Torat Esther"), Height = 26, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.DimGray };
         var ded = new Label { Text = "לעילוי נשמת הנערה הצדקנית\nאסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט\"א\nתהא נשמתה צרורה בצרור החיים. תנצב\"ה", Height = 66, Font = new Font("Segoe UI", 10.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(90, 70, 40) };
         var link = new LinkLabel { Text = Lang.T("עמוד ההוצאות ויומן השינויים", "Releases page and changelog"), Height = 28, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
