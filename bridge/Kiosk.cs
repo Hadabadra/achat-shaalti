@@ -31,6 +31,54 @@ public static class Kiosk
 
     public static string[] AllowedExtensions => Config.GetList("kiosk.allowOpenExtensions");
 
+    /// <summary>במצב readOnly (ברירת מחדל כבוי) שינוי קבצים חסום בזמן נעילה</summary>
+    public static bool ReadOnly => Config.Get("kiosk.readOnly", false);
+
+    /// <summary>חוסם שינוי קבצים בזמן נעילה רק כאשר הופעל מצב readOnly</summary>
+    public static void EnsureFileWriteAllowed()
+    {
+        if (IsActive && ReadOnly) throw BridgeException.Locked("שינוי קבצים חסום במצב נעילה");
+    }
+
+    // ---------- אילו הגדרות פתוחות בזמן נעילה ----------
+
+    /// <summary>כל ההגדרות שאפשר לפתוח או לחסום בנעילה. רשת, בלוטות', מצב טיסה, USB ושעה חסומים כברירת מחדל</summary>
+    public static readonly string[] AllSections =
+        { "audio", "display", "energy", "keyboard", "mouse", "printer", "time", "wifi", "bluetooth", "airplane", "usb" };
+    private static readonly string[] DefaultOpenSections = { "audio", "display", "energy", "keyboard", "mouse", "printer" };
+
+    public static string[] OpenSections =>
+        Config.HasList("kiosk.openSections") ? Config.GetList("kiosk.openSections") : DefaultOpenSections;
+
+    /// <summary>שער לכל נקודות הקצה של ההגדרות: בזמן נעילה הגדרה שלא נפתחה חסומה גם בגשר, לא רק מוסתרת בתוסף</summary>
+    public static void EnsureSectionAllowed(string section)
+    {
+        if (IsActive && !OpenSections.Contains(section, StringComparer.OrdinalIgnoreCase))
+            throw BridgeException.Locked("ההגדרה הזו סגורה במצב נעילה");
+    }
+
+    private static readonly (string prefix, string section)[] SectionRoutes =
+    {
+        ("/sys/audio/", "audio"), ("/sys/display/", "display"), ("/sys/energy/", "energy"),
+        ("/sys/keyboard/", "keyboard"), ("/sys/mouse/", "mouse"), ("/sys/printers/", "printer"),
+        ("/sys/time/", "time"), ("/sys/wifi/", "wifi"), ("/sys/bluetooth/", "bluetooth"),
+        ("/sys/airplane/", "airplane"), ("/sys/usb/", "usb"),
+    };
+
+    /// <summary>לאיזו הגדרה שייכת פעולת שינוי. קריאות (get, list וכו') פתוחות תמיד; null = לא שייך להגדרה</summary>
+    public static string SectionOf(string path, JsonElement body)
+    {
+        string p = path.ToLowerInvariant();
+        if (p.EndsWith("/get") || p.EndsWith("/list") || p.EndsWith("/devices") || p.EndsWith("/networks")) return null;
+        if (p == "/sys/radios/set") return body.Str("kind", "wifi").ToLowerInvariant() == "bluetooth" ? "bluetooth" : "wifi";
+        foreach (var (prefix, section) in SectionRoutes)
+            if (p.StartsWith(prefix)) return section;
+        return null;
+    }
+
+    /// <summary>מעבר לרשת אחרת, הדלקת רדיו והצמדת בלוטות' (בעיה #1): חסומים בנעילה אלא אם ההגדרה נפתחה</summary>
+    public static void EnsureNetworkAllowed(string section = "wifi") => EnsureSectionAllowed(section);
+
     /// <summary>
     /// האם המשתמש הנוכחי חבר בקבוצת ה-Administrators המקומית.
     /// זו "נקודת תורפה": משתמש עם הרשאות מנהל יכול לבטל את הנעילה (לעצור את הגשר,
@@ -143,6 +191,9 @@ public static class Kiosk
         otzariaPath = OtzariaPath() ?? "",
         blockTaskManager = Config.Get("kiosk.blockTaskManager", true),
         allowOpenExtensions = AllowedExtensions,
+        readOnly = ReadOnly,
+        openSections = OpenSections,
+        allSections = AllSections,
         warnings = Warnings(),
     };
 
@@ -199,6 +250,11 @@ public static class Kiosk
     private static object Settings(JsonElement b)
     {
         Verify(b.Str("password"), allowRecovery: false);
+        if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
+        if (b.Has("openSections"))
+            Config.Set("kiosk.openSections", new JsonArray(b.StrArray("openSections")
+                .Where(x => AllSections.Contains(x, StringComparer.OrdinalIgnoreCase))
+                .Select(x => (JsonNode)x.ToLowerInvariant()).ToArray()));
         if (b.Has("allowOpenExtensions"))
             Config.Set("kiosk.allowOpenExtensions",
                 new JsonArray(b.StrArray("allowOpenExtensions").Select(x => (JsonNode)x.TrimStart('.').ToLowerInvariant()).ToArray()));

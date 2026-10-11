@@ -130,7 +130,15 @@ public static class Usb
             if (!locked) Thread.Sleep(500);
         }
         if (!locked)
-            throw new BridgeException("busy", "הכונן בשימוש. סגרו קבצים ותוכנות שפתוחים ממנו (כולל חלונות סייר) ונסו שוב.", 409);
+        {
+            h.Dispose();
+            // ניסיון הוצאה דרך מנהל ההתקנים: Windows מסרב ורושם ביומן איזו תוכנה מחזיקה את הכונן
+            string pnp = PnpIdFor(letter);
+            if (pnp != null) TryCmEject(pnp, out _);
+            var holders = Holders(letter);
+            string who = holders.Count > 0 ? " התוכנות שמחזיקות את הכונן: " + string.Join(", ", holders) + "." : "";
+            throw new BridgeException("busy", "הכונן בשימוש." + who + " סגרו קבצים ותוכנות שפתוחים ממנו (כולל חלונות סייר) ונסו שוב.", 409);
+        }
 
         if (!DeviceIoControl(h, FsctlDismountVolume, IntPtr.Zero, 0, IntPtr.Zero, 0, out _, IntPtr.Zero))
             throw new BridgeException("busy", "ניתוק הכרך נכשל. נסו שוב בעוד רגע.", 409);
@@ -145,8 +153,78 @@ public static class Usb
             ejected = DeviceIoControl(h, IoctlStorageEjectMedia, IntPtr.Zero, 0, IntPtr.Zero, 0, out _, IntPtr.Zero);
         }
         finally { Marshal.FreeHGlobal(buf); }
-        Config.Log("usb eject " + letter + " ejected=" + ejected);
-        return new { ok = true, letter, ejected };
+        h.Dispose();
+
+        // כיבוי ההתקן עצמו (כמו "הוצאה בטוחה" של Windows): ההתקן נעלם מהרשימה ונורית ה-USB נכבית
+        bool poweredOff = false;
+        string pnpId = PnpIdFor(letter);
+        if (pnpId != null) poweredOff = TryCmEject(pnpId, out _);
+        Config.Log("usb eject " + letter + " ejected=" + ejected + " poweredOff=" + poweredOff);
+        return new { ok = true, letter, ejected, poweredOff };
+    }
+
+    // ---------- מנהל ההתקנים: כיבוי ההתקן ומי מחזיק את הכונן ----------
+
+    [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)] private static extern int CM_Locate_DevNodeW(out uint devInst, string id, uint flags);
+    [DllImport("cfgmgr32.dll")] private static extern int CM_Get_Parent(out uint parent, uint devInst, uint flags);
+    [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]
+    private static extern int CM_Request_Device_EjectW(uint devInst, out int vetoType, System.Text.StringBuilder vetoName, int nameLen, uint flags);
+
+    private static string PnpIdFor(string letter)
+    {
+        try
+        {
+            using var parts = new ManagementObjectSearcher("ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='" + letter + "'} WHERE AssocClass=Win32_LogicalDiskToPartition");
+            foreach (ManagementObject p in parts.Get())
+            {
+                string pid = ((p["DeviceID"] as string) ?? "").Replace("\\", "\\\\");
+                using var disks = new ManagementObjectSearcher("ASSOCIATORS OF {Win32_DiskPartition.DeviceID='" + pid + "'} WHERE AssocClass=Win32_DiskDriveToDiskPartition");
+                foreach (ManagementObject d in disks.Get())
+                    if (d["PNPDeviceID"] is string id && id.Length > 0) return id;
+            }
+        }
+        catch (Exception ex) { Config.Log("usb pnp: " + ex.Message); }
+        return null;
+    }
+
+    /// <summary>הוצאה דרך מנהל ההתקנים: קודם ההתקן ההורה (התקן ה-USB), ואם נכשל — הדיסק עצמו</summary>
+    private static bool TryCmEject(string pnpId, out string veto)
+    {
+        veto = "";
+        if (CM_Locate_DevNodeW(out uint dev, pnpId, 0) != 0) return false;
+        var name = new System.Text.StringBuilder(260);
+        if (CM_Get_Parent(out uint parent, dev, 0) == 0 &&
+            CM_Request_Device_EjectW(parent, out int vt, name, name.Capacity, 0) == 0 && vt == 0) return true;
+        name.Clear();
+        bool ok = CM_Request_Device_EjectW(dev, out int vt2, name, name.Capacity, 0) == 0 && vt2 == 0;
+        veto = name.ToString();
+        return ok;
+    }
+
+    /// <summary>תוכנות שמחזיקות את הכונן: תוכנות שרצות מתוכו, ומה ש-Windows רשם ביומן כשסירב להוצאה (אירוע 225)</summary>
+    private static List<string> Holders(string letter)
+    {
+        var res = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in System.Diagnostics.Process.GetProcesses())
+        {
+            try
+            {
+                string f = p.MainModule?.FileName;
+                if (f != null && f.StartsWith(letter, StringComparison.OrdinalIgnoreCase)) res.Add(p.ProcessName);
+            }
+            catch { }
+            finally { p.Dispose(); }
+        }
+        try
+        {
+            Thread.Sleep(700);
+            string q = "*[System[Provider[@Name='Microsoft-Windows-Kernel-PnP'] and (EventID=225) and TimeCreated[timediff(@SystemTime) <= 120000]]]";
+            string o = Config.Run("wevtutil", "qe System /q:\"" + q + "\" /f:xml /c:5 /rd:true", 8000) ?? "";
+            foreach (Match m in Regex.Matches(o, @"([^\\<>""]+\.exe)<", RegexOptions.IgnoreCase))
+                res.Add(Path.GetFileNameWithoutExtension(m.Groups[1].Value));
+        }
+        catch { }
+        return res.ToList();
     }
 }
 
@@ -316,15 +394,84 @@ public static class Keyboard
                 };
         }
         catch (Exception ex) { Config.Log("backlight: " + ex.Message); }
-        return new { supported = false, name = "", enabled = false, brightness = 0, vendor, model };
+
+        // ASUS: ממשק ה-WMI של ATK (אותו ממשק שבו משתמש מנהל ההתקן של ASUS), רמות 0-3
+        int? asus = AsusLevel();
+        if (asus.HasValue)
+            return new { supported = true, name = "ASUS Keyboard Backlight", enabled = asus.Value > 0, brightness = asus.Value * 100 / 3, levels = 3, vendor, model, hint = FnHint(vendor) };
+
+        return new { supported = false, name = "", enabled = false, brightness = 0, vendor, model, hint = FnHint(vendor) };
+    }
+
+    /// <summary>במחשבים שבהם היצרן לא חושף את התאורה ל-Windows — הקיצור במקלדת לפי היצרן</summary>
+    private static string FnHint(string vendor)
+    {
+        string v = (vendor ?? "").ToLowerInvariant();
+        if (v.Contains("lenovo")) return "Fn + רווח";
+        if (v.Contains("dell")) return "Fn + F10 (או Fn + F5 בחלק מהדגמים)";
+        if (v.Contains("hp") || v.Contains("hewlett")) return "Fn + F5 (או F4/F9/F11 עם סמל מקלדת מוארת)";
+        if (v.Contains("asus")) return "Fn + F7 (הגברה) / Fn + F6 (הנמכה)";
+        if (v.Contains("acer")) return "Fn + F9 (או Fn + i)";
+        if (v.Contains("microsoft")) return "Fn + F1";
+        return "";
+    }
+
+    private const uint AsusKbdBacklight = 0x00050021;
+
+    private static ManagementObject AsusAtk()
+    {
+        try
+        {
+            using var s = new ManagementObjectSearcher(@"root\WMI", "SELECT * FROM AsusAtkWmi_WMNB");
+            foreach (ManagementObject o in s.Get()) return o;
+        }
+        catch { }
+        return null;
+    }
+
+    private static uint? AsusCall(string method, uint dev, uint? ctrl)
+    {
+        using var o = AsusAtk();
+        if (o == null) return null;
+        var p = o.GetMethodParameters(method);
+        p["Device_ID"] = dev;
+        if (ctrl.HasValue) p["Control_status"] = ctrl.Value;
+        var r = o.InvokeMethod(method, p, null);
+        return r?["device_status"] is uint u ? u : r?["device_status"] != null ? Convert.ToUInt32(r["device_status"]) : null;
+    }
+
+    private static int? AsusLevel()
+    {
+        try
+        {
+            uint? st = AsusCall("DSTS", AsusKbdBacklight, null);
+            // 0x00010000 = ההתקן קיים; הרמה בשתי הסיביות הנמוכות
+            if (!st.HasValue || (st.Value & 0x00010000) == 0) return null;
+            return (int)(st.Value & 0x3);
+        }
+        catch { return null; }
+    }
+
+    private static bool AsusSet(int level)
+    {
+        try { return AsusCall("DEVS", AsusKbdBacklight, 0x80u | (uint)Math.Clamp(level, 0, 3)).HasValue; }
+        catch { return false; }
     }
 
     public static async Task<object> BacklightSet(JsonElement b)
     {
         var l = await Lamps();
-        if (l.Count == 0) throw BridgeException.Unsupported("תאורת המקלדת אינה נתמכת במחשב זה");
         bool? enabled = b.BoolOpt("enabled");
         double? br = b.Num("brightness");
+        if (l.Count == 0 && AsusLevel().HasValue)
+        {
+            int level = br.HasValue ? (int)Math.Round(Math.Clamp(br.Value, 0, 100) * 3 / 100) : (AsusLevel() ?? 0);
+            if (enabled == false) level = 0;
+            else if (enabled == true && level == 0) level = 2;
+            if (!AsusSet(level)) throw BridgeException.Unsupported("שינוי התאורה נכשל");
+            return await BacklightGet(b);
+        }
+        if (l.Count == 0) throw BridgeException.Unsupported("תאורת המקלדת אינה נתמכת במחשב זה");
         foreach (var (_, lamp) in l)
         {
             if (enabled.HasValue) lamp.IsEnabled = enabled.Value;

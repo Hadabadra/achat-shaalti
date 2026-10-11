@@ -54,6 +54,7 @@ public static class Server
         UpdateApi.Register();
         SysApi.Register();
         DeviceApi.Register();
+        MoreApi.Register();
         Kiosk.Register();
 
         int port = FindPort();
@@ -136,6 +137,10 @@ public static class Server
 
             if (!Routes.TryGetValue(path, out var handler))
                 throw BridgeException.NotFound("נקודת קצה לא קיימת: " + path);
+
+            // בזמן נעילה: הגדרה שלא נפתחה בהגדרות הנעילה חסומה גם כאן
+            string section = Kiosk.SectionOf(path, body);
+            if (section != null) Kiosk.EnsureSectionAllowed(section);
 
             object data = await handler(body);
             await WriteOk(ctx, data);

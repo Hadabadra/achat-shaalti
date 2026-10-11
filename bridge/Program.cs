@@ -110,6 +110,11 @@ public static class Config
         }
     }
 
+    public static bool HasList(string key)
+    {
+        lock (Gate) { return Data[key] is JsonArray; }
+    }
+
     public static string[] GetList(string key)
     {
         lock (Gate)
