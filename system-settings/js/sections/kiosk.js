@@ -18,10 +18,16 @@
     try { st = await SS.bridge.call('/kiosk/status'); }
     catch (e) { body.innerHTML = ui.errorBox(e); return; }
     if (SS.bridge.health) { SS.bridge.health.kioskActive = !!st.active; SS.setStatus(true); }
-    render(body, st);
+    var progs = [], found = [];
+    try { progs = (await SS.bridge.call('/kiosk/programs')).programs || []; } catch (e) { progs = []; }
+    try { found = (await SS.bridge.call('/kiosk/programs/detect')).found || []; } catch (e) { found = []; }
+    found = found.filter(function (f) {
+      return !progs.some(function (p) { return p.path.toLowerCase() === f.path.toLowerCase(); });
+    });
+    render(body, st, progs, found);
   }
 
-  function render(body, st) {
+  function render(body, st, progs, found) {
     var active = !!st.active;
     var html =
       '<div class="status-card ' + (active ? 'active' : '') + '">' +
@@ -63,6 +69,7 @@
         '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
+      html += programsCard(progs, found);
       html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
         '<p class="muted">בחלון „ביטול נעילה” אפשר להקליד גם את <b>קוד השחזור</b> שקיבלתם בהגדרת הסיסמה. במקרה חירום אפשר להריץ משורת הפקודה:</p>' +
         '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock &lt;קוד-שחזור&gt;</code>' +
@@ -70,10 +77,10 @@
     }
 
     body.innerHTML = html;
-    wire(body, st);
+    wire(body, st, progs, found);
   }
 
-  function wire(body, st) {
+  function wire(body, st, progs, found) {
     var f = body.querySelector('[data-form=setpw]');
     if (f) {
       setTimeout(function () { var i = f.querySelector('input'); if (i) i.focus(); }, 50);
@@ -100,6 +107,14 @@
     on('disable', function () { disable(body); });
     on('chpw', function () { changePw(body); });
     on('settings', function () { editSettings(body, st); });
+    on('prog-add', function () { addProgram(body, {}); });
+    found.forEach(function (f, i) {
+      on('prog-found-' + i, function () { addProgram(body, f); });
+    });
+    progs.forEach(function (p) {
+      on('prog-open-' + p.id, function () { openProgram(p); });
+      on('prog-del-' + p.id, function () { removeProgram(body, p); });
+    });
 
     function on(act, fn) {
       var b = body.querySelector('[data-act=' + act + ']');
@@ -222,6 +237,68 @@
       }
     });
     if (ok) { ui.toast('ההגדרות נשמרו', 'success'); load(body); }
+  }
+
+  function programsCard(progs, found) {
+    var rows = progs.map(function (p) {
+      return '<div class="setting-row"><div class="setting-text"><b>' + ui.esc(p.name) + '</b>' +
+        '<span class="muted path"><bdi dir="ltr">' + ui.esc(p.path) + '</bdi>' + (p.exists ? '' : ' · הקובץ לא נמצא') + '</span></div>' +
+        '<button class="btn btn-tonal" data-act="prog-open-' + ui.esc(p.id) + '"' + (p.exists ? '' : ' disabled') + '>' + ui.icon('computer') + 'פתיחה</button>' +
+        '<button class="btn btn-tonal" data-act="prog-del-' + ui.esc(p.id) + '" aria-label="הסרה">' + ui.icon('close') + '</button></div>';
+    }).join('');
+    var suggest = found.map(function (f, i) {
+      return '<button class="btn btn-tonal" data-act="prog-found-' + i + '">' + ui.icon('edit') + 'הוספת ' + ui.esc(f.name) + '</button>';
+    }).join('');
+    return '<div class="card"><div class="card-title">תוכנות מותרות לפתיחה</div>' +
+      '<p class="muted">תוכנות לימוד (כתבי הקודש, אוצר החכמה, בר אילן, Word ועוד) שאפשר לפתוח מכאן גם בזמן נעילה. ההוספה וההסרה דורשות את סיסמת הנעילה. בסיום העבודה סוגרים את התוכנה וחוזרים לאוצריא.</p>' +
+      (rows || '<p class="muted">עדיין לא הוגדרו תוכנות.</p>') +
+      '<div class="row-actions"><button class="btn btn-tonal" data-act="prog-add">' + ui.icon('edit') + 'הוספת תוכנה</button>' + suggest + '</div></div>';
+  }
+
+  async function openProgram(p) {
+    try {
+      await SS.bridge.call('/kiosk/programs/launch', { id: p.id }, { timeoutMs: 30000 });
+      ui.toast('התוכנה נפתחת…', 'success');
+    } catch (err) { ui.toast(ui.errText(err), 'error'); }
+  }
+
+  async function addProgram(body, preset) {
+    var ok = await ui.dialog({
+      title: 'הוספת תוכנה מותרת', icon: 'computer',
+      body: '<p class="muted">התוכנה תופיע ברשימה ותיפתח מתוך אוצריא גם בזמן נעילה. מומלץ להוסיף רק תוכנות לימוד. אם התוכנה נפתחת דרך תהליך נוסף (מפעיל נפרד), הוסיפו את שמו בשדה „תהליכים נוספים”, כדי שהחלון לא יוחזר לרקע.</p>',
+      fields: [
+        { name: 'name', label: 'שם להצגה', value: preset.name || '' },
+        { name: 'path', label: 'נתיב קובץ ההפעלה (exe)', value: preset.path || '', dir: 'ltr', placeholder: 'C:\\Program Files\\...\\program.exe' },
+        { name: 'procs', label: 'תהליכים נוספים (לא חובה)', value: preset.procs || '', dir: 'ltr', placeholder: 'launcher, helper' },
+        { name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }
+      ],
+      actions: [{ label: 'ביטול', value: false }, { label: 'הוספה', value: true, kind: 'primary' }],
+      validate: function (x) {
+        if (!x.name.trim()) return 'יש להקליד שם';
+        if (!/^[A-Za-z]:\\.+\.exe$/i.test(x.path.trim().replace(/^"|"$/g, ''))) return 'יש להקליד נתיב מלא לקובץ exe';
+        return x.pw ? '' : 'יש להקליד את סיסמת הנעילה';
+      },
+      onSubmit: async function (x) {
+        await SS.bridge.call('/kiosk/programs/add', { password: x.pw, name: x.name.trim(), path: x.path.trim(), procs: (x.procs || '').trim() });
+        return true;
+      }
+    });
+    if (ok) { ui.toast('התוכנה נוספה', 'success'); load(body); }
+  }
+
+  async function removeProgram(body, p) {
+    var ok = await ui.dialog({
+      title: 'הסרת תוכנה מהרשימה', icon: 'warning',
+      body: '<p>להסיר את <b>' + ui.esc(p.name) + '</b> מרשימת התוכנות המותרות? התוכנה עצמה לא תימחק.</p>',
+      fields: [{ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }],
+      actions: [{ label: 'ביטול', value: false }, { label: 'הסרה', value: true, kind: 'primary' }],
+      validate: function (x) { return x.pw ? '' : 'יש להקליד את סיסמת הנעילה'; },
+      onSubmit: async function (x) {
+        await SS.bridge.call('/kiosk/programs/remove', { password: x.pw, id: p.id });
+        return true;
+      }
+    });
+    if (ok) { ui.toast('התוכנה הוסרה', 'success'); load(body); }
   }
 
   function parseExt(s) {

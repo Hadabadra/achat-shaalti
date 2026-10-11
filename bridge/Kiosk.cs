@@ -37,6 +37,7 @@ public static class Kiosk
         Server.Route("/kiosk/enable", Enable);
         Server.Route("/kiosk/disable", Disable);
         Server.Route("/kiosk/settings", Settings);
+        Programs.Register();
     }
 
     // ---------- סיסמה ----------
@@ -87,6 +88,16 @@ public static class Kiosk
             }
             throw new BridgeException("wrong_password", "סיסמה שגויה", 401);
         }
+    }
+
+    /// <summary>אימות סיסמה לשימוש מודולים אחרים (בלי קוד שחזור)</summary>
+    internal static void RequirePassword(string password) => Verify(password, allowRecovery: false);
+
+    /// <summary>מביא חלון לחזית (לתוכנות מותרות שנפתחו מתוך אוצריא)</summary>
+    internal static void BringToFront(IntPtr hwnd)
+    {
+        if (IsIconic(hwnd)) ShowWindow(hwnd, 9 /* SW_RESTORE */);
+        if (!SetForegroundWindow(hwnd)) SwitchToThisWindow(hwnd, true);
     }
 
     private static string NewRecoveryCode()
@@ -406,6 +417,7 @@ public static class Kiosk
 
             GetWindowThreadProcessId(GetForegroundWindow(), out uint fgPid);
             if (fgPid == otz.Id || fgPid == Environment.ProcessId) return;
+            if (Programs.ShouldYieldTo(fgPid)) return; // תוכנה מותרת (רשימה מוגדרת בסיסמה) בחזית
             if (!SetForegroundWindow(hwnd)) SwitchToThisWindow(hwnd, true);
         }
         catch (Exception ex) { Config.Log("watchdog: " + ex.Message); }

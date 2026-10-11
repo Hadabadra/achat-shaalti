@@ -118,6 +118,7 @@
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
       allowOpenExtensions: ['pdf', 'txt']
     },
+    programs: [],
     password: null,
     recovery: null,
     fails: 0,
@@ -243,6 +244,26 @@
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
       return clone(M.kiosk);
+    },
+    '/kiosk/programs': function () { return { programs: clone(M.programs) }; },
+    '/kiosk/programs/detect': function () {
+      return { found: [{ name: 'Word', path: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE', procs: 'WINWORD' }] };
+    },
+    '/kiosk/programs/launch': function (b) {
+      if (!M.programs.some(function (p) { return p.id === b.id; })) throw mockErr('not_found', 'התוכנה אינה ברשימת התוכנות המותרות');
+      return { opened: true };
+    },
+    '/kiosk/programs/add': function (b) {
+      checkPw(b.password, false);
+      if (M.programs.some(function (p) { return p.path.toLowerCase() === String(b.path).toLowerCase(); })) throw mockErr('exists', 'התוכנה כבר ברשימה');
+      M.programs.push({ id: Math.random().toString(16).slice(2, 10), name: b.name, path: b.path,
+        procs: String(b.procs || '').split(/[,;\s]+/).filter(Boolean), exists: true });
+      return { programs: clone(M.programs) };
+    },
+    '/kiosk/programs/remove': function (b) {
+      checkPw(b.password, false);
+      M.programs = M.programs.filter(function (p) { return p.id !== b.id; });
+      return { programs: clone(M.programs) };
     }
   };
 

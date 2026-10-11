@@ -87,6 +87,21 @@
 | `/kiosk/disable` | `{ password }` (או קוד שחזור) | `{ active: false }` |
 | `/kiosk/settings` | `{ password, allowOpenExtensions?, otzariaPath? }` | סטטוס |
 
+### תוכנות מותרות לפתיחה ממצב נעילה — /kiosk/programs/*
+הרשימה נשמרת ב-`kiosk.programs` ומוגדרת בסיסמה בלבד. הפתיחה היא תמיד לפי `id` מהרשימה, לא לפי נתיב חופשי.
+
+| נקודת קצה | גוף | תשובה |
+|---|---|---|
+| `/kiosk/programs` | `{}` | `{ programs: [{ id, name, path, procs: [], exists }] }` |
+| `/kiosk/programs/launch` | `{ id }` | `{ opened: true }` — פותח ומביא את החלון לחזית. בלי סיסמה (הפתיחה מוגבלת לרשימה) |
+| `/kiosk/programs/add` | `{ password, name, path, procs? }` | `{ programs }` — `path` מלא לקובץ `exe`; `procs` = שמות תהליכים נוספים (מופרדים בפסיק) |
+| `/kiosk/programs/remove` | `{ password, id }` | `{ programs }` |
+| `/kiosk/programs/detect` | `{}` | `{ found: [{ name, path, procs }] }` — הצעות לפי הרישום של Windows (כרגע: Word) |
+
+- בזמן שתוכנה מהרשימה בחזית (לפי שם הקובץ או `procs`), המעקב של הנעילה לא מחזיר את אוצריא לחזית. אחרי הפתיחה יש 15 שניות חסד.
+  כשהתוכנה נסגרת — אוצריא חוזרת לחזית.
+- אי אפשר להוסיף מעטפות ומנהלי מערכת (`explorer`, `cmd`, `powershell`, `regedit`, `taskmgr` ועוד). מקסימום 20 תוכנות.
+
 נעילה רכה (תמיד): סגירת explorer.exe (שורת המשימות ותפריט התחל), hook מקלדת שחוסם
 Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב שמחזיר את אוצריא לחזית
 ומפעיל אותה מחדש אם נסגרה, וחסימת מנהל המשימות (HKCU Policies DisableTaskMgr).
