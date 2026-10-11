@@ -340,6 +340,33 @@ public static class Kiosk
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
     [DllImport("user32.dll")] private static extern void SwitchToThisWindow(IntPtr hWnd, bool altTab);
 
+    [DllImport("user32.dll")] private static extern bool IsZoomed(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect rect);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect { public int Left, Top, Right, Bottom; }
+
+    private static DateTime _lastFit = DateTime.MinValue;
+
+    /// <summary>
+    /// מוודא שחלון אוצריא ממלא את כל המסך. אם הוא לא ממוקסם — ממקסם. אם הוא ממוקסם אבל עדיין משאיר
+    /// פס ריק (אזור העבודה לא התעדכן אחרי סגירת שורת המשימות) — משחזר וממקסם מחדש, לכל היותר פעם ב-8 שניות.
+    /// חלון במסך מלא של אוצריא עצמה (מכסה את כל המסך) לא נוגעים בו.
+    /// </summary>
+    private static void FitToScreen(IntPtr hwnd)
+    {
+        const int SwRestore = 9, SwMaximize = 3;
+        if (!GetWindowRect(hwnd, out var r)) return;
+        var b = System.Windows.Forms.Screen.FromHandle(hwnd).Bounds;
+        bool covers = r.Left <= b.Left + 1 && r.Top <= b.Top + 1 && r.Right >= b.Right - 1 && r.Bottom >= b.Bottom - 1;
+        if (covers) return;
+        if (!IsZoomed(hwnd)) { ShowWindow(hwnd, SwMaximize); return; }
+        if ((DateTime.UtcNow - _lastFit).TotalSeconds < 8) return;
+        _lastFit = DateTime.UtcNow;
+        ShowWindow(hwnd, SwRestore);
+        ShowWindow(hwnd, SwMaximize);
+    }
+
     private static int _watchBusy;
 
     private static void Watch()
@@ -372,9 +399,13 @@ public static class Kiosk
 
             IntPtr hwnd = otz.MainWindowHandle;
             if (hwnd == IntPtr.Zero) return;
+
+            // אוצריא תמיד ממוקסמת: בלי מזעור, בלי חלון קטן, ובלי חור במקום שורת המשימות
+            if (IsIconic(hwnd)) ShowWindow(hwnd, 9 /* SW_RESTORE */);
+            if (Config.Get("kiosk.maximizeOtzaria", true)) FitToScreen(hwnd);
+
             GetWindowThreadProcessId(GetForegroundWindow(), out uint fgPid);
             if (fgPid == otz.Id || fgPid == Environment.ProcessId) return;
-            if (IsIconic(hwnd)) ShowWindow(hwnd, 9 /* SW_RESTORE */);
             if (!SetForegroundWindow(hwnd)) SwitchToThisWindow(hwnd, true);
         }
         catch (Exception ex) { Config.Log("watchdog: " + ex.Message); }
