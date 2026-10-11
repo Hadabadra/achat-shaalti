@@ -56,6 +56,15 @@
 | `/recycle/delete` | `{ ids: [id] }` | `{ deleted, failed }` — מחיקה לצמיתות של פריטים נבחרים מהסל |
 | `/recycle/empty` | `{}` | `{ emptied: true }` — ריקון כל הסל (`SHEmptyRecycleBin`, בלי חלונות אישור; האישור הוא בתוסף) |
 
+## זיהוי טקסט (OCR) של Windows — /ocr/*
+
+מנוע `Windows.Media.Ocr` המובנה. לעברית נדרשת חבילת השפה `Language.OCR~~~he-IL` (הגדרות ← זמן ושפה ← שפה ← עברית ← אפשרויות שפה, או `Add-WindowsCapability -Online -Name Language.OCR~~~he-IL` כמנהל). בלי החבילה הגשר מחזיר `unsupported` והלקוח אמור לחזור למנוע שלו.
+
+| נתיב | גוף | data |
+|---|---|---|
+| `/ocr/status` | `{}` | `{ available, languages: ["he-IL", ...], hebrew: bool, hebrewCapability, installHint, maxImageDimension }` |
+| `/ocr/recognize` | `{ image: base64 \| data URL (PNG/JPEG/BMP), lang?: "he-IL" }` | `{ text, lines: [{ text, words: [{ text, x, y, w, h }] }], width, height, lang }` — קואורדינטות בפיקסלים של התמונה. בלי `lang` — שפות פרופיל המשתמש. תמונה מעל `maxImageDimension` בצד כלשהו → `bad_request` (הלקוח מקטין) |
+
 ## מערכת — /sys/*
 
 | נתיב | גוף | data |

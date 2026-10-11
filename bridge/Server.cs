@@ -50,6 +50,7 @@ public static class Server
     {
         FsApi.Register();
         RecycleApi.Register();
+        OcrApi.Register();
         SysApi.Register();
         Kiosk.Register();
 
