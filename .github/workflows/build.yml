@@ -154,6 +154,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --notes-file release-notes.md
 
+      # Release שנשאר טיוטה (draft): מעדכנים את הקבצים לבנייה הנוכחית ומפרסמים
+      - name: השלמת Release שנשאר טיוטה
+        if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $draft = gh release view ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --json isDraft -q .isDraft
+          if ($draft -ne 'true') { Write-Host "not a draft"; exit 0 }
+          gh release upload ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --clobber out/OtzariaBridge.exe bridge/plugins/system-settings.otzplugin bridge/plugins/file-explorer.otzplugin SHA256SUMS.txt
+          gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --draft=false --latest --target ${{ github.sha }}
+
   plugins:
     name: ולידציה, צילומים ופרסום לחנות
     runs-on: ubuntu-latest
