@@ -326,13 +326,20 @@ public static class FsApi
         return move ? new { moved = done, skipped, failed } : new { copied = done, skipped, failed };
     }
 
-    private static void CopyDir(string src, string dest, bool overwrite)
+    private static void CopyDir(string src, string dest, bool overwrite, int depth = 0)
     {
+        // תקרת עומק כהגנה אחרונה מפני רקורסיה פתולוגית
+        if (depth > 64) throw new IOException("עומק התיקיות עמוק מדי להעתקה: " + src);
         Directory.CreateDirectory(dest);
         foreach (string f in Directory.GetFiles(src))
             File.Copy(f, Path.Combine(dest, Path.GetFileName(f)), overwrite);
         foreach (string d in Directory.GetDirectories(src))
-            CopyDir(d, Path.Combine(dest, Path.GetFileName(d)), overwrite);
+        {
+            // דילוג על נקודות reparse (junction/symlink). junction שמצביע על תיקיית־אב יוצר לולאה
+            // אינסופית → StackOverflowException שאי אפשר ללכוד והורג את כל התהליך (הגשר והמגש).
+            if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;
+            CopyDir(d, Path.Combine(dest, Path.GetFileName(d)), overwrite, depth + 1);
+        }
     }
 
     // מחיקה לסל המיחזור דרך SHFileOperation
