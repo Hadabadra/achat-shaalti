@@ -52,7 +52,7 @@ public static class Programs
     private static List<Entry> _autoCache = new();
     private static DateTime _autoAt = DateTime.MinValue;
 
-    public static bool AutoEnabled => Config.Get(AutoKey, false);
+    public static bool AutoEnabled => Config.Get(AutoKey, true);
 
     public static void Register()
     {
@@ -208,13 +208,116 @@ public static class Programs
         return ListResult();
     }
 
-    /// <summary>מאתר תוכנות נפוצות להצעה (כרגע: Word), לפי App Paths ברישום</summary>
+    /// <summary>מאתר תוכנות נפוצות להצעה: Word ותוכנות התורה המוכרות (בנתיבים הידועים, ואם לא — בחיפוש בכוננים)</summary>
     private static object Detect()
     {
         var found = new List<object>();
         string word = AppPath("WINWORD.EXE");
         if (word != null) found.Add(new { name = "Word", path = word, procs = "WINWORD" });
+        foreach (var (name, path, procs) in KnownTorah())
+            found.Add(new { name, path, procs = string.Join(", ", procs) });
         return new { found = found.ToArray() };
+    }
+
+    // ---------- תוכנות תורה מוכרות ----------
+
+    private record Known(string Name, string[] Exes, string[] Procs, Func<IEnumerable<string>> Candidates);
+
+    private static IEnumerable<string> Drives()
+    {
+        foreach (var d in DriveInfo.GetDrives())
+        {
+            bool ok = false;
+            try { ok = d.IsReady && (d.DriveType == DriveType.Fixed || d.DriveType == DriveType.Removable); } catch { }
+            if (ok) yield return d.RootDirectory.FullName;
+        }
+    }
+
+    private static IEnumerable<string> Under(string dir, string pattern, string tail)
+    {
+        string[] dirs;
+        try { dirs = Directory.Exists(dir) ? Directory.GetDirectories(dir, pattern) : Array.Empty<string>(); } catch { dirs = Array.Empty<string>(); }
+        return dirs.Select(x => System.IO.Path.Combine(x, tail));
+    }
+
+    private static readonly Known[] KnownList =
+    {
+        new("בר אילן — שו\"ת", new[] { "RESPONSA.exe" }, new[] { "RESPONSA" }, () =>
+            Under(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "ResponsaCD*", "RESPONSA.exe")
+            .Concat(Under(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ResponsaCD*", "RESPONSA.exe"))
+            .Concat(Drives().SelectMany(r => Under(r, "ResponsaCD*", "RESPONSA.exe")))),
+        new("כתבי הקודש", new[] { "כתבי הקודש.exe", "KleiKodesh.exe" }, new[] { "כתבי הקודש", "KleiKodesh" }, () =>
+            new[]
+            {
+                System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KleiKodesh", "כתבי הקודש.exe"),
+                System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KleiKodesh", "KleiKodesh.exe"),
+                System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "KleiKodesh", "כתבי הקודש.exe"),
+            }),
+        new("אוצר החכמה", new[] { "otzar.exe", "אוצר החכמה.exe" }, new[] { "otzar", "אוצר החכמה", "OtzarLauncher" }, () =>
+            Drives().SelectMany(r => new[]
+            {
+                System.IO.Path.Combine(r, "OtzarApp", "OtzarLocal", "launcher", "bin", "x64", "app", "otzar.exe"),
+                System.IO.Path.Combine(r, "אוצר החכמה.exe"),
+            })),
+    };
+
+    private static List<(string name, string path, string[] procs)> _knownCache;
+    private static DateTime _knownAt = DateTime.MinValue;
+
+    /// <summary>לכל תוכנה מוכרת: קודם הנתיבים הידועים, ואם לא נמצאה — חיפוש לפי שם הקובץ בכוננים (עד עומק 4).
+    /// התוצאה נשמרת ל-10 דקות כדי לא לסרוק שוב בכל פתיחה</summary>
+    private static List<(string name, string path, string[] procs)> KnownTorah()
+    {
+        lock (AutoGate)
+        {
+            if (_knownCache != null && (DateTime.UtcNow - _knownAt).TotalMinutes < 10) return _knownCache;
+            var res = new List<(string, string, string[])>();
+            foreach (var k in KnownList)
+            {
+                string hit = null;
+                try { hit = k.Candidates().FirstOrDefault(File.Exists); } catch { }
+                hit ??= Search(k.Exes);
+                if (hit != null) res.Add((k.Name, hit, k.Procs));
+            }
+            _knownCache = res;
+            _knownAt = DateTime.UtcNow;
+            return res;
+        }
+    }
+
+    private static readonly HashSet<string> SkipDirs = new(StringComparer.OrdinalIgnoreCase)
+    { "Windows", "$Recycle.Bin", "System Volume Information", "ProgramData", "Recovery", "node_modules", ".git", "AppData" };
+
+    private static string Search(string[] exes)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(8);
+        var roots = Drives().Concat(new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        });
+        foreach (string root in roots)
+        {
+            var q = new Queue<(string dir, int depth)>();
+            q.Enqueue((root, 0));
+            while (q.Count > 0 && DateTime.UtcNow < deadline)
+            {
+                var (dir, depth) = q.Dequeue();
+                foreach (string exe in exes)
+                {
+                    string p = System.IO.Path.Combine(dir, exe);
+                    if (File.Exists(p)) return p;
+                }
+                if (depth >= 4) continue;
+                try
+                {
+                    foreach (string sub in Directory.EnumerateDirectories(dir))
+                        if (!SkipDirs.Contains(System.IO.Path.GetFileName(sub))) q.Enqueue((sub, depth + 1));
+                }
+                catch { }
+            }
+        }
+        return null;
     }
 
     private static string AppPath(string exe)
@@ -246,6 +349,7 @@ public static class Programs
             {
                 string word = AppPath("WINWORD.EXE");
                 if (word != null) AddAuto(found, "Word", word, new[] { "WINWORD" });
+                foreach (var (kn, kp, kprocs) in KnownTorah()) AddAuto(found, kn, kp, kprocs);
 
                 var keywords = TorahKeywords.Concat(Config.GetList(KeywordsKey)).Select(k => k.ToLowerInvariant()).ToArray();
                 foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })

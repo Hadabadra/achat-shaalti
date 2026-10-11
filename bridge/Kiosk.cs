@@ -192,6 +192,10 @@ public static class Kiosk
         blockTaskManager = Config.Get("kiosk.blockTaskManager", true),
         allowOpenExtensions = AllowedExtensions,
         readOnly = ReadOnly,
+        clock = Config.Get("kiosk.clock", true),
+        clockPosition = Config.Get("kiosk.clockPosition", "bottom-left"),
+        restScreen = Config.Get("kiosk.restScreen", true),
+        fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
         openSections = OpenSections,
         allSections = AllSections,
         warnings = Warnings(),
@@ -251,6 +255,10 @@ public static class Kiosk
     {
         Verify(b.Str("password"), allowRecovery: false);
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
+        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria" })
+            if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
+        string cp = b.Str("clockPosition");
+        if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right") Config.Set("kiosk.clockPosition", cp);
         if (b.Has("openSections"))
             Config.Set("kiosk.openSections", new JsonArray(b.StrArray("openSections")
                 .Where(x => AllSections.Contains(x, StringComparer.OrdinalIgnoreCase))
@@ -392,6 +400,7 @@ public static class Kiosk
             }
 
             Tray.Invoke(InstallHook);
+            Overlay.ShowClock(); // שורת המשימות מוסתרת — שעה ותאריך בשעון צף
             _watchdog ??= new System.Threading.Timer(_ => Watch(), null, 0, 2000);
             Tray.SetKioskState(true);
         }
@@ -410,6 +419,7 @@ public static class Kiosk
             // ממתינים שסבב שומר שכבר רץ יסתיים, כדי שלא יסגור את explorer מיד אחרי שהופעל מחדש
             for (int i = 0; i < 30 && Volatile.Read(ref _watchBusy) == 1; i++) Thread.Sleep(100);
             Tray.Invoke(RemoveHook);
+            Overlay.HideAll();
             RestoreWindowFrame();
             ClearRegistry();
             StartExplorer();
@@ -620,7 +630,14 @@ public static class Kiosk
             if (hwnd == IntPtr.Zero) return;
 
             // אוצריא תמיד ממוקסמת: בלי מזעור, בלי חלון קטן, ובלי חור במקום שורת המשימות
-            if (IsIconic(hwnd)) ShowWindow(hwnd, 9 /* SW_RESTORE */);
+            // אוצריא ממוזערת: מסך מנוחה עם סמל אוצריא, שעה ותאריך, במקום החזרה מיידית
+            if (IsIconic(hwnd))
+            {
+                if (Config.Get("kiosk.restScreen", true)) { Overlay.ShowRest(hwnd); return; }
+                ShowWindow(hwnd, 9 /* SW_RESTORE */);
+            }
+            else if (Overlay.RestVisible) Overlay.HideRest();
+            if (Overlay.RestVisible) return;
             if (Config.Get("kiosk.maximizeOtzaria", true)) FitToScreen(hwnd);
             if (Config.Get("kiosk.fullscreenOtzaria", true)) MakeFullscreen(hwnd);
 
