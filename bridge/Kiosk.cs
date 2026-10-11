@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Win32;
@@ -29,6 +30,31 @@ public static class Kiosk
     private static bool HasPassword => !string.IsNullOrEmpty(Config.Get<string>("kiosk.passwordHash", null));
 
     public static string[] AllowedExtensions => Config.GetList("kiosk.allowOpenExtensions");
+
+    /// <summary>
+    /// האם המשתמש הנוכחי חבר בקבוצת ה-Administrators המקומית.
+    /// זו "נקודת תורפה": משתמש עם הרשאות מנהל יכול לבטל את הנעילה (לעצור את הגשר,
+    /// לשנות רישום/מדיניות, או להיכנס כמנהל) — ולכן מומלץ שעמדת לימוד תרוץ בחשבון רגיל.
+    /// מזהה חברות בקבוצה גם כאשר הטוקן מסונן על ידי UAC (deny-only group עדיין מופיעה).
+    /// </summary>
+    public static bool UserIsAdministrator()
+    {
+        try
+        {
+            using var id = WindowsIdentity.GetCurrent();
+            var admins = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+            return id.Groups != null && id.Groups.Any(g => g == admins);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>אזהרות על מצב הקשחה חלש, להצגה למי שמפעיל את הנעילה</summary>
+    private static string[] Warnings()
+    {
+        var w = new List<string>();
+        if (UserIsAdministrator()) w.Add("admin");
+        return w.ToArray();
+    }
 
     public static void Register()
     {
@@ -106,6 +132,7 @@ public static class Kiosk
         otzariaPath = OtzariaPath() ?? "",
         blockTaskManager = Config.Get("kiosk.blockTaskManager", true),
         allowOpenExtensions = AllowedExtensions,
+        warnings = Warnings(),
     };
 
     private static object SetPassword(JsonElement b)
@@ -228,6 +255,9 @@ public static class Kiosk
             // חסימת מנהל המשימות דרך מדיניות. במחשבים רבים המפתח Policies\System נעול למשתמש רגיל
             // (נוצר על ידי מנהל/מדיניות קבוצתית), ולכן זו חסימה "במאמץ הטוב": אם אין הרשאה,
             // הנעילה ממשיכה, ומנהל המשימות נסגר על ידי שומר הנעילה ונחסם במקלדת (Ctrl+Shift+Esc).
+            if (UserIsAdministrator())
+                Config.Log("kiosk: אזהרה — הנעילה הופעלה בחשבון עם הרשאות מנהל, שניתן לעקוף אותה ממנו. מומלץ להפעיל בעמדת לימוד בחשבון משתמש רגיל.");
+
             _taskMgrByPolicy = false;
             try
             {
