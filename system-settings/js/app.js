@@ -11,10 +11,15 @@
 
   SS.openUrl = async function (url) {
     if (window.Otzaria) {
+      /* אם הפתיחה נכשלת — מעתיקים את הקישור ללוח, כדי שאפשר להדביק אותו בדפדפן */
+      var failed = async function () {
+        var ok = await SS.copyText(url);
+        ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + url, 'error');
+      };
       try {
         var r = await window.Otzaria.call('app.openUrl', { url: url });
-        if (r && r.success === false) ui.toast('לא ניתן לפתוח את הקישור', 'error');
-      } catch (e) { ui.toast('לא ניתן לפתוח את הקישור', 'error'); }
+        if (r && r.success === false) await failed();
+      } catch (e) { await failed(); }
     } else {
       ui.toast('בתוך אוצריא הקישור ייפתח בדפדפן', 'info');
     }

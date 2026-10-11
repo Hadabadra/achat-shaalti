@@ -86,6 +86,8 @@
 | `/sys/wifi/disconnect` | `{}` | `{ ok }` |
 | `/sys/power` | `{ action: "sleep"\|"restart"\|"shutdown"\|"lock" }` | `{ ok }` |
 
+| `/sys/update-check` | `{ force?: false }` | `{ current, latest, tag, newer: bool, url, releasesUrl }` — משווה לגרסה האחרונה של הגשר בעמוד ההוצאות בגיטהאב (תוצאה נשמרת 10 דקות). הגשר לא מוריד ולא מחליף את עצמו. אין חיבור לאינטרנט → `internal` (502) |
+
 ## נעילה (קיוסק) — /kiosk/*
 
 | נתיב | גוף | data |

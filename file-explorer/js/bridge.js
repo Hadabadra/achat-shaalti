@@ -244,7 +244,28 @@
     clipboardSet: function (paths, cut) { return Bridge.call('/fs/clipboard-set', { paths: paths, cut: !!cut }); },
 
     /* חיפוש זורם */
-    search: function (root, opts, handlers, isCancelled) {
+    search: async function (root, opts, handlers, isCancelled) {
+      /* במסך "המחשב הזה" אין תיקייה: מחפשים בכל הכוננים, אחד אחרי השני (הגשר דורש root) */
+      if (!root) {
+        var rr = await FX.BridgeProvider.roots();
+        var total = { cancelled: false, truncated: false, scanned: 0, hits: 0, complete: true };
+        var left = opts.maxResults || 500;
+        for (var di = 0; di < rr.drives.length && left > 0; di++) {
+          if (isCancelled && isCancelled()) { total.cancelled = true; break; }
+          var sub = Object.assign({}, opts, { maxResults: left });
+          var r1 = await FX.BridgeProvider.search(rr.drives[di].path, sub, {
+            hit: function (h) { left--; total.hits++; handlers.hit(h); },
+            progress: function (p) { handlers.progress({ scanned: total.scanned + (p.scanned || 0), current: p.current }); }
+          }, isCancelled);
+          total.scanned += r1.scanned || 0;
+          total.cancelled = total.cancelled || !!r1.cancelled;
+          total.truncated = total.truncated || !!r1.truncated;
+          total.complete = total.complete && !!r1.complete;
+          if (r1.cancelled) break;
+        }
+        if (left <= 0) total.truncated = true;
+        return total;
+      }
       var body = {
         root: root,
         query: opts.query || '*',

@@ -4,6 +4,16 @@
   var I = window.I18N;
   var t = function (s) { return I.t(s); };
   I.add({
+    'לעילוי נשמת הנערה הצדקנית': 'In loving memory of the righteous young woman',
+    'אסתר גיטה בת רבי מיכאל שלום הלוי שיבדלט"א': 'Esther Gitta, daughter of Rabbi Michael Shalom HaLevi, may he live long',
+    'תהא נשמתה צרורה בצרור החיים. תנצב"ה': 'May her soul be bound up in the bond of eternal life.',
+    'בדיקת עדכון': 'Check for updates',
+    'בדיקה חוזרת': 'Check again',
+    'העתקת הקישור': 'Copy link',
+    'לעמוד ההוצאה': 'Open release page',
+    'בדיקת העדכון נכשלה': 'The update check failed',
+    'הגשר מעודכן': 'The bridge is up to date',
+    'לא ניתן לפתוח את הקישור, הוא הועתק ללוח': 'Could not open the link; it was copied to the clipboard',
     'שליחת הערות זמינה רק בתוך אוצריא': 'Sending feedback is available only inside Otzaria',
     'ההערה נשלחת לצוות אוצריא ולמפתח התוסף דרך מערכת הדיווח של אוצריא. לפני השליחה תוצג בקשת אישור.': 'Your note is sent to the Otzaria team and the plugin developer through the Otzaria reporting system. You will be asked to confirm before it is sent.',
     'סוג': 'Type',

@@ -453,6 +453,16 @@ public static class Kiosk
         _hook = IntPtr.Zero;
     }
 
+    private static bool ForegroundIsAllowedProgram()
+    {
+        try
+        {
+            GetWindowThreadProcessId(GetForegroundWindow(), out uint pid);
+            return pid != 0 && pid != (uint)Environment.ProcessId && Programs.ShouldYieldTo(pid);
+        }
+        catch { return false; }
+    }
+
     private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0)
@@ -465,6 +475,8 @@ public static class Kiosk
                 vk is 0x5B or 0x5C ||                     // Win
                 (alt && vk is 0x09 or 0x1B or 0x73) ||   // Alt+Tab, Alt+Esc, Alt+F4
                 (ctrl && vk == 0x1B);                     // Ctrl+Esc
+            // Alt+F4 עובד בתוכנה מותרת שנמצאת בחזית, כדי שאפשר לסגור אותה ולחזור לאוצריא
+            if (block && alt && vk == 0x73 && ForegroundIsAllowedProgram()) block = false;
             if (block) return (IntPtr)1;
         }
         return CallNextHookEx(_hook, nCode, wParam, lParam);

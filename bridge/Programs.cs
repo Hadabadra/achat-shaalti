@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Management;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -18,7 +19,7 @@ public static class Programs
     private const string AutoKey = "kiosk.autoTorahPrograms";
     private const string KeywordsKey = "kiosk.autoTorahKeywords";
     private const int MaxPrograms = 20;
-    private const int GraceSeconds = 15;
+    private const int GraceSeconds = 30;
 
     // מעטפות ומנהלי מערכת שאסור להוסיף לרשימה (עוקף את הנעילה)
     private static readonly HashSet<string> Blocked = new(StringComparer.OrdinalIgnoreCase)
@@ -143,11 +144,14 @@ public static class Programs
         if (!File.Exists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);
 
         _graceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
-        Process.Start(new ProcessStartInfo(e.Path)
+        using (var started = Process.Start(new ProcessStartInfo(e.Path)
         {
             UseShellExecute = true,
             WorkingDirectory = System.IO.Path.GetDirectoryName(e.Path),
-        });
+        }))
+        {
+            if (started != null) RememberLaunched(started.Id);
+        }
         Task.Run(() => Focus(e));
         return new { opened = true };
     }
@@ -308,15 +312,97 @@ public static class Programs
 
     // ---------- שילוב עם השומר של הנעילה ----------
 
-    /// <summary>האם השומר צריך לוותר על החזרת אוצריא לחזית (תוכנה מותרת בחזית, או פתיחה טרייה)</summary>
+    // תהליכים שנפתחו דרך הגשר (מזהה → זמן פתיחה). נשמרים 10 דקות, כדי לזהות גם תהליכי בן
+    // של מפעיל שכבר נסגר (למשל תוכנה שמפעילה תהליך אחר שמציג את החלון).
+    private static readonly Dictionary<int, DateTime> Launched = new();
+    private static readonly Dictionary<int, (int parent, DateTime at)> ParentCache = new();
+    private static readonly object PidGate = new();
+
+    private static void RememberLaunched(int pid)
+    {
+        lock (PidGate)
+        {
+            foreach (int k in Launched.Where(x => DateTime.UtcNow - x.Value > TimeSpan.FromMinutes(10)).Select(x => x.Key).ToList())
+                Launched.Remove(k);
+            Launched[pid] = DateTime.UtcNow;
+        }
+    }
+
+    private static int ParentOf(int pid)
+    {
+        lock (PidGate)
+            if (ParentCache.TryGetValue(pid, out var c) && DateTime.UtcNow - c.at < TimeSpan.FromSeconds(10)) return c.parent;
+        int parent = 0;
+        try
+        {
+            using var q = new ManagementObjectSearcher("SELECT ParentProcessId FROM Win32_Process WHERE ProcessId=" + pid);
+            foreach (ManagementObject mo in q.Get())
+                using (mo) parent = Convert.ToInt32(mo["ParentProcessId"]);
+        }
+        catch { /* אין גישה ל-WMI */ }
+        lock (PidGate) ParentCache[pid] = (parent, DateTime.UtcNow);
+        return parent;
+    }
+
+    /// <summary>האם התהליך נפתח דרך הגשר, או שהוא תהליך בן (עד 6 דורות) של תהליך שנפתח כך</summary>
+    private static bool IsLaunchedTree(int pid)
+    {
+        for (int i = 0; i < 6 && pid > 4; i++)
+        {
+            lock (PidGate) if (Launched.ContainsKey(pid)) return true;
+            pid = ParentOf(pid);
+        }
+        return false;
+    }
+
+    /// <summary>תיקיות רחבות מדי כדי להתיר את כל מה שבהן (Windows, Program Files, תיקיית משתמש...)</summary>
+    private static bool BroadDir(string dir)
+    {
+        if (string.IsNullOrEmpty(dir)) return true;
+        string d = dir.TrimEnd('\\');
+        string root = (System.IO.Path.GetPathRoot(dir) ?? "").TrimEnd('\\');
+        if (d.Length <= root.Length) return true;
+        string win = Environment.GetFolderPath(Environment.SpecialFolder.Windows).TrimEnd('\\');
+        if (d.Equals(win, StringComparison.OrdinalIgnoreCase) || d.StartsWith(win + "\\", StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (var f in new[]
+        {
+            Environment.SpecialFolder.ProgramFiles, Environment.SpecialFolder.ProgramFilesX86,
+            Environment.SpecialFolder.CommonApplicationData, Environment.SpecialFolder.UserProfile,
+            Environment.SpecialFolder.DesktopDirectory, Environment.SpecialFolder.MyDocuments,
+            Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolder.ApplicationData,
+        })
+        {
+            string x = Environment.GetFolderPath(f).TrimEnd('\\');
+            if (x.Length > 0 && d.Equals(x, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// האם השומר צריך לוותר על החזרת אוצריא לחזית. כן אם: פתיחה טרייה (30 שניות), או שהתהליך בחזית הוא
+    /// תוכנה מהרשימה — לפי שם תהליך, לפי קובץ ההפעלה המלא, לפי תיקיית ההתקנה (תהליכי עזר ומפעילים נפרדים),
+    /// או לפי עץ התהליכים של מה שנפתח דרך הגשר.
+    /// </summary>
     public static bool ShouldYieldTo(uint foregroundPid)
     {
         if (DateTime.UtcNow < _graceUntil) return true;
         try
         {
-            string fg;
-            using (var p = Process.GetProcessById((int)foregroundPid)) fg = p.ProcessName.ToLowerInvariant();
-            return Load().Any(e => ProcNames(e).Contains(fg));
+            using var p = Process.GetProcessById((int)foregroundPid);
+            string fg = p.ProcessName.ToLowerInvariant();
+            var list = Load();
+            if (list.Any(e => ProcNames(e).Contains(fg))) return true;
+
+            string exe = null;
+            try { exe = p.MainModule?.FileName; } catch { /* תהליך מוגבה או ללא גישה */ }
+            if (!string.IsNullOrEmpty(exe))
+                foreach (var e in list)
+                {
+                    if (exe.Equals(e.Path, StringComparison.OrdinalIgnoreCase)) return true;
+                    string dir = System.IO.Path.GetDirectoryName(e.Path);
+                    if (!BroadDir(dir) && exe.StartsWith(dir.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+            return IsLaunchedTree((int)foregroundPid);
         }
         catch { return false; }
     }
