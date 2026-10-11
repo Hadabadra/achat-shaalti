@@ -49,12 +49,21 @@ jobs:
       - name: Publish
         run: dotnet publish bridge/OtzariaBridge.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o out
 
+      - name: SHA256 לאימות ההורדה
+        shell: pwsh
+        run: |
+          $files = @("out/OtzariaBridge.exe", "bridge/plugins/system-settings.otzplugin", "bridge/plugins/file-explorer.otzplugin")
+          $lines = foreach ($f in $files) { "{0}  {1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) }
+          $lines | Set-Content SHA256SUMS.txt -Encoding ascii
+          Get-Content SHA256SUMS.txt
+
       - uses: actions/upload-artifact@v4
         with:
           name: OtzariaBridge
           path: |
             out/OtzariaBridge.exe
             bridge/plugins/*.otzplugin
+            SHA256SUMS.txt
           if-no-files-found: error
 
       - name: האם לשחרר גרסה?
@@ -99,12 +108,18 @@ jobs:
             ""
             "> ⚠️ לפני הפעלת *נעילה קפדנית* — לרשום את קוד השחזור."
             ""
+            "## אם Windows או האנטי-וירוס מזהירים"
+            "הגשר עדיין אינו חתום בחתימת קוד, ולכן SmartScreen עלול להציג 'Windows protected your PC'. לוחצים **More info / מידע נוסף** ← **Run anyway / הפעל בכל זאת**."
+            "הקוד פתוח כולו בריפו, והקובץ נבנה אוטומטית ב-GitHub Actions. לאימות: ב-PowerShell ``Get-FileHash OtzariaBridge.exe`` והשוואה ל-**SHA256SUMS.txt**."
+            "הגשר מאזין רק ל-127.0.0.1 (המחשב המקומי) ואינו נגיש מהרשת."
+            ""
             "## קבצים"
             "| קובץ | מה זה |"
             "|---|---|"
             "| ``OtzariaBridge.exe`` | גשר אוצריא — תוכנת הרקע ל-Windows |"
             "| ``file-explorer.otzplugin`` | תוסף סייר קבצים |"
             "| ``system-settings.otzplugin`` | תוסף הגדרות מערכת |"
+            "| ``SHA256SUMS.txt`` | טביעות SHA256 לאימות הקבצים (גם העדכון האוטומטי בודק אותן) |"
             ""
             "## שימושי"
             "- אנגלית: תפריט המגש → English, או ``OtzariaBridge.exe --lang en``"
@@ -131,6 +146,7 @@ jobs:
             out/OtzariaBridge.exe
             bridge/plugins/system-settings.otzplugin
             bridge/plugins/file-explorer.otzplugin
+            SHA256SUMS.txt
 
       - name: עדכון הערות של Release קיים
         if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'

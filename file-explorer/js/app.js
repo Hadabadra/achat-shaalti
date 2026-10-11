@@ -5,7 +5,7 @@
   var ui = window.SS.ui;
   FX.ui = ui;
   FX.t = window.I18N ? window.I18N.t : function (x) { return x; };
-  FX.VERSION = '1.7.0';
+  FX.VERSION = '2.0.0';
   FX.CHANGELOG_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/blob/main/CHANGELOG.md';
   FX.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
 
@@ -764,40 +764,125 @@
       choices.map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === cur ? ' selected' : '') + '>' + c[1] + '</option>'; }).join('') +
       '</select></label>';
   }
-  async function settingsDialog() {
+  /* ---------- מסך הגדרות בסגנון אוצריא: קטגוריות בצד, כרטיסים, ושמירה מיידית ---------- */
+  var SET_CATS = [
+    ['open', 'פתיחת קבצים', 'open'],
+    ['view', 'תצוגה', 'grid'],
+    ['general', 'כללי', 'settings'],
+    ['about', 'אודות', 'info']
+  ];
+  function seg(name, cur, choices) {
+    return '<div class="fx-seg" role="radiogroup" data-seg="' + name + '">' + choices.map(function (c) {
+      return '<button type="button" class="fx-seg-btn' + (String(c[0]) === String(cur) ? ' on' : '') + '" role="radio" aria-checked="' +
+        (String(c[0]) === String(cur) ? 'true' : 'false') + '" data-v="' + c[0] + '">' + c[1] + '</button>';
+    }).join('') + '</div>';
+  }
+  function setRow(title, hint, control) {
+    return '<div class="fx-set-row"><div class="fx-set-text"><b>' + title + '</b>' + (hint ? '<span class="muted small">' + hint + '</span>' : '') + '</div>' + control + '</div>';
+  }
+  function setSwitch(name, on) {
+    return '<button type="button" class="fx-switch' + (on ? ' on' : '') + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" data-sw="' + name + '"><span></span></button>';
+  }
+  function setCat(id) {
     var o = opts();
+    var ext = [['external', 'יישום חיצוני']];
     var pref = window.I18N ? window.I18N.pref() : 'auto';
-    var ext = [['external', 'ביישום חיצוני (דרך הגשר)']];
-    var form = null;
-    var body = '<div class="fx-settings">' +
-      sel('pdf', 'קובצי PDF', o.pdf, [['internal', 'בצופה הפנימי'], ['ocr', 'בתוסף צופה PDF+OCR']].concat(ext)) +
-      sel('word', 'מסמכי Word', o.word, [['two', 'בצופה הפנימי — שני טורים'], ['one', 'בצופה הפנימי — טור אחד'], ['wordplugin', 'בתוסף וורד לאוצריא']].concat(ext)) +
-      sel('text', 'קובצי טקסט', o.text, [['internal', 'בצופה הפנימי']].concat(ext)) +
-      sel('image', 'תמונות', o.image, [['internal', 'בתצוגה מקדימה']].concat(ext)) +
-      sel('zoom', 'גודל טקסט', String(FX.layout.zoom()), [['0.8', 'קטן מאוד'], ['0.85', 'קטן'], ['0.9', 'רגיל'], ['1', 'בינוני'], ['1.1', 'גדול'], ['1.2', 'גדול מאוד'], ['1.35', 'ענק']]) +
-      sel('mode', 'תצוגת קבצים', FX.layout.mode(), [['details', 'פרטים'], ['list', 'רשימה'], ['icons', 'סמלים']]) +
-      sel('lang', 'שפה', pref, [['auto', 'אוטומטי (לפי אוצריא)'], ['he', 'עברית'], ['en', 'English']]) +
-      '<p class="muted small">ההגדרות נשמרות במחשב הזה. פתיחה חיצונית דורשת את גשר אוצריא; בלעדיו נפתח בצופה הפנימי. גודל טקסט גם ב-Ctrl+ / Ctrl- / Ctrl+0.</p>' +
-      '<div class="fx-about"><b>אודות</b> — סייר קבצים ' + FX.esc(FX.VERSION) + ' · חד בדרא' +
-      '<p class="small">עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, וצפייה ב-PDF, Word, טקסט ותמונות. עם גשר אוצריא — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.</p>' +
-      '<a href="#" role="button" class="btn btn-text" data-act="changelog">יומן שינויים</a></div></div>';
-    var r = await ui.dialog({
-      title: 'הגדרות', icon: 'info', body: body,
-      actions: [{ label: 'ביטול', value: false }, { label: 'שמירה', value: true, kind: 'primary' }],
-      onOpen: function (f) {
-        form = f;
-        var cl = f.querySelector('[data-act=changelog]');
-        if (cl) cl.addEventListener('click', function (ev) { ev.preventDefault(); openUrl(FX.CHANGELOG_URL); });
+    if (id === 'open') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('open') + 'באיזה צופה לפתוח</div>' +
+      setRow('קובצי PDF', 'הצופה הפנימי, צופה PDF+OCR (תוסף), או התוכנה שמוגדרת ב-Windows', seg('pdf', o.pdf, [['internal', 'צופה פנימי'], ['ocr', 'PDF+OCR']].concat(ext))) +
+      setRow('מסמכי Word', 'שני טורים נוחים לקריאה, טור אחד, או תוסף וורד לאוצריא', seg('word', o.word, [['two', 'שני טורים'], ['one', 'טור אחד'], ['wordplugin', 'וורד לאוצריא']].concat(ext))) +
+      setRow('קובצי טקסט', '', seg('text', o.text, [['internal', 'צופה פנימי']].concat(ext))) +
+      setRow('תמונות', '', seg('image', o.image, [['internal', 'תצוגה מקדימה']].concat(ext))) +
+      '<p class="muted small">פתיחה ביישום חיצוני דורשת את גשר אוצריא; בלעדיו הקובץ נפתח בצופה הפנימי.</p></div>';
+    if (id === 'view') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('grid') + 'תצוגת הקבצים</div>' +
+      setRow('פריסה', '', seg('mode', FX.layout.mode(), [['details', 'פרטים'], ['list', 'רשימה'], ['icons', 'סמלים']])) +
+      setRow('גודל טקסט', 'גם ב-Ctrl+ / Ctrl- / Ctrl+0', seg('zoom', String(FX.layout.zoom()), [['0.8', 'קטן מאוד'], ['0.9', 'רגיל'], ['1', 'בינוני'], ['1.1', 'גדול'], ['1.2', 'גדול מאוד'], ['1.35', 'ענק']])) +
+      setRow('הצגת קבצים מוסתרים', 'קבצים ותיקיות עם התכונה "מוסתר" יוצגו בצבע חלש', setSwitch('hidden', S.showHidden)) +
+      '</div>';
+    if (id === 'general') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('settings') + 'כללי</div>' +
+      setRow('שפת הממשק', 'אוטומטי = לפי השפה של אוצריא', seg('lang', pref, [['auto', 'אוטומטי'], ['he', 'עברית'], ['en', 'English']])) +
+      setRow('שליחת הערה או דיווח על תקלה', '', '<button type="button" class="btn btn-tonal" data-act="fb">שליחת הערה</button>') +
+      setRow('איפוס הגדרות הסייר', 'מחזיר את כל ההגדרות שבמסך הזה לברירת המחדל', '<button type="button" class="btn btn-tonal" data-act="reset">איפוס</button>') +
+      '</div>';
+    var b = FX.Bridge && FX.Bridge.info;
+    return '<div class="fx-set-card fx-set-hero"><div class="fx-set-logo">' + ic('folder') + '</div><div>' +
+      '<h3>סייר קבצים</h3><p class="muted">גרסה ' + FX.esc(FX.VERSION) + ' · חד בדרא</p>' +
+      '<p>עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, סל מיחזור, וצפייה ב-PDF, Word, טקסט ותמונות. עם גשר אוצריא — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.</p></div></div>' +
+      '<div class="fx-set-card fx-set-memorial"><p>לעילוי נשמת</p><b>אסתר גיטה בת רבי מיכאל שלום הלוי שיבדלט"א</b><p>תנצב"ה</p></div>' +
+      '<div class="fx-set-card"><div class="fx-set-title">' + ic('info') + 'גשר אוצריא</div>' +
+      setRow(b ? 'מחובר · גרסה ' + FX.esc(b.version || '?') : 'הגשר אינו מחובר', b ? '' : 'בלי הגשר הסייר עובד על תיקיות שאישרתם בלבד',
+        b ? '<button type="button" class="btn btn-tonal" data-act="upd">בדיקת עדכונים</button>' : '') +
+      '<div class="fx-upd muted small" data-slot="upd"></div>' +
+      '<div class="fx-set-actions"><button type="button" class="btn btn-tonal" data-act="changelog">יומן שינויים</button>' +
+      '<button type="button" class="btn btn-tonal" data-act="releases">עמוד ההוצאות</button></div></div>';
+  }
+  function settingsDialog(cat) {
+    var old = $('fx-setpage');
+    if (old) old.remove();
+    var page = document.createElement('div');
+    page.id = 'fx-setpage';
+    page.className = 'fx-setpage fade-in';
+    page.setAttribute('role', 'dialog');
+    page.setAttribute('aria-label', 'הגדרות');
+    page.innerHTML = '<header class="fx-set-head"><button type="button" class="icon-btn" data-act="close" title="חזרה (Esc)" aria-label="חזרה">' + ic('back') + '</button>' +
+      '<h2>הגדרות</h2></header><div class="fx-set-body"><nav class="fx-set-nav">' +
+      SET_CATS.map(function (c) { return '<button type="button" class="fx-set-navbtn" data-cat="' + c[0] + '">' + ic(c[2]) + '<span>' + c[1] + '</span></button>'; }).join('') +
+      '</nav><div class="fx-set-content"></div></div>';
+    document.body.appendChild(page);
+    var content = page.querySelector('.fx-set-content');
+    function showCat(id) {
+      page.querySelectorAll('.fx-set-navbtn').forEach(function (x) { x.classList.toggle('on', x.dataset.cat === id); });
+      content.innerHTML = setCat(id);
+      content.scrollTop = 0;
+      try { localStorage.setItem('fx.setCat', id); } catch (e) { /* כלום */ }
+    }
+    function close() { page.remove(); document.removeEventListener('keydown', onKey, true); $('fx-main').focus(); }
+    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+    document.addEventListener('keydown', onKey, true);
+    page.addEventListener('click', async function (e) {
+      var t = e.target.closest('button');
+      if (!t) return;
+      if (t.dataset.cat) { showCat(t.dataset.cat); return; }
+      var act = t.dataset.act;
+      if (act === 'close') { close(); return; }
+      if (act === 'fb') { sendFeedback(); return; }
+      if (act === 'changelog') { openUrl(FX.CHANGELOG_URL); return; }
+      if (act === 'releases') { openUrl('https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest'); return; }
+      if (act === 'reset') {
+        if (!(await ui.confirm('איפוס הגדרות', '<p>להחזיר את הגדרות הסייר לברירת המחדל?</p>', 'איפוס'))) return;
+        saveOpts(Object.assign({}, OPT_DEF)); FX.layout.setZoom(0.9); FX.layout.setMode('details');
+        S.showHidden = false; savePrefs(); refresh(); if (window.I18N) window.I18N.set('auto');
+        showCat('general'); ui.toast('ההגדרות אופסו', 'success'); return;
+      }
+      if (act === 'upd') {
+        var slot = content.querySelector('[data-slot=upd]');
+        slot.textContent = 'בודק…';
+        try {
+          var r = await FX.Bridge.call('/sys/update-check', { force: true }, { timeoutMs: 30000 });
+          slot.textContent = r.newer ? 'גרסה ' + r.latest + ' זמינה. עדכון בלחיצה: הגדרות מערכת ← אודות, או תפריט הגשר ליד השעון ← אודות ועדכונים.'
+            : 'הכול מעודכן (גרסה ' + r.current + ').';
+        } catch (err) { slot.textContent = 'בדיקת העדכון נכשלה: ' + ((err && err.message) || err); }
+        return;
+      }
+      if (t.dataset.sw === 'hidden') {
+        S.showHidden = !S.showHidden;
+        t.classList.toggle('on', S.showHidden); t.setAttribute('aria-checked', S.showHidden ? 'true' : 'false');
+        var hb = $('fx-hidden'); hb.classList.toggle('on', S.showHidden); hb.setAttribute('aria-pressed', S.showHidden ? 'true' : 'false');
+        savePrefs(); refresh(); return;
+      }
+      var sg = t.closest('[data-seg]');
+      if (sg && t.dataset.v != null) {
+        sg.querySelectorAll('.fx-seg-btn').forEach(function (x) { var on = x === t; x.classList.toggle('on', on); x.setAttribute('aria-checked', on ? 'true' : 'false'); });
+        var name = sg.dataset.seg, v = t.dataset.v;
+        if (name === 'zoom') FX.layout.setZoom(parseFloat(v) || 0.9);
+        else if (name === 'mode') FX.layout.setMode(v);
+        else if (name === 'lang') { if (window.I18N) window.I18N.set(v); }
+        else { var o = opts(); o[name] = v; saveOpts(o); }
       }
     });
-    if (!r || !form) return;
-    var v = {};
-    Array.prototype.forEach.call(form.querySelectorAll('select'), function (x) { v[x.name] = x.value; });
-    saveOpts({ pdf: v.pdf, word: v.word, text: v.text, image: v.image });
-    FX.layout.setZoom(parseFloat(v.zoom) || 0.9);
-    FX.layout.setMode(v.mode);
-    ui.toast('ההגדרות נשמרו', 'success');
-    if (window.I18N && v.lang !== pref) window.I18N.set(v.lang);
+    var start = typeof cat === 'string' ? cat : null;
+    try { start = start || localStorage.getItem('fx.setCat'); } catch (e) { /* כלום */ }
+    showCat(SET_CATS.some(function (c) { return c[0] === start; }) ? start : 'open');
+    var first = page.querySelector('[data-act=close]'); if (first) first.focus();
   }
 
   function sendFeedback() {

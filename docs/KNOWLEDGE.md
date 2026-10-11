@@ -82,6 +82,15 @@
 - **הוצאה אוטומטית:** דחיפה ל-main עם שינוי ב-`bridge/`, `system-settings/`, `file-explorer/` או `CHANGELOG.md` בונה ויוצרת Release מהסעיף העליון ב-CHANGELOG. אם התג כבר קיים, מתעדכנות רק ההערות, בלי הקבצים. כדי לרענן קבצים צריך למחוק את ה-Release ואת התג ולדחוף שוב.
 - **ולידטור החנות:** תיאור קצר במניפסט עד 150 תווים, אחרת הבדיקה נכשלת. הולידציה נכשלת אחרי שה-Release כבר נוצר.
 - **שגיאות CI:** יומני העבודות מופנים לדומיין שאינו נגיש מהסביבה. את השגיאות קוראים מ-`GET /repos/.../check-runs/{job_id}/annotations`.
-- **קומפילציה:** בנייה מקומית של הגשר אינה אפשרית בלי גישה ל-NuGet, ולכן הבדיקה היחידה של ה-C# היא ה-CI.
+- **קומפילציה מקומית (עובד מ-12.10.2026):** ה-SDK של אובונטו (apt) חסר WindowsDesktop. מתקינים את ה-SDK הרשמי: `curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0 --install-dir /opt/dn8`, יוצרים קבצים ריקים `bridge/plugins/{system-settings,file-explorer}.otzplugin`, ומריצים `/opt/dn8/dotnet build -c Release -r win-x64` בתיקייה `bridge`. NuGet נגיש. כך נחסכים סבבי CI.
 - **תאורת מקלדת:** ל-Windows אין API אחיד לתאורה רגילה. `Windows.Devices.Lights.LampArray` (מקלדות HID LampArray) מתקמפל ועובד כ-API, אך לא נבדק מול חומרה.
 
+
+## נלמד ב-2.0.0
+- **בודק העדכונים:** ההוצאות מתויגות `vX.Y.Z` (לא `bridge-v*`). הבאג הישן סינן הכול ולכן תמיד החזיר "מעודכן".
+- **"מסך שחור" (#8):** המעטפת ב-`HKCU\...\Winlogon\Shell` גוברת גם במצב בטוח ולא מושבתת ב"אפליקציות אתחול". לכן `Kiosk.BootGuard` רץ ראשון בכל הפעלה ומנקה כשאין נעילה מאושרת.
+- **עדכון עצמי:** הורדה ל-`%TEMP%\OtzariaBridge-update`, אימות מול `SHA256SUMS.txt` שבהוצאה, ואז `OtzariaBridge.exe --install --quiet` (המתקין סוגר את הגשר הישן, מעתיק ומפעיל מחדש).
+- **חלונות WinForms בנעילה** (`Overlay.cs`): שעון צף עם `WS_EX_NOACTIVATE` כדי לא לגנוב פוקוס; מסך מנוחה במקום שחזור מיידי של אוצריא ממוזערת. השומר מדלג כל עוד מסך המנוחה גלוי.
+- **תאריך עברי:** ב-C# `CultureInfo("he-IL")` עם `HebrewCalendar`; ב-JS `Intl.DateTimeFormat('he-IL-u-ca-hebrew')`.
+- **תוכנות תורה:** נתיבים ידועים ב-`Programs.KnownList`; אם לא נמצאו — חיפוש לפי שם קובץ בכוננים (עומק 4, עד 8 שניות, מטמון 10 דקות).
+- **מיזוג בקשות מיזוג:** מיזוג ישיר דרך ה-API (`PUT /pulls/N/merge`) עובד; בהתנגשות מיישמים ידנית.

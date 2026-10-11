@@ -138,3 +138,29 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
   רושם הפעלה אוטומטית (HKCU Run, ארגומנט `--background`), ועולה עם אייקון במגש.
 - `--uninstall`: מבטל נעילה (דורש `--password` אם יש), מסיר Run ותיקייה.
 - קובץ הגדרות: `%LOCALAPPDATA%\OtzariaBridge\config.json`.
+
+## נוסף בגרסה 2.0.0
+
+| נקודת קצה | גוף הבקשה | תשובה |
+|---|---|---|
+| `/sys/mouse/get` | — | `speed` (1-20), `leftHanded`, `doubleClickMs`, `wheelLines`, `precision`, `touchpad` (או null: `taps`, `twoFingerRightClick`, `naturalScroll`, `sensitivity` 0-3, `cursorSpeed`) |
+| `/sys/mouse/set` | אותם שדות (חלקי), `touchpad: {...}` | כמו get. משטח המגע נשמר ב-HKCU ומוחל בכניסה הבאה |
+| `/sys/airplane/get` | — | `supported`, `on`, `radios[{kind,name,on}]` |
+| `/sys/airplane/set` | `on` | כמו get. "מצב טיסה" = כיבוי כל המשדרים; בכיבוי חוזרים המשדרים שהיו דולקים (`airplane.restore`) |
+| `/sys/printers/list` | — | `printers[{name,isDefault,offline,network,driver,port,status}]`, `windowsManagesDefault` |
+| `/sys/printers/set-default` | `name` | כמו list. מכבה את LegacyDefaultPrinterMode=0 ("Windows ינהל") |
+| `/sys/printers/test-page` | `name` | `ok` |
+| `/sys/time/get` | — | `now`, `zone`, `zoneName`, `dst`, `clock24`, `autoSync`, `zones[{id,name}]` |
+| `/sys/time/set` | `zone` / `clock24` / `dateTime` (yyyy-MM-ddTHH:mm) | כמו get. `dateTime` דורש מנהל → forbidden |
+| `/sys/time/sync` | — | כמו get (`w32tm /resync`, דורש מנהל) |
+| `/sys/keyboard/default-language/get` | — | `methods[{id,lang,name}]`, `current` (InputTip, ריק = לפי רשימת השפות) |
+| `/sys/keyboard/default-language/set` | `id` (ריק = ביטול) | כמו get (`Set-WinDefaultInputMethodOverride`) |
+| `/sys/update-check` | `force` | `current`, `latest`, `tag`, `newer`, `url`, `canInstall`, `notes` |
+| `/sys/update-install` | — | `started`, `version`, `sha256`. חסום בנעילה |
+| `/sys/power` | `action`: גם `hibernate`, `signout` | `ok` |
+| `/sys/usb/eject` | `letter` | נוסף `poweredOff`. כשתפוס: הודעת busy עם שמות התוכנות המחזיקות |
+| `/sys/keyboard/backlight/get` | — | נוסף `hint` (קיצור Fn לפי יצרן), `levels` ב-ASUS |
+
+### נעילה — שדות חדשים ב-`/kiosk/status` וב-`/kiosk/settings`
+`readOnly`, `clock`, `clockPosition` (bottom-left/bottom-right/top-left/top-right), `restScreen`, `fullscreenOtzaria`, `openSections` (מתוך `allSections`), `warnings` (`admin`).
+בזמן נעילה, כל פעולת שינוי של הגדרה שלא ב-`openSections` מחזירה `locked` (423) — נאכף ב-`Server.Handle` לפי `Kiosk.SectionOf`.

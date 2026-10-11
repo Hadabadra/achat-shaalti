@@ -125,13 +125,13 @@ internal sealed class AboutForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10f);
         BackColor = Color.White;
-        ClientSize = new Size(460, 400);
+        ClientSize = new Size(480, 450);
         Padding = new Padding(20);
 
         var logo = new PictureBox { Image = new Icon(Overlay.AppIcon(), 64, 64).ToBitmap(), SizeMode = PictureBoxSizeMode.CenterImage, Height = 76, Dock = DockStyle.Top };
         var title = new Label { Text = Lang.T("גשר אוצריא", "Otzaria Bridge"), Font = new Font("Segoe UI Semibold", 16f), Height = 38, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         var ver = new Label { Text = Lang.T("גרסה ", "Version ") + Program.Version + " · " + Lang.T("חד בדרא", "Chad Bedra"), Height = 26, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.DimGray };
-        var ded = new Label { Text = "לעילוי נשמת אסתר גיטה בת רבי מיכאל שלום הלוי שיבדלט\"א", Height = 30, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(90, 70, 40) };
+        var ded = new Label { Text = "לעילוי נשמת הנערה הצדקנית\nאסתר גיטה בת רבי מיכאל שלום הלוי שיבדלט\"א\nתהא נשמתה צרורה בצרור החיים. תנצב\"ה", Height = 66, Font = new Font("Segoe UI", 10.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(90, 70, 40) };
         var link = new LinkLabel { Text = Lang.T("עמוד ההוצאות ויומן השינויים", "Releases page and changelog"), Height = 28, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         link.LinkClicked += (_, _) => OpenUrl(UpdateApi.AllReleasesUrl);
 
