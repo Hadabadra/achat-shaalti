@@ -72,6 +72,11 @@
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
     usb: '<path d="M12 3v14"/><path d="M12 7l4 2.5v2M12 11l-4 2v2"/><circle cx="12" cy="19" r="2"/><rect x="15" y="11.5" width="2" height="2"/><circle cx="8" cy="16" r="1.2"/>',
     keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+    printer: '<path d="M7 9V3.5h10V9"/><rect x="3.5" y="9" width="17" height="8" rx="2"/><path d="M7 14h10v6.5H7z"/>',
+    airplane: '<path d="M21 15.5l-8-4.5V5a1.5 1.5 0 0 0-3 0v6l-8 4.5V17l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-4.5l8 2.5z"/>',
+    hibernate: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/><path d="M15 3.5h4l-4 4h4"/>',
+    signout: '<path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8l-4 4 4 4M6 12h10"/>',
     bridge: '<path d="M2.5 17h19M4 17v-4M20 17v-4M2.5 13c3.5 0 6-4 9.5-4s6 4 9.5 4M8 17v-5.5M16 17v-5.5M12 17V9"/>'
   };
   ui.icon = function (name, cls) {

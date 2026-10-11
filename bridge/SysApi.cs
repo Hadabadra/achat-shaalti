@@ -216,6 +216,14 @@ public static class SysApi
             case "sleep":
                 Task.Run(async () => { await Task.Delay(500); Application.SetSuspendState(PowerState.Suspend, false, false); });
                 break;
+            case "hibernate":
+                // שינה עמוקה (Hibernate): העבודה נשמרת לדיסק והמחשב כבה לגמרי
+                Task.Run(async () => { await Task.Delay(500); Application.SetSuspendState(PowerState.Hibernate, false, false); });
+                break;
+            case "signout":
+                if (Kiosk.IsActive) throw BridgeException.Locked();
+                Process.Start(new ProcessStartInfo("shutdown", "/l") { CreateNoWindow = true, UseShellExecute = false });
+                break;
             case "restart":
                 Process.Start(new ProcessStartInfo("shutdown", "/r /t 0") { CreateNoWindow = true, UseShellExecute = false });
                 break;

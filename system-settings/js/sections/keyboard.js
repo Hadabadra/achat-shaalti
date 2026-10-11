@@ -12,12 +12,13 @@
     mount: function (body) {
       body.innerHTML =
         '<div class="card"><div class="card-title">שפת הקלדה</div><div data-slot="lay">' + ui.loading() + '</div></div>' +
+        '<div class="card"><div class="card-title">שפת ברירת מחדל</div><div data-slot="def">' + ui.loading() + '</div></div>' +
         '<div class="card"><div class="card-title">מהירות הקשה</div><div data-slot="speed">' + ui.loading() + '</div></div>' +
         '<div class="card"><div class="card-title">מקשים</div><div data-slot="keys">' + ui.loading() + '</div></div>' +
         '<div class="card"><div class="card-title">תאורת מקלדת</div><div data-slot="bl">' + ui.loading() + '</div></div>';
     },
     load: async function (body) {
-      await Promise.all([loadMain(body), loadBacklight(body)]);
+      await Promise.all([loadMain(body), loadBacklight(body), loadDefault(body)]);
     }
   });
 
@@ -100,6 +101,30 @@
     });
   }
 
+  /* השפה שנבחרת בכל חלון חדש ובכניסה ל-Windows */
+  async function loadDefault(body) {
+    var slot = body.querySelector('[data-slot=def]');
+    var d;
+    try { d = await SS.bridge.call('/sys/keyboard/default-language/get', {}, { timeoutMs: 25000 }); }
+    catch (e) { slot.innerHTML = ui.errorBox(e); return; }
+    var list = d.methods || [];
+    if (!list.length) { slot.innerHTML = '<div class="empty">לא נמצאו שפות מותקנות.</div>'; return; }
+    var cur = (d.current || '').toUpperCase();
+    slot.innerHTML = '<div class="preset-row">' +
+      '<button class="btn ' + (!cur ? 'btn-primary' : 'btn-tonal') + '" data-def="">לפי רשימת השפות</button>' +
+      list.map(function (m) {
+        return '<button class="btn ' + (m.id.toUpperCase() === cur ? 'btn-primary' : 'btn-tonal') + '" data-def="' + ui.esc(m.id) + '">' + ui.esc(m.name) + '</button>';
+      }).join('') + '</div>' +
+      '<p class="muted small">השפה שתיבחר אוטומטית בכל חלון חדש ובכניסה ל-Windows. למשל עברית, כדי שאפשר יהיה לחפש באוצריא מיד.</p>';
+    slot.querySelectorAll('[data-def]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        try { await SS.bridge.call('/sys/keyboard/default-language/set', { id: b.dataset.def }, { timeoutMs: 25000 }); ui.toast('שפת ברירת המחדל נשמרה', 'success'); }
+        catch (e) { ui.error(e, 'שפת ברירת מחדל'); }
+        loadDefault(body);
+      });
+    });
+  }
+
   async function loadBacklight(body) {
     var slot = body.querySelector('[data-slot=bl]');
     var d;
@@ -109,7 +134,8 @@
       var who = [d.vendor, d.model].filter(Boolean).join(' ');
       slot.innerHTML = '<div class="state-box">' + ui.icon('info') + '<div><b>לא נתמך במחשב זה</b>' +
         '<p class="muted">ל-Windows אין ממשק אחיד לתאורת מקלדת רגילה, והשליטה בה תלויה ביצרן המחשב' + (who ? ' (' + ui.esc(who) + ')' : '') +
-        '. בדרך כלל אפשר לשנות אותה במקש Fn במקלדת עצמה. השליטה מכאן זמינה במקלדות עם תמיכה בתקן HID LampArray.</p></div></div>';
+        '. בדרך כלל אפשר לשנות אותה במקש Fn במקלדת עצמה' + (d.hint ? ': <b dir="ltr">' + ui.esc(d.hint) + '</b>' : '') +
+        '. השליטה מכאן זמינה במחשבי ASUS ובמקלדות עם תמיכה בתקן HID LampArray.</p></div></div>';
       return;
     }
     slot.innerHTML =

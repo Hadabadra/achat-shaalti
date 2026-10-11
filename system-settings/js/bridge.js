@@ -116,7 +116,10 @@
     kiosk: {
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
-      allowOpenExtensions: ['pdf', 'txt'], warnings: []
+      allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, clock: true, clockPosition: 'bottom-left',
+      restScreen: true, fullscreenOtzaria: true,
+      openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer'],
+      allSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth', 'airplane', 'usb']
     },
     programs: [],
     autoTorah: false,
@@ -244,6 +247,9 @@
       checkPw(b.password, false);
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
+      ['readOnly', 'clock', 'restScreen', 'fullscreenOtzaria'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
+      if (b.clockPosition) M.kiosk.clockPosition = b.clockPosition;
+      if (Array.isArray(b.openSections)) M.kiosk.openSections = b.openSections.slice();
       return clone(M.kiosk);
     },
     '/kiosk/programs': function () {
@@ -321,12 +327,57 @@
     return clone(M.energy);
   };
 
+  /* ---------- mock: 2.0 (mouse, airplane, printers, time, default language, update) ---------- */
+  M.mouse = { speed: 10, leftHanded: false, doubleClickMs: 500, wheelLines: 3, precision: true,
+    touchpad: { taps: true, twoFingerRightClick: true, naturalScroll: false, sensitivity: 2, cursorSpeed: 10 } };
+  mockRoutes['/sys/mouse/get'] = function () { return clone(M.mouse); };
+  mockRoutes['/sys/mouse/set'] = function (b) {
+    Object.keys(b).forEach(function (k) { if (k === 'touchpad') Object.assign(M.mouse.touchpad, b.touchpad); else M.mouse[k] = b[k]; });
+    return clone(M.mouse);
+  };
+  M.airplane = false;
+  mockRoutes['/sys/airplane/get'] = function () {
+    return { supported: true, on: M.airplane, radios: M.radios.map(function (r) { return { kind: r.kind, name: r.name, on: r.state === 'on' }; }) };
+  };
+  mockRoutes['/sys/airplane/set'] = function (b) {
+    M.airplane = !!b.on; M.radios.forEach(function (r) { r.state = b.on ? 'off' : 'on'; });
+    return mockRoutes['/sys/airplane/get']();
+  };
+  M.printers = [
+    { name: 'HP LaserJet Pro M404', isDefault: true, offline: false, network: true, status: 3 },
+    { name: 'Microsoft Print to PDF', isDefault: false, offline: false, network: false, status: 3 },
+    { name: 'Canon PIXMA (בית המדרש)', isDefault: false, offline: true, network: true, status: 7 }
+  ];
+  mockRoutes['/sys/printers/list'] = function () { return { printers: clone(M.printers), windowsManagesDefault: false }; };
+  mockRoutes['/sys/printers/set-default'] = function (b) { M.printers.forEach(function (p) { p.isDefault = p.name === b.name; }); return mockRoutes['/sys/printers/list'](); };
+  mockRoutes['/sys/printers/test-page'] = function () { return { ok: true }; };
+  M.time = { zone: 'Israel Standard Time', clock24: true, autoSync: true, dst: false };
+  mockRoutes['/sys/time/get'] = function () {
+    return Object.assign(clone(M.time), { now: new Date().toISOString().slice(0, 19), zoneName: '(UTC+02:00) Jerusalem',
+      zones: [{ id: 'Israel Standard Time', name: '(UTC+02:00) Jerusalem' }, { id: 'GMT Standard Time', name: '(UTC+00:00) London' }, { id: 'Eastern Standard Time', name: '(UTC-05:00) New York' }] });
+  };
+  mockRoutes['/sys/time/set'] = function (b) {
+    if (b.dateTime) throw mockErr('forbidden', 'שינוי השעה ידנית דורש הרשאות מנהל. אפשר לסנכרן מול האינטרנט או לשנות את אזור הזמן.');
+    if (b.zone) M.time.zone = b.zone; if (typeof b.clock24 === 'boolean') M.time.clock24 = b.clock24;
+    return mockRoutes['/sys/time/get']();
+  };
+  mockRoutes['/sys/time/sync'] = function () { return mockRoutes['/sys/time/get'](); };
+  M.defLang = '040D:0002040D';
+  mockRoutes['/sys/keyboard/default-language/get'] = function () {
+    return { current: M.defLang, methods: [{ id: '040D:0002040D', lang: 'he', name: 'עברית' }, { id: '0409:00000409', lang: 'en-US', name: 'English (United States)' }] };
+  };
+  mockRoutes['/sys/keyboard/default-language/set'] = function (b) { M.defLang = b.id; return mockRoutes['/sys/keyboard/default-language/get'](); };
+  mockRoutes['/sys/update-check'] = function () {
+    return { current: '2.0.0', latest: '2.0.0', newer: false, canInstall: false, url: 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest' };
+  };
+  mockRoutes['/sys/update-install'] = function () { return { started: false, message: 'הגשר מעודכן (2.0.0)' }; };
+
   var mock = {
     port: 47917,
     async probe() {
       await delay(250);
       if (/[?&]offline=1/.test(location.search)) return null;
-      return { name: 'otzaria-bridge', version: '1.7.0', port: 47917, kioskActive: M.kiosk.active, platform: 'windows' };
+      return { name: 'otzaria-bridge', version: '2.0.0', port: 47917, kioskActive: M.kiosk.active, platform: 'windows' };
     },
     async call(path, body) {
       await delay(180);

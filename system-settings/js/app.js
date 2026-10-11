@@ -4,7 +4,7 @@
   var SS = (window.SS = window.SS || {});
   var ui = SS.ui;
   SS.sections = SS.sections || [];
-  SS.VERSION = '1.7.0';
+  SS.VERSION = '2.0.0';
   SS.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
 
   var state = { current: null, connected: false, probeTimer: null, suspended: false, booted: false };
@@ -49,19 +49,92 @@
     return SS.sections.find(function (s) { return s.id === id; });
   }
 
+  /* סדר וקבוצות כמו בהגדרות של Windows */
+  var ORDER = ['display', 'audio', 'energy', 'time', 'keyboard', 'mouse', 'printer', 'usb', 'bluetooth', 'wifi', 'airplane', 'programs', 'kiosk', 'system', 'about'];
+  var GROUPS = [
+    ['system', 'מערכת', ['display', 'audio', 'energy', 'time', 'system']],
+    ['devices', 'התקנים', ['keyboard', 'mouse', 'printer', 'usb', 'bluetooth']],
+    ['network', 'רשת', ['wifi', 'airplane']],
+    ['study', 'לימוד ונעילה', ['programs', 'kiosk']],
+    ['about', '', ['about']]
+  ];
+  /* הגדרות שאפשר לסגור בנעילה (חייב להתאים ל-Kiosk.AllSections בגשר) */
+  var LOCKABLE = ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth', 'airplane', 'usb'];
+  var NETWORK = ['wifi', 'bluetooth', 'airplane'];
+
+  SS.prefs = {
+    get: function (k, def) { try { var v = localStorage.getItem('ss.' + k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } },
+    set: function (k, v) { try { localStorage.setItem('ss.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } }
+  };
+  /* מצב מנותק: מחשב בלי רשת — מסתירים Wi-Fi, בלוטות׳ ומצב טיסה */
+  SS.isOfflineMode = function () { return !!SS.prefs.get('offlineMode', false); };
+  SS.setOfflineMode = function (on) { SS.prefs.set('offlineMode', !!on); refreshNav(); };
+  SS.lockOpen = null; /* רשימת ההגדרות הפתוחות בנעילה, כשהנעילה פעילה */
+
+  function visible(s) {
+    if (SS.isOfflineMode() && NETWORK.indexOf(s.id) >= 0) return false;
+    if (SS.lockOpen && LOCKABLE.indexOf(s.id) >= 0 && SS.lockOpen.indexOf(s.id) < 0) return false;
+    return true;
+  }
+  SS.sectionVisible = function (id) { var s = sectionById(id); return !!s && visible(s); };
+
   function buildNav() {
+    SS.sections.sort(function (a, b) {
+      var x = ORDER.indexOf(a.id), y = ORDER.indexOf(b.id);
+      return (x < 0 ? 99 : x) - (y < 0 ? 99 : y);
+    });
     var nav = document.getElementById('nav');
-    nav.innerHTML = SS.sections.map(function (s) {
-      return '<button class="nav-item" data-id="' + s.id + '">' + ui.icon(s.icon) + '<span>' + ui.esc(s.title) + '</span></button>';
-    }).join('');
+    nav.innerHTML = '<label class="nav-search">' + ui.icon('search') +
+      '<input type="search" id="nav-q" placeholder="חיפוש הגדרה" aria-label="חיפוש הגדרה" autocomplete="off"></label><div id="nav-list"></div>';
     nav.addEventListener('click', function (e) {
       var b = e.target.closest('.nav-item');
       if (b) show(b.dataset.id);
     });
+    var q = nav.querySelector('#nav-q');
+    q.addEventListener('input', function () { refreshNav(); });
+    q.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { var first = nav.querySelector('.nav-item'); if (first) show(first.dataset.id); }
+      if (e.key === 'Escape') { q.value = ''; refreshNav(); }
+    });
+    refreshNav();
   }
 
+  function refreshNav() {
+    var list = document.getElementById('nav-list');
+    if (!list) return;
+    var qEl = document.getElementById('nav-q');
+    var q = (qEl && qEl.value || '').trim().toLowerCase();
+    var html = '';
+    GROUPS.forEach(function (g) {
+      var items = g[2].map(sectionById).filter(function (s) {
+        if (!s || !visible(s)) return false;
+        if (!q) return true;
+        return (s.title + ' ' + (s.keywords || '') + ' ' + (window.I18N ? window.I18N.t(s.title) : '')).toLowerCase().indexOf(q) >= 0;
+      });
+      if (!items.length) return;
+      if (g[1]) html += '<div class="nav-group">' + ui.esc(g[1]) + '</div>';
+      html += items.map(function (s) {
+        return '<button class="nav-item' + (s.id === state.current ? ' active' : '') + '" data-id="' + s.id + '">' + ui.icon(s.icon) + '<span>' + ui.esc(s.title) + '</span></button>';
+      }).join('');
+    });
+    list.innerHTML = html || '<div class="empty small">לא נמצאו הגדרות</div>';
+    if (state.current && !SS.sectionVisible(state.current) && !q) show('about');
+  }
+  SS.refreshNav = refreshNav;
+
+  /* בזמן נעילה: מביאים מהגשר אילו הגדרות פתוחות */
+  async function syncLock(h) {
+    var prev = JSON.stringify(SS.lockOpen);
+    if (h && h.kioskActive) {
+      try { SS.lockOpen = (await SS.bridge.call('/kiosk/status')).openSections || []; } catch (e) { SS.lockOpen = SS.lockOpen || []; }
+    } else SS.lockOpen = null;
+    if (JSON.stringify(SS.lockOpen) !== prev) refreshNav();
+  }
+  SS.syncLock = syncLock;
+
   function show(id) {
-    var s = sectionById(id) || SS.sections[0];
+    var s = sectionById(id);
+    if (!s || !visible(s)) s = SS.sections.find(visible) || SS.sections[0];
     state.current = s.id;
     document.querySelectorAll('.nav-item').forEach(function (b) {
       b.classList.toggle('active', b.dataset.id === s.id);
@@ -155,6 +228,7 @@
     setStatus(true);
     document.getElementById('offline').hidden = true;
     document.getElementById('shell-body').hidden = false;
+    await syncLock(h);
     if (!wasConnected) {
       var start = null;
       try { start = localStorage.getItem('ss.section'); } catch (e) { start = null; }

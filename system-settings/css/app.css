@@ -125,7 +125,7 @@ button, input { font-family: var(--font-ui); font-size: inherit; color: inherit;
 }
 .nav-item {
   display: flex; align-items: center; gap: 0.875em;
-  min-height: 3.25em; padding: 0 1.125em;
+  min-height: 2.75em; padding: 0 1.125em;
   border: none; border-radius: var(--radius-pill);
   background: transparent; color: var(--color-on-surface-variant);
   font-weight: 500; text-align: start; cursor: pointer;
@@ -347,7 +347,7 @@ code { font-family: var(--font-mono); }
 .battery-shell { position: relative; width: 2.75em; height: 1.25em; border: 0.125em solid currentColor; border-radius: 0.3125em; padding: 0.125em; display: inline-flex; justify-content: flex-start; direction: ltr; }
 .battery-shell::after { content: ''; position: absolute; left: 100%; top: 0.25em; width: 0.1875em; height: 0.5em; background: currentColor; border-radius: 0 0.125em 0.125em 0; }
 .battery-shell i { display: block; height: 100%; border-radius: 0.125em; background: var(--color-ok); }
-.power-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75em; }
+.power-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75em; }
 .power-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.625em;
   min-height: 7em; padding: 0.875em; border-radius: var(--radius-lg);
@@ -450,3 +450,30 @@ html[dir=ltr] body { direction: ltr; }
 .fb-form { display: flex; flex-direction: column; gap: 0.75em; text-align: start; }
 .fb-text, .fb-type { width: 100%; }
 .fb-text { height: auto; min-height: 8em; resize: vertical; padding: 0.5em 0.75em; line-height: 1.5; }
+
+/* ---------- 2.0: חיפוש וקבוצות בתפריט, שעון, בחירה ---------- */
+#nav-list { display: flex; flex-direction: column; gap: 0.25em; }
+.nav-search {
+  display: flex; align-items: center; gap: 0.5em; margin: 0 0 0.5em; padding: 0 0.75em;
+  min-height: 2.5em; border-radius: var(--radius-pill);
+  background: var(--color-surface-container-highest); color: var(--color-on-surface-variant);
+}
+.nav-search .ic { width: 1.125em; height: 1.125em; flex-shrink: 0; }
+.nav-search input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  color: var(--color-on-surface); font-size: 1em; font-family: var(--font-ui);
+}
+.nav-search:focus-within { box-shadow: 0 0 0 0.125em var(--color-primary); }
+.nav-group {
+  margin: 0.75em 0.875em 0.25em; font-size: 0.8em; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--color-on-surface-variant);
+}
+.clock-hero { text-align: center; padding: 1.5em 1em; }
+.clock-big { font-size: 3.25em; font-weight: 300; line-height: 1.1; color: var(--color-primary); font-variant-numeric: tabular-nums; direction: ltr; }
+.clock-heb { font-family: var(--font-main); font-size: 1.375em; margin: 0.25em 0 0.125em; color: var(--color-on-surface); }
+select.input { appearance: auto; cursor: pointer; }
+.setting-row.big b { font-size: 1.125em; }
+@media (max-width: 42.5em) {
+  .nav-search, .nav-group { display: none; }
+  #nav-list { flex-direction: row; }
+}

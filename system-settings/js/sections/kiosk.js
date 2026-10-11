@@ -17,7 +17,7 @@
     var st;
     try { st = await SS.bridge.call('/kiosk/status'); }
     catch (e) { body.innerHTML = ui.errorBox(e); return; }
-    if (SS.bridge.health) { SS.bridge.health.kioskActive = !!st.active; SS.setStatus(true); }
+    if (SS.bridge.health) { SS.bridge.health.kioskActive = !!st.active; SS.setStatus(true); if (SS.syncLock) SS.syncLock(SS.bridge.health); }
     var progs = [], found = [];
     try {
       var pr = await SS.bridge.call('/kiosk/programs');
@@ -84,9 +84,13 @@
       html += '<div class="card"><div class="card-title">סיסמה והגדרות</div>' +
         '<div class="setting-row"><div class="setting-text"><b>שינוי סיסמה</b><span class="muted">החלפת סיסמת הנעילה (נדרשת הסיסמה הנוכחית)</span></div>' +
         '<button class="btn btn-tonal" data-act="chpw">' + ui.icon('edit') + 'שינוי</button></div>' +
+        '<div class="setting-row"><div class="setting-text"><b>מה פתוח בזמן נעילה</b><span class="muted">' +
+        ui.esc((st.openSections || []).map(function (id) { return SECTION_NAMES[id] || id; }).join(', ') || 'רק תוכנות לימוד ואודות') +
+        (st.readOnly ? ' · קבצים לקריאה בלבד' : '') + (st.clock !== false ? ' · שעון צף' : '') + '</span></div>' +
+        '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>קבצים שמותר לפתוח בזמן נעילה</b><span class="muted"><bdi dir="ltr">' +
         ui.esc((st.allowOpenExtensions || []).length ? st.allowOpenExtensions.map(function (x) { return '.' + x; }).join(', ') : '—') + '</bdi></span></div>' +
-        '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
+        '<button class="btn btn-tonal" data-act="settings2">' + ui.icon('edit') + 'עריכה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
       html += programsCard(progs, found, !!st.autoTorah);
@@ -127,6 +131,7 @@
     on('disable', function () { disable(body); });
     on('chpw', function () { changePw(body); });
     on('settings', function () { editSettings(body, st); });
+    on('settings2', function () { editSettings(body, st); });
     on('prog-add', function () { addProgram(body, {}); });
     on('prog-auto', function () { toggleAuto(body, !!st.autoTorah); });
     found.forEach(function (f, i) {
@@ -237,23 +242,44 @@
     }
   }
 
+  var SECTION_NAMES = {
+    audio: 'שמע', display: 'מסך', energy: 'חשמל וסוללה', keyboard: 'מקלדת', mouse: 'עכבר ומשטח מגע',
+    printer: 'מדפסות', time: 'שעה ותאריך', wifi: 'רשת אלחוטית', bluetooth: 'בלוטות׳', airplane: 'מצב טיסה', usb: 'התקני USB'
+  };
+
   async function editSettings(body, st) {
+    var all = st.allSections || Object.keys(SECTION_NAMES);
+    var open = st.openSections || [];
+    var fields = [
+      { name: 'ext', label: 'סיומות קבצים שמותר לפתוח בתוכנות אחרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
+      { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
+      { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
+      { name: 'rest', type: 'checkbox', label: 'מסך מנוחה כשאוצריא ממוזערת', value: st.restScreen !== false, hint: 'סמל אוצריא, שעה ותאריך במסך מלא. לחיצה בכל מקום מחזירה לאוצריא' },
+      { name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' },
+      { name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' }
+    ];
+    all.forEach(function (id) {
+      fields.push({ name: 'sec_' + id, type: 'checkbox', label: 'פתוח בנעילה: ' + (SECTION_NAMES[id] || id), value: open.indexOf(id) >= 0 });
+    });
+    fields.push({ name: 'pos', label: 'מיקום השעון (bottom-left / bottom-right / top-left / top-right)', value: st.clockPosition || 'bottom-left', dir: 'ltr' });
+    fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
     var ok = await ui.dialog({
       title: 'הגדרות נעילה', icon: 'edit',
-      body: '<p class="muted">סוגי קבצים שמותר לפתוח בתוכנות אחרות גם בזמן נעילה (למשל pdf). הפרידו בפסיקים.</p>',
-      fields: [
-        { name: 'ext', label: 'סיומות מותרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
-        { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
-        { name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }
-      ],
+      body: '<p class="muted">מה פתוח לתלמיד בזמן נעילה, ואיך נראה המסך. הגדרות שלא סומנו מוסתרות ונחסמות גם בגשר.</p>',
+      fields: fields,
       actions: [{ label: 'ביטול', value: false }, { label: 'שמירה', value: true, kind: 'primary' }],
       validate: function (x) {
         if (!x.pw) return 'יש להקליד את סיסמת הנעילה';
+        if (['bottom-left', 'bottom-right', 'top-left', 'top-right'].indexOf(x.pos.trim()) < 0) return 'מיקום שעון לא תקין';
         var bad = parseExt(x.ext).filter(function (e) { return !/^[a-z0-9]{1,10}$/.test(e); });
         return bad.length ? 'סיומת לא תקינה: ' + bad[0] : '';
       },
       onSubmit: async function (x) {
-        await SS.bridge.call('/kiosk/settings', { password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim() });
+        await SS.bridge.call('/kiosk/settings', {
+          password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
+          readOnly: !!x.ro, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, clockPosition: x.pos.trim(),
+          openSections: all.filter(function (id) { return x['sec_' + id]; })
+        });
         return true;
       }
     });

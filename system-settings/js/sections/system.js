@@ -8,6 +8,8 @@
   var POWER = [
     { action: 'lock', label: 'נעילת מסך', icon: 'lock', title: 'לנעול את המסך?', text: 'המסך יינעל ויהיה צורך בסיסמת Windows כדי לחזור.', ok: 'נעל מסך' },
     { action: 'sleep', label: 'שינה', icon: 'sleep', title: 'להעביר למצב שינה?', text: 'המחשב יעבור למצב שינה. העבודה הפתוחה תישמר.', ok: 'שינה' },
+    { action: 'hibernate', label: 'שינה עמוקה', icon: 'hibernate', title: 'לעבור לשינה עמוקה?', text: 'העבודה הפתוחה תישמר לדיסק והמחשב ייכבה לגמרי. בהדלקה הבאה הכול יחזור כפי שהיה. חוסך יותר סוללה משינה רגילה.', ok: 'שינה עמוקה' },
+    { action: 'signout', label: 'התנתקות', icon: 'signout', title: 'להתנתק מ-Windows?', text: 'כל התוכנות ייסגרו ותחזרו למסך הכניסה. שמרו עבודה פתוחה לפני כן.', ok: 'התנתקות', danger: true },
     { action: 'restart', label: 'הפעלה מחדש', icon: 'restart', title: 'להפעיל מחדש את המחשב?', text: 'כל התוכנות ייסגרו והמחשב יופעל מחדש. שמרו עבודה פתוחה לפני כן.', ok: 'הפעל מחדש', danger: true },
     { action: 'shutdown', label: 'כיבוי', icon: 'power', title: 'לכבות את המחשב?', text: 'כל התוכנות ייסגרו והמחשב יכובה.', ok: 'כבה', danger: true }
   ];
@@ -20,7 +22,16 @@
         '<div class="card"><div class="card-title">הפעלה וכיבוי</div><div class="power-grid">' +
         POWER.map(function (p) {
           return '<button class="power-btn' + (p.danger ? ' danger' : '') + '" data-a="' + p.action + '">' + ui.icon(p.icon) + '<span>' + p.label + '</span></button>';
-        }).join('') + '</div></div>';
+        }).join('') + '</div></div>' +
+        '<div class="card"><div class="card-title">מצב מנותק</div>' +
+        '<div class="setting-row"><div class="setting-text"><b>מחשב בלי רשת</b><span class="muted">מסתיר את Wi-Fi, בלוטות׳ ומצב טיסה מהתפריט, למחשבי לימוד שאינם מחוברים לרשת</span></div>' +
+        ui.switchHtml('sw-offline', SS.isOfflineMode && SS.isOfflineMode(), 'מצב מנותק') + '</div></div>';
+      body.querySelector('#sw-offline').addEventListener('click', function () {
+        var on = !SS.isOfflineMode();
+        SS.setOfflineMode(on);
+        ui.setSwitch(this, on);
+        ui.toast(on ? 'מצב מנותק: הגדרות הרשת הוסתרו' : 'הגדרות הרשת מוצגות שוב', 'success');
+      });
       body.querySelectorAll('[data-a]').forEach(function (b) {
         b.addEventListener('click', async function () {
           var p = POWER.find(function (x) { return x.action === b.dataset.a; });

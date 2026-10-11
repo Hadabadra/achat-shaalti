@@ -5,6 +5,12 @@
   var ui = SS.ui;
   SS.sections = SS.sections || [];
 
+  function cmpVer(a, b) {
+    var x = String(a || '').split('.').map(Number), y = String(b || '').split('.').map(Number);
+    for (var i = 0; i < 3; i++) { var d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
+    return 0;
+  }
+
   /* בדיקת עדכון: הגשר משווה לגרסה האחרונה בגיטהאב; ההורדה ידנית מעמוד ההוצאות */
   async function checkUpdate(slot, force) {
     if (!slot) return;
@@ -19,14 +25,30 @@
       slot.innerHTML = '<div class="state-box error">' + ui.icon('warning') + '<div><b>בדיקת העדכון נכשלה</b><p class="muted">' + ui.esc(ui.errText(e)) + '</p></div></div>';
       return;
     }
+    /* גם התוסף עצמו נבדק: גרסת התוסף ישנה מהגרסה האחרונה = צריך להתקין את התוספים מחדש */
+    var pluginOld = r.latest && cmpVer(SS.VERSION, r.latest) < 0;
     var msg = r.newer
-      ? '<b>יש גרסה חדשה: ' + ui.esc(r.latest) + '</b> (מותקנת: ' + ui.esc(r.current) + '). הורידו מעמוד ההוצאות והפעילו את הקובץ החדש — הוא מחליף את הישן.'
-      : '<b>הגשר מעודכן</b> (גרסה ' + ui.esc(r.current) + ').';
+      ? '<b>יש גרסה חדשה: ' + ui.esc(r.latest) + '</b> (הגשר המותקן: ' + ui.esc(r.current) + ').' +
+        (r.canInstall ? ' אפשר לעדכן בלחיצה: הקובץ יורד, נבדק מול חתימת ה-SHA256 שבהוצאה, והגשר יופעל מחדש.' : ' הורידו מעמוד ההוצאות והפעילו את הקובץ החדש.')
+      : '<b>הגשר מעודכן</b> (גרסה ' + ui.esc(r.current) + ', האחרונה: ' + ui.esc(r.latest || '?') + ').';
+    if (pluginOld) msg += '<br>התוסף הזה בגרסה ' + ui.esc(SS.VERSION) + '. אחרי עדכון הגשר: תפריט הגשר ליד השעון ← „התקן/עדכן את התוספים באוצריא”.';
     slot.innerHTML = '<div class="state-box">' + ui.icon(r.newer ? 'download' : 'check') + '<div>' + msg + '</div></div>' +
-      '<div class="row-actions">' + (r.newer ? '<button class="btn btn-primary" data-act="open">' + ui.icon('download') + 'לעמוד ההוצאה</button>' : '') +
+      '<div class="row-actions">' +
+      (r.canInstall ? '<button class="btn btn-primary" data-act="install">' + ui.icon('download') + 'עדכון עכשיו</button>' : '') +
+      (r.newer ? '<button class="btn ' + (r.canInstall ? 'btn-tonal' : 'btn-primary') + '" data-act="open">' + ui.icon('link') + 'לעמוד ההוצאה</button>' : '') +
       '<button class="btn btn-tonal" data-act="chk">' + ui.icon('refresh') + 'בדיקה חוזרת</button></div>';
     var o = slot.querySelector('[data-act=open]');
     if (o) o.addEventListener('click', function () { SS.openUrl(r.url || SS.BRIDGE_URL); });
+    var ins = slot.querySelector('[data-act=install]');
+    if (ins) ins.addEventListener('click', async function () {
+      ins.disabled = true;
+      ins.innerHTML = '<span class="spinner sm"></span>מוריד…';
+      try {
+        var x = await SS.bridge.call('/sys/update-install', {}, { timeoutMs: 180000 });
+        ui.toast(x.started ? 'העדכון מותקן. הגשר יופעל מחדש בעוד רגע.' : (x.message || 'הגשר מעודכן'), 'success');
+        setTimeout(function () { if (SS.reprobe) SS.reprobe(); }, 8000);
+      } catch (e) { ui.error(e, 'עדכון'); ins.disabled = false; ins.innerHTML = ui.icon('download') + 'עדכון עכשיו'; }
+    });
     slot.querySelector('[data-act=chk]').addEventListener('click', function () { checkUpdate(slot, true); });
   }
 
@@ -36,7 +58,7 @@
       body.innerHTML =
         '<div class="card about-hero"><div class="about-ic">' + ui.icon('computer') + '</div><div>' +
         '<h3>הגדרות מערכת</h3><p class="muted">גרסה ' + ui.esc(SS.VERSION) + ' · מאת חד בדרא</p>' +
-        '<p>שליטה בשמע, במסך, בבלוטות׳, ברשת ובהפעלת המחשב — ומצב נעילה שהופך את המחשב לעמדת לימוד באוצריא בלבד.</p></div></div>' +
+        '<p>כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה ותאריך, מקלדת, עכבר, מדפסות, USB, בלוטות׳ ורשת — ומצב נעילה שהופך את המחשב לעמדת לימוד באוצריא ובתוכנות הלימוד בלבד.</p></div></div>' +
         '<div class="card about-memorial"><p>לעילוי נשמת הנערה הצדקנית</p><h3>אסתר גיטה בת רבי מיכאל שלום הלוי שיבדלט"א</h3><p>תהא נשמתה צרורה בצרור החיים. תנצב"ה</p></div>' +
         '<div class="card"><div class="card-title">גשר אוצריא</div><div data-slot="bridge">' + ui.loading() + '</div>' +
         '<div data-slot="update"></div></div>' +
@@ -68,7 +90,7 @@
         '<dt>פורט</dt><dd dir="ltr">127.0.0.1:' + ui.esc(h.port || SS.bridge.port) + '</dd>' +
         '<dt>מערכת</dt><dd dir="ltr">' + ui.esc(h.platform || '') + '</dd>' +
         '<dt>מצב נעילה</dt><dd>' + (h.kioskActive ? 'פעיל' : 'לא פעיל') + '</dd></dl>';
-      checkUpdate(body.querySelector('[data-slot=update]'), false);
+      checkUpdate(body.querySelector('[data-slot=update]'), true);
     }
   });
 })();

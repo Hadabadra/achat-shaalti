@@ -49,8 +49,8 @@
         b.disabled = true;
         b.innerHTML = '<span class="spinner sm"></span>';
         try {
-          await SS.bridge.call('/sys/usb/eject', { letter: letter }, { timeoutMs: 20000 });
-          ui.toast('אפשר לנתק את הכונן ' + letter + ' בבטחה', 'success');
+          var r = await SS.bridge.call('/sys/usb/eject', { letter: letter }, { timeoutMs: 30000 });
+          ui.toast((r && r.poweredOff ? 'ההתקן כובה. ' : '') + 'אפשר לנתק את הכונן ' + letter + ' בבטחה', 'success');
         } catch (e) { ui.error(e, 'הוצאת כונן'); }
         busy = false;
         lastSig = '';
