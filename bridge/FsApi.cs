@@ -62,7 +62,9 @@ public static class FsApi
 
     private static bool Exists(string p) => File.Exists(p) || Directory.Exists(p);
 
-    /// <summary>אזורים מוגנים: מחיקה, העברה ושינוי שם אסורים</summary>
+    /// <summary>אזורים מוגנים (Windows, Program Files, ProgramData ותיקיית הגשר עצמו):
+    /// מחיקה, העברה, שינוי שם, שינוי מאפיינים, יצירת תיקייה וכתיבת קובץ אסורים.
+    /// בפרט חוסם כתיבה אל config.json של הגשר, שמכיל את גיבוב סיסמת הנעילה.</summary>
     private static void EnsureNotProtected(string p)
     {
         string full = Path.GetFullPath(p).TrimEnd('\\');
@@ -207,6 +209,7 @@ public static class FsApi
     private static object Mkdir(JsonElement b)
     {
         string path = FullPath(b.Req("path"));
+        EnsureNotProtected(path);
         if (Exists(path)) throw BridgeException.Exists("כבר קיים: " + path);
         Directory.CreateDirectory(path);
         return new { path };
@@ -448,6 +451,7 @@ public static class FsApi
     private static object WriteText(JsonElement b)
     {
         string path = FullPath(b.Req("path"));
+        EnsureNotProtected(path);
         string content = b.Str("content", "");
         bool overwrite = b.Bool("overwrite");
         if (Directory.Exists(path)) throw BridgeException.Exists("קיימת תיקייה בשם זה");
