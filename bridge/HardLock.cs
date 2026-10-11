@@ -259,7 +259,7 @@ public static class HardLock
                 Sc($"create {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"תורת אסתר\"");
             else
                 Sc($"config {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"תורת אסתר\"");
-            Sc($"description {ServiceName} \"תורת אסתר — נעילה מוקשחת לגשר אוצריא\"");
+            Sc($"description {ServiceName} \"תורת אסתר — על שם אסתר דינר ע״ה. נעילה מוקשחת לגשר אוצריא\"");
             Sc($"failure {ServiceName} reset= 86400 actions= restart/5000/restart/5000/restart/30000");
 
             using var sc = new ServiceController(ServiceName);

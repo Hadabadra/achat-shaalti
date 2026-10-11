@@ -12,7 +12,7 @@
     <RootNamespace>OtzariaBridge</RootNamespace>
     <Version>3.0.0</Version>
     <Product>גשר אוצריא</Product>
-    <Company>חד בדרא</Company>
+    <Company>תורת אסתר</Company>
     <ApplicationIcon>..\assets\icon.ico</ApplicationIcon>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>

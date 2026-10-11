@@ -25,4 +25,4 @@
 - פרסום לחנות אוצריא: Actions → Run workflow → `store`. דורש את הסודות `OTZARIA_USER` ו-`OTZARIA_PASSWORD`.
 - מסמכים: `docs/WORKPLAN.md`, `docs/STATUS.md`, `docs/BRIDGE_API.md`, `docs/KNOWLEDGE.md`, `docs/SDK-998-OPPORTUNITIES.md`.
 
-יומן שינויים: [CHANGELOG.md](CHANGELOG.md) · מפתח: חד בדרא
+יומן שינויים: [CHANGELOG.md](CHANGELOG.md) · מפתח: תורת אסתר
