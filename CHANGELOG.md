@@ -5,6 +5,21 @@
 
 ---
 
+## 1.0.0 — 11.10.2026 (גרסה רשמית ראשונה)
+
+### סייר קבצים
+- **חלונית תצוגה מקדימה** (כפתור בסרגל הניווט): תמונות, טקסט, עמוד ראשון של PDF ומסמכי Word, ופרטי הקובץ.
+- **שינוי רוחב החלוניות בגרירה** — חלונית המיקומים וחלונית התצוגה המקדימה (לחיצה כפולה על המפריד מחזירה לברירת המחדל).
+- **מצבי תצוגה:** פרטים, רשימה וסמלים.
+- **גודל טקסט:** ברירת מחדל קטנה יותר, בחירה בהגדרות ו-Ctrl+ / Ctrl- / Ctrl+0.
+- **מאפיינים מורחבים** בלשוניות "כללי" ו"פרטים": נתיב מלא, העתקת נתיב, וסימון "מוסתר" ו"קריאה בלבד" (עם הגשר).
+
+### גשר אוצריא
+- נקודת קצה חדשה `/fs/attributes` לשינוי התכונות "מוסתר" ו"קריאה בלבד".
+- **תיקון: הפעלת מצב נעילה נכשלה** עם "Access to the registry key ...Policies\System is denied" במחשבים שבהם המפתח נעול למשתמש רגיל. עכשיו הנעילה מופעלת בכל מקרה, ואם אין הרשאה לחסום את מנהל המשימות במדיניות — שומר הנעילה סוגר אותו כשהוא נפתח. הפעלה שנכשלה כבר לא משאירה נעילה חלקית.
+
+---
+
 ## 0.0.4 — 11.10.2026 (גרסת ניסיון)
 
 ### סייר קבצים
@@ -61,6 +76,9 @@
 ---
 
 # Changelog — Otzaria system tools
+
+## 1.0.0 — 2026-10-11 (first official release)
+File Explorer: preview pane, resizable panes, details/list/icons views, text size, tabbed properties with hidden/read-only. Bridge: `/fs/attributes`; fixed lock mode failing with "registry key ...Policies\\System is denied".
 
 ## 0.0.4 — 2026-10-11 (trial release)
 File Explorer: open PDFs in the PDF+OCR plugin and Word files in Word for Otzaria; fixed the changelog link; new settings icon.

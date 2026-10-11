@@ -139,7 +139,13 @@ public static class Kiosk
         Config.Set("kiosk.blockTaskManager", blockTm);
         Config.Set("kiosk.active", true);
         Config.Save();
-        Apply();
+        try { Apply(); }
+        catch
+        {
+            // הפעלה שנכשלה לא משאירה את המחשב במצב נעילה חלקי
+            Release();
+            throw;
+        }
         return new { active = true };
     }
 
@@ -201,22 +207,40 @@ public static class Kiosk
         if (IsActive) Apply();
     }
 
+    private static bool _taskMgrByPolicy;
+
     private static void Apply()
     {
         lock (Gate)
         {
-            using (var k = Registry.CurrentUser.CreateSubKey(PoliciesKey))
+            // חסימת מנהל המשימות דרך מדיניות. במחשבים רבים המפתח Policies\System נעול למשתמש רגיל
+            // (נוצר על ידי מנהל/מדיניות קבוצתית), ולכן זו חסימה "במאמץ הטוב": אם אין הרשאה,
+            // הנעילה ממשיכה, ומנהל המשימות נסגר על ידי שומר הנעילה ונחסם במקלדת (Ctrl+Shift+Esc).
+            _taskMgrByPolicy = false;
+            try
             {
-                if (Config.Get("kiosk.blockTaskManager", true)) k.SetValue("DisableTaskMgr", 1, RegistryValueKind.DWord);
+                using var k = Registry.CurrentUser.CreateSubKey(PoliciesKey);
+                if (Config.Get("kiosk.blockTaskManager", true)) { k.SetValue("DisableTaskMgr", 1, RegistryValueKind.DWord); _taskMgrByPolicy = true; }
                 else k.DeleteValue("DisableTaskMgr", false);
             }
-
-            using (var k = Registry.CurrentUser.CreateSubKey(WinlogonKey))
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
             {
+                Config.Log("kiosk: Policies\\System לא נגיש, חסימת מנהל המשימות בשומר בלבד: " + ex.Message);
+            }
+
+            try
+            {
+                using var k = Registry.CurrentUser.CreateSubKey(WinlogonKey);
                 // נעילה קפדנית: המעטפת היא הגשר, שמפעיל את אוצריא. ללא strict המעטפת לא משתנה
                 if (Config.Get("kiosk.strict", false))
                     k.SetValue("Shell", "\"" + Installer.InstalledExe + "\" --background", RegistryValueKind.String);
                 else k.DeleteValue("Shell", false);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+            {
+                Config.Log("kiosk: Winlogon לא נגיש: " + ex.Message);
+                if (Config.Get("kiosk.strict", false))
+                    throw BridgeException.Forbidden("נעילה קפדנית דורשת הרשאה לשנות את מעטפת Windows, ואין הרשאה כזו במחשב הזה. אפשר להפעיל נעילה רגילה.");
             }
 
             Tray.Invoke(InstallHook);
@@ -315,6 +339,13 @@ public static class Kiosk
             {
                 try { if (p.SessionId == session) p.Kill(); } catch { }
             }
+
+            // אם המדיניות לא נכתבה (אין הרשאה) — סוגרים את מנהל המשימות כשהוא נפתח (מה שאפשר בלי הרשאות מנהל)
+            if (!_taskMgrByPolicy && Config.Get("kiosk.blockTaskManager", true))
+                foreach (var p in Process.GetProcessesByName("Taskmgr"))
+                {
+                    try { if (p.SessionId == session) p.Kill(); } catch { }
+                }
 
             string path = OtzariaPath();
             string name = string.IsNullOrEmpty(path) ? "otzaria" : Path.GetFileNameWithoutExtension(path);

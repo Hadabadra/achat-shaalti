@@ -33,6 +33,7 @@ public static class FsApi
         Server.Route("/fs/stat", b => Stat(FullPath(b.Req("path"))));
         Server.Route("/fs/mkdir", Mkdir);
         Server.Route("/fs/rename", Rename);
+        Server.Route("/fs/attributes", SetAttributes);
         Server.Route("/fs/copy", b => Transfer(b, move: false));
         Server.Route("/fs/move", b => Transfer(b, move: true));
         Server.Route("/fs/delete", Delete);
@@ -209,6 +210,21 @@ public static class FsApi
         if (Exists(path)) throw BridgeException.Exists("כבר קיים: " + path);
         Directory.CreateDirectory(path);
         return new { path };
+    }
+
+    /// <summary>שינוי התכונות "מוסתר" ו"קריאה בלבד" של קובץ או תיקייה; מחזיר את המאפיינים החדשים</summary>
+    private static object SetAttributes(JsonElement b)
+    {
+        string path = FullPath(b.Req("path"));
+        if (!Exists(path)) throw BridgeException.NotFound("לא נמצא: " + path);
+        EnsureNotProtected(path);
+        var attrs = File.GetAttributes(path);
+        if (b.TryGetProperty("hidden", out var h) && (h.ValueKind == JsonValueKind.True || h.ValueKind == JsonValueKind.False))
+            attrs = h.GetBoolean() ? attrs | FileAttributes.Hidden : attrs & ~FileAttributes.Hidden;
+        if (b.TryGetProperty("readOnly", out var r) && (r.ValueKind == JsonValueKind.True || r.ValueKind == JsonValueKind.False))
+            attrs = r.GetBoolean() ? attrs | FileAttributes.ReadOnly : attrs & ~FileAttributes.ReadOnly;
+        File.SetAttributes(path, attrs);
+        return Stat(path);
     }
 
     private static object Rename(JsonElement b)

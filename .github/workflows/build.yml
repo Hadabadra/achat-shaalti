@@ -15,7 +15,7 @@ on:
       - "system-settings-screenshots/**"
       - "tools/screens/**"
       - "CHANGELOG.md"
-      - ".github/workflows/bridge.yml"
+      - ".github/workflows/build.yml"
   workflow_dispatch:
     inputs:
       store:
@@ -97,7 +97,7 @@ jobs:
             "1. מורידים את **OtzariaBridge.exe** (למטה) ומפעילים פעם אחת: הגשר מותקן, עולה אוטומטית עם Windows, ופותח את תיקיית התוספים."
             "2. באוצריא: התקנת תוסף מקובץ → **file-explorer.otzplugin** ו-**system-settings.otzplugin**."
             ""
-            "> ⚠️ גרסת ניסיון — עדיין לא נבדקה על מחשבי Windows אמיתיים. לא להפעיל *נעילה קפדנית* לפני שרושמים את קוד השחזור."
+            "> ⚠️ לפני הפעלת *נעילה קפדנית* — לרשום את קוד השחזור."
             ""
             "## קבצים"
             "| קובץ | מה זה |"
@@ -123,8 +123,9 @@ jobs:
         with:
           tag_name: ${{ steps.rel.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: כלי מערכת לאוצריא ${{ steps.rel.outputs.tag }} (ניסיון)
-          prerelease: true
+          name: כלי מערכת לאוצריא ${{ steps.rel.outputs.tag }}
+          prerelease: false
+          make_latest: true
           body_path: release-notes.md
           files: |
             out/OtzariaBridge.exe

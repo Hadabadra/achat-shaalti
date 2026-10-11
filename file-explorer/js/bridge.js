@@ -196,6 +196,7 @@
     mkdir: function (dir, name) { return Bridge.call('/fs/mkdir', { path: FX.win.join(dir, name) }); },
     newTextFile: function (dir, name) { return Bridge.call('/fs/write-text', { path: FX.win.join(dir, name), content: '', overwrite: false }); },
     rename: function (path, newName) { return Bridge.call('/fs/rename', { path: path, newName: newName }); },
+    setAttributes: function (path, attrs) { return Bridge.call('/fs/attributes', { path: path, hidden: !!attrs.hidden, readOnly: !!attrs.readOnly }); },
     copy: function (sources, destDir, conflict) {
       return Bridge.call('/fs/copy', { sources: sources, destDir: destDir, conflict: conflict || 'rename' }, { timeoutMs: 120000 });
     },

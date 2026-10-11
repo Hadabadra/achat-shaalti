@@ -5,7 +5,7 @@
   var ui = window.SS.ui;
   FX.ui = ui;
   FX.t = window.I18N ? window.I18N.t : function (x) { return x; };
-  FX.VERSION = '0.0.4';
+  FX.VERSION = '1.0.0';
   FX.CHANGELOG_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/blob/main/CHANGELOG.md';
   FX.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
 
@@ -344,6 +344,7 @@
       list.innerHTML = S.view.map(rowHtml).join('');
     }
     renderStatus();
+    if (FX.onSelection) FX.onSelection();
   }
   function refreshRows() {
     Array.prototype.forEach.call($('fx-list').querySelectorAll('.fx-row'), function (r) {
@@ -355,6 +356,7 @@
       r.classList.toggle('cut', !!(e && S.clip && S.clip.cut && S.clip.paths.indexOf(e.path) >= 0));
     });
     renderStatus(); renderCmds();
+    if (FX.onSelection) FX.onSelection();
   }
   function renderStatus() {
     var sel = selected();
@@ -692,8 +694,10 @@
       sel('word', 'מסמכי Word', o.word, [['two', 'בצופה הפנימי — שני טורים'], ['one', 'בצופה הפנימי — טור אחד'], ['wordplugin', 'בתוסף וורד לאוצריא']].concat(ext)) +
       sel('text', 'קובצי טקסט', o.text, [['internal', 'בצופה הפנימי']].concat(ext)) +
       sel('image', 'תמונות', o.image, [['internal', 'בתצוגה מקדימה']].concat(ext)) +
+      sel('zoom', 'גודל טקסט', String(FX.layout.zoom()), [['0.8', 'קטן מאוד'], ['0.85', 'קטן'], ['0.9', 'רגיל'], ['1', 'בינוני'], ['1.1', 'גדול'], ['1.2', 'גדול מאוד'], ['1.35', 'ענק']]) +
+      sel('mode', 'תצוגת קבצים', FX.layout.mode(), [['details', 'פרטים'], ['list', 'רשימה'], ['icons', 'סמלים']]) +
       sel('lang', 'שפה', pref, [['auto', 'אוטומטי (לפי אוצריא)'], ['he', 'עברית'], ['en', 'English']]) +
-      '<p class="muted small">ההגדרות נשמרות במחשב הזה. פתיחה חיצונית דורשת את גשר אוצריא; בלעדיו נפתח בצופה הפנימי.</p>' +
+      '<p class="muted small">ההגדרות נשמרות במחשב הזה. פתיחה חיצונית דורשת את גשר אוצריא; בלעדיו נפתח בצופה הפנימי. גודל טקסט גם ב-Ctrl+ / Ctrl- / Ctrl+0.</p>' +
       '<div class="fx-about"><b>אודות</b> — סייר קבצים ' + FX.esc(FX.VERSION) + ' · חד בדרא' +
       '<p class="small">עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, וצפייה ב-PDF, Word, טקסט ותמונות. עם גשר אוצריא — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.</p>' +
       '<a href="#" role="button" class="btn btn-text" data-act="changelog">יומן שינויים</a></div></div>';
@@ -710,6 +714,8 @@
     var v = {};
     Array.prototype.forEach.call(form.querySelectorAll('select'), function (x) { v[x.name] = x.value; });
     saveOpts({ pdf: v.pdf, word: v.word, text: v.text, image: v.image });
+    FX.layout.setZoom(parseFloat(v.zoom) || 0.9);
+    FX.layout.setMode(v.mode);
     ui.toast('ההגדרות נשמרו', 'success');
     if (window.I18N && v.lang !== pref) window.I18N.set(v.lang);
   }
@@ -812,21 +818,62 @@
     try { d = S.prov.kind === 'bridge' ? await S.prov.stat(path) : await S.prov.stat(path, e); }
     catch (err) { busy(false); opError(err, 'קריאת המאפיינים נכשלה'); return; }
     busy(false);
-    var rows = [
-      ['שם', d.name || (e ? e.name : S.prov.nameOf(path))],
-      ['מיקום', S.prov.displayPath(d.path || path)],
-      ['סוג', d.type === 'dir' ? 'תיקייה' : FX.typeLabel({ name: d.name || '', type: d.type })],
-      ['גודל', d.size != null ? FX.formatSize(d.size) + ' (' + FX.formatNumber(d.size) + ' בתים)' : ''],
-      ['פריטים', d.itemCount != null ? FX.formatNumber(d.itemCount) : ''],
+    var name = d.name || (e ? e.name : S.prov.nameOf(path));
+    var isDir = d.type === 'dir';
+    var full = S.prov.displayPath(d.path || path);
+    var ext = isDir ? '' : FX.extOf(name);
+    var kind = FX.kindOf({ name: name, type: isDir ? 'dir' : 'file' });
+    function grid(rows) {
+      return '<dl class="info-grid">' + rows.filter(function (r) { return r[1]; }).map(function (r) {
+        return '<dt>' + r[0] + '</dt><dd' + (r[2] ? ' dir="ltr" data-noi18n' : '') + '>' + FX.esc(r[1]) + '</dd>';
+      }).join('') + '</dl>';
+    }
+    var canAttr = S.prov.kind === 'bridge' && !!S.prov.setAttributes && !(e ? (e.type === 'drive' || FX.win.isDriveRoot(e.path)) : (S.isRoot || FX.win.isDriveRoot(S.path)));
+    var general = '<div class="fx-props-head"><span class="fx-ic k-' + kind + '">' + ic(FX.kindInfo(kind).icon) + '</span><b data-noi18n>' + FX.esc(name) + '</b></div>' +
+      grid([
+        ['סוג', isDir ? 'תיקייה' : FX.typeLabel({ name: name, type: 'file' })],
+        ['מיקום', S.prov.displayPath(S.prov.parentOf(d.path || path) || ''), true],
+        ['גודל', d.size != null ? FX.formatSize(d.size) + ' (' + FX.formatNumber(d.size) + ' בתים)' : ''],
+        ['פריטים', d.itemCount != null ? FX.formatNumber(d.itemCount) : '']
+      ]) +
+      (canAttr ? '<div class="fx-attrs"><span class="field-label">תכונות</span>' +
+        '<label class="check-row"><input type="checkbox" name="hidden"' + (d.hidden ? ' checked' : '') + '><span class="check-box">' + ui.icon('check') + '</span><span class="check-text">מוסתר</span></label>' +
+        '<label class="check-row"><input type="checkbox" name="readOnly"' + (d.readOnly ? ' checked' : '') + '><span class="check-box">' + ui.icon('check') + '</span><span class="check-text">קריאה בלבד</span></label></div>'
+        : grid([['תכונות', [d.readOnly ? 'קריאה בלבד' : '', d.hidden ? 'מוסתר' : ''].filter(Boolean).join(', ')]]));
+    var details = grid([
+      ['נתיב מלא', full, true],
+      ['סיומת', ext ? '.' + ext : ''],
       ['נוצר', d.created ? FX.formatDate(d.created) : ''],
-      ['שונה', d.modified ? FX.formatDate(d.modified) : ''],
-      ['תכונות', [d.readOnly ? 'קריאה בלבד' : '', d.hidden ? 'מוסתר' : ''].filter(Boolean).join(', ')]
-    ].filter(function (r) { return r[1]; });
-    await ui.dialog({
-      title: 'מאפיינים', icon: 'info',
-      body: '<dl class="info-grid">' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + FX.esc(r[1]) + '</dd>'; }).join('') + '</dl>',
-      actions: [{ label: 'סגירה', value: true, kind: 'primary' }]
+      ['שונה', d.modified ? FX.formatDate(d.modified) : '']
+    ]) + '<a href="#" role="button" class="btn btn-text" data-act="copypath">' + ic('copy') + 'העתקת הנתיב</a>';
+    var body = '<div class="fx-tabs" role="tablist">' +
+      '<a href="#" role="tab" class="fx-tab on" data-tab="g">כללי</a><a href="#" role="tab" class="fx-tab" data-tab="d">פרטים</a></div>' +
+      '<div class="fx-tabpanel" data-panel="g">' + general + '</div><div class="fx-tabpanel" data-panel="d" hidden>' + details + '</div>';
+    var form = null;
+    var r = await ui.dialog({
+      title: 'מאפיינים', body: body, tone: 'fx-props',
+      actions: canAttr ? [{ label: 'ביטול', value: false }, { label: 'שמירה', value: true, kind: 'primary' }] : [{ label: 'סגירה', value: true, kind: 'primary' }],
+      onOpen: function (f) {
+        form = f;
+        f.querySelectorAll('[data-tab]').forEach(function (t) {
+          t.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            f.querySelectorAll('[data-tab]').forEach(function (x) { x.classList.toggle('on', x === t); });
+            f.querySelectorAll('[data-panel]').forEach(function (p) { p.hidden = p.dataset.panel !== t.dataset.tab; });
+          });
+        });
+        var cp = f.querySelector('[data-act=copypath]');
+        if (cp) cp.addEventListener('click', function (ev) { ev.preventDefault(); copyText(full).then(function (ok) { ui.toast(ok ? 'הנתיב הועתק' : 'ההעתקה נכשלה', ok ? 'success' : 'error'); }); });
+      }
     });
+    if (!r || !canAttr || !form) return;
+    var hid = form.querySelector('input[name=hidden]').checked, ro = form.querySelector('input[name=readOnly]').checked;
+    if (hid === !!d.hidden && ro === !!d.readOnly) return;
+    try {
+      await S.prov.setAttributes(d.path || path, { hidden: hid, readOnly: ro });
+      ui.toast('התכונות עודכנו', 'success');
+      refresh();
+    } catch (err) { opError(err, 'עדכון התכונות נכשל'); }
   }
 
   function busy(on, text) {
@@ -1168,6 +1215,7 @@
     $('fx-hidden').classList.toggle('on', S.showHidden);
     $('fx-hidden').setAttribute('aria-pressed', S.showHidden ? 'true' : 'false');
     bind();
+    FX.layout.init();
     connect(false);
   }
 
@@ -1189,7 +1237,7 @@
     }
   }
 
-  FX.app = { go: go, refresh: refresh, connect: connect };
+  FX.app = { go: go, refresh: refresh, connect: connect, selected: function () { return S.prov ? selected() : []; }, prov: function () { return S.prov; } };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

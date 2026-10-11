@@ -29,6 +29,7 @@
 | `/fs/stat` | `{ path }` | `{ name, path, type, size, created, modified, readOnly, hidden, itemCount? }` |
 | `/fs/mkdir` | `{ path }` | `{ path }` — `exists` אם קיים |
 | `/fs/rename` | `{ path, newName }` | `{ path }` |
+| `/fs/attributes` | `{ path, hidden?: bool, readOnly?: bool }` | כמו `/fs/stat` — מחזיר את המאפיינים אחרי השינוי. נחסם באזורים מוגנים ובשורש כונן (מ-1.0.0) |
 | `/fs/copy` | `{ sources: [path], destDir, conflict: "skip"\|"overwrite"\|"rename" }` | `{ copied: n, skipped: n, failed: [{path, message}] }` — תיקיות רקורסיבית. `rename` = "שם (2).ext" |
 | `/fs/move` | אותו גוף כמו copy | `{ moved, skipped, failed }` |
 | `/fs/delete` | `{ paths: [path], permanent?: false }` | `{ deleted, failed }` — ברירת מחדל לסל המיחזור |
