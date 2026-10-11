@@ -5,7 +5,7 @@
   var ui = window.SS.ui;
   FX.ui = ui;
   FX.t = window.I18N ? window.I18N.t : function (x) { return x; };
-  FX.VERSION = '0.0.3';
+  FX.VERSION = '0.0.4';
   FX.CHANGELOG_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/blob/main/CHANGELOG.md';
   FX.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
 
@@ -688,15 +688,15 @@
     var ext = [['external', 'ביישום חיצוני (דרך הגשר)']];
     var form = null;
     var body = '<div class="fx-settings">' +
-      sel('pdf', 'קובצי PDF', o.pdf, [['internal', 'בצופה הפנימי']].concat(ext)) +
-      sel('word', 'מסמכי Word', o.word, [['two', 'בצופה הפנימי — שני טורים'], ['one', 'בצופה הפנימי — טור אחד']].concat(ext)) +
+      sel('pdf', 'קובצי PDF', o.pdf, [['internal', 'בצופה הפנימי'], ['ocr', 'בתוסף צופה PDF+OCR']].concat(ext)) +
+      sel('word', 'מסמכי Word', o.word, [['two', 'בצופה הפנימי — שני טורים'], ['one', 'בצופה הפנימי — טור אחד'], ['wordplugin', 'בתוסף וורד לאוצריא']].concat(ext)) +
       sel('text', 'קובצי טקסט', o.text, [['internal', 'בצופה הפנימי']].concat(ext)) +
       sel('image', 'תמונות', o.image, [['internal', 'בתצוגה מקדימה']].concat(ext)) +
       sel('lang', 'שפה', pref, [['auto', 'אוטומטי (לפי אוצריא)'], ['he', 'עברית'], ['en', 'English']]) +
       '<p class="muted small">ההגדרות נשמרות במחשב הזה. פתיחה חיצונית דורשת את גשר אוצריא; בלעדיו נפתח בצופה הפנימי.</p>' +
       '<div class="fx-about"><b>אודות</b> — סייר קבצים ' + FX.esc(FX.VERSION) + ' · חד בדרא' +
       '<p class="small">עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, וצפייה ב-PDF, Word, טקסט ותמונות. עם גשר אוצריא — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.</p>' +
-      '<button type="button" class="btn btn-text" data-act="changelog">יומן שינויים</button></div></div>';
+      '<a href="#" role="button" class="btn btn-text" data-act="changelog">יומן שינויים</a></div></div>';
     var r = await ui.dialog({
       title: 'הגדרות', icon: 'info', body: body,
       actions: [{ label: 'ביטול', value: false }, { label: 'שמירה', value: true, kind: 'primary' }],
@@ -724,6 +724,46 @@
     });
   }
 
+  /* פתיחה בתוסף אחר (plugin.openOther, אוצריא 0.9.97) */
+  var PDF_PLUGIN = 'com.chadbedera.pdfviewer';
+  var WORD_PLUGIN = 'com.otzaria_word_editor.superdoc';
+  async function openInPlugin(pluginId, param) {
+    var r = await window.Otzaria.call('plugin.openOther', { pluginId: pluginId, param: param || null });
+    if (r && r.success === false) throw FX.OpError((r.error && r.error.code) || 'internal', (r.error && r.error.message) || '');
+  }
+  async function openInPdfPlugin(e) {
+    busy(true, 'מכין את הקובץ…');
+    try {
+      var param = { name: e.name };
+      if (S.prov.kind === 'bridge') {
+        if (e.size > 15 * 1024 * 1024) throw FX.OpError('too_large', 'קובץ גדול מ-15MB — פתחו אותו בצופה הפנימי או ביישום חיצוני');
+        var d = await FX.Bridge.call('/fs/read', { path: e.path, maxBytes: 15 * 1024 * 1024 }, { timeoutMs: 120000 });
+        param.dataUrl = 'data:application/pdf;base64,' + d.content;
+      } else {
+        var rd = await S.prov.read(e);
+        param.url = rd.url;
+      }
+      await openInPlugin(PDF_PLUGIN, param);
+    } catch (err) {
+      busy(false);
+      if (String(err && err.code).indexOf('not_found') >= 0) ui.toast('התוסף צופה PDF+OCR אינו מותקן', 'error');
+      else opError(err, 'הפתיחה בצופה PDF+OCR נכשלה');
+      return;
+    }
+    busy(false);
+  }
+  async function openInWordPlugin(e) {
+    /* התוסף "וורד לאוצריא" אינו מקבל עדיין קובץ מתוסף אחר: פותחים אותו ומעתיקים את הנתיב ללוח */
+    try {
+      await openInPlugin(WORD_PLUGIN, { name: e.name, path: S.prov.kind === 'bridge' ? e.path : null });
+      var copied = S.prov.kind === 'bridge' ? await copyText(e.path) : false;
+      ui.toast(copied ? 'וורד לאוצריא נפתח. הנתיב הועתק — פתחו בו את הקובץ והדביקו את הנתיב בחלון הבחירה' : 'וורד לאוצריא נפתח — פתחו בו את הקובץ', 'info');
+    } catch (err) {
+      if (String(err && err.code).indexOf('not_found') >= 0) ui.toast('התוסף וורד לאוצריא אינו מותקן', 'error');
+      else opError(err, 'הפתיחה בוורד לאוצריא נכשלה');
+    }
+  }
+
   function openExternal(e) {
     S.prov.open(e.path).catch(function (err) { opError(err, 'הפתיחה נכשלה'); });
   }
@@ -735,6 +775,8 @@
     var canExt = !!S.prov.caps.open;
     var kind = ext === 'pdf' ? 'pdf' : (ext === 'docx' || ext === 'doc') ? 'word' : FX.isTextExt(ext) ? 'text' : FX.isImageExt(ext) ? 'image' : '';
     if (kind && o[kind] === 'external' && canExt) { openExternal(e); return; }
+    if (kind === 'pdf' && o.pdf === 'ocr') { openInPdfPlugin(e); return; }
+    if (kind === 'word' && o.word === 'wordplugin' && ext === 'docx') { openInWordPlugin(e); return; }
     if (kind === 'pdf' && window.pdfjsLib) { FX.viewPdf(S.prov, e); return; }
     if (kind === 'word' && window.JSZip && ext === 'docx') { FX.viewDocx(S.prov, e, o.word === 'one' ? 1 : 2); return; }
     if (kind === 'text') { FX.viewText(S.prov, e); return; }

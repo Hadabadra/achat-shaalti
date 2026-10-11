@@ -238,3 +238,4 @@ svg.ic .fill { fill: currentColor; fill-opacity: 0.16; }
 .fb-text { height: auto; min-height: 8em; resize: vertical; padding: 0.5em 0.75em; line-height: 1.5; }
 .fx-about { border-top: 0.0625em solid var(--fx-line); padding-top: 0.75em; }
 .fx-about p { margin: 0.375em 0; }
+a.btn { text-decoration: none; display: inline-flex; }

@@ -7,7 +7,7 @@ namespace OtzariaBridge;
 
 public static class Program
 {
-    public const string Version = "0.0.3";
+    public const string Version = "0.0.4";
     public static int Port { get; set; }
 
     [DllImport("kernel32.dll")] private static extern bool AttachConsole(int pid);

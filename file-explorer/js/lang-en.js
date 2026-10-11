@@ -4,6 +4,16 @@
   var I = window.I18N;
   var t = function (s) { return I.t(s); };
   I.add({
+    'בתוסף צופה PDF+OCR': 'In the PDF+OCR viewer plugin',
+    'בתוסף וורד לאוצריא': 'In the Word for Otzaria plugin',
+    'מכין את הקובץ…': 'Preparing the file…',
+    'קובץ גדול מ-15MB — פתחו אותו בצופה הפנימי או ביישום חיצוני': 'File larger than 15MB — open it in the built-in viewer or an external app',
+    'התוסף צופה PDF+OCR אינו מותקן': 'The PDF+OCR viewer plugin is not installed',
+    'הפתיחה בצופה PDF+OCR נכשלה': 'Opening in PDF+OCR failed',
+    'וורד לאוצריא נפתח. הנתיב הועתק — פתחו בו את הקובץ והדביקו את הנתיב בחלון הבחירה': 'Word for Otzaria opened. The path was copied — open the file there and paste the path in the file dialog',
+    'וורד לאוצריא נפתח — פתחו בו את הקובץ': 'Word for Otzaria opened — open the file there',
+    'התוסף וורד לאוצריא אינו מותקן': 'The Word for Otzaria plugin is not installed',
+    'הפתיחה בוורד לאוצריא נכשלה': 'Opening in Word for Otzaria failed',
     'עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, וצפייה ב-PDF, Word, טקסט ותמונות. עם גשר אוצריא — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.': 'Browse and manage files from inside Otzaria: copy, move, delete, rename, search, and view PDF, Word, text and images. With Otzaria Bridge you can reach the whole computer; without it, only folders you approved.',
     'שליחת הערות זמינה רק בתוך אוצריא': 'Sending feedback is available only inside Otzaria',
     'ההערה נשלחת לצוות אוצריא ולמפתח התוסף דרך מערכת הדיווח של אוצריא. לפני השליחה תוצג בקשת אישור.': 'Your note is sent to the Otzaria team and the plugin developer through the Otzaria reporting system. You will be asked to confirm before it is sent.',

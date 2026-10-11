@@ -4,7 +4,7 @@
   var SS = (window.SS = window.SS || {});
   var ui = SS.ui;
   SS.sections = SS.sections || [];
-  SS.VERSION = '0.0.3';
+  SS.VERSION = '0.0.4';
   SS.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
 
   var state = { current: null, connected: false, probeTimer: null, suspended: false, booted: false };

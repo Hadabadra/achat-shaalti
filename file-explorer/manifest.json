@@ -1,7 +1,7 @@
 {
   "id": "com.chadbedera.fileexplorer",
   "name": "סייר קבצים",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "סייר קבצים מתוך אוצריא: עיון, העתקה, גזירה, הדבקה, מחיקה, שינוי שם, תצוגה מקדימה וחיפוש קבצים. דורש את גשר אוצריא; בלעדיו עובד על תיקיות שאושרו.",
   "author": "חד בדרא",
   "schemaVersion": 1,
@@ -17,7 +17,8 @@
     "fs.user_files.write",
     "reader.toolbar",
     "app.startup_contributions",
-    "navigation.write"
+    "navigation.write",
+    "plugin.open_other"
   ],
   "network": {
     "enabled": true,

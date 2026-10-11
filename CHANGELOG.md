@@ -5,6 +5,15 @@
 
 ---
 
+## 0.0.4 — 11.10.2026 (גרסת ניסיון)
+
+### סייר קבצים
+- בהגדרות: אפשר לפתוח PDF בתוסף **צופה PDF+OCR** (מגרסה 2.7.0), ו-Word בתוסף **וורד לאוצריא** (`plugin.openOther`). וורד לאוצריא עדיין לא מקבל קובץ מתוסף אחר, ולכן הוא נפתח והנתיב מועתק ללוח.
+- תיקון: "יומן שינויים" בהגדרות לא נפתח.
+- אייקון ההגדרות הוחלף לגלגל שיניים.
+
+---
+
 ## 0.0.3 — 11.10.2026 (גרסת ניסיון)
 
 ### כללי
@@ -52,6 +61,9 @@
 ---
 
 # Changelog — Otzaria system tools
+
+## 0.0.4 — 2026-10-11 (trial release)
+File Explorer: open PDFs in the PDF+OCR plugin and Word files in Word for Otzaria; fixed the changelog link; new settings icon.
 
 ## 0.0.3 — 2026-10-11 (trial release)
 Moved to its own repository (otzaria-system-tools); in-plugin download and changelog links point here.
