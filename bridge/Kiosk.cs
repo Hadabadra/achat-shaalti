@@ -30,6 +30,24 @@ public static class Kiosk
 
     public static string[] AllowedExtensions => Config.GetList("kiosk.allowOpenExtensions");
 
+    /// <summary>במצב readOnly (ברירת מחדל כבוי) שינוי קבצים חסום בזמן נעילה</summary>
+    public static bool ReadOnly => Config.Get("kiosk.readOnly", false);
+
+    /// <summary>
+    /// חוסם בזמן נעילה פעולות שמאפשרות מעבר לרשת לא מסוננת (Wi-Fi, רדיו, הצמדת בלוטות').
+    /// זו הדליפה המרכזית: מחשב לימוד שמסתמך על סינון ברמת הרשת לא אמור לאפשר מעבר לרשת אחרת.
+    /// </summary>
+    public static void EnsureNetworkAllowed()
+    {
+        if (IsActive) throw BridgeException.Locked("שינוי הרשת חסום במצב נעילה");
+    }
+
+    /// <summary>חוסם שינוי קבצים בזמן נעילה רק כאשר הופעל מצב readOnly</summary>
+    public static void EnsureFileWriteAllowed()
+    {
+        if (IsActive && ReadOnly) throw BridgeException.Locked("שינוי קבצים חסום במצב נעילה");
+    }
+
     public static void Register()
     {
         Server.Route("/kiosk/status", _ => Status());
@@ -105,6 +123,7 @@ public static class Kiosk
         autoStartBridge = Installer.HasAutoStart(),
         otzariaPath = OtzariaPath() ?? "",
         blockTaskManager = Config.Get("kiosk.blockTaskManager", true),
+        readOnly = ReadOnly,
         allowOpenExtensions = AllowedExtensions,
     };
 
@@ -161,6 +180,8 @@ public static class Kiosk
     private static object Settings(JsonElement b)
     {
         Verify(b.Str("password"), allowRecovery: false);
+        if (b.Has("readOnly"))
+            Config.Set("kiosk.readOnly", b.Bool("readOnly"));
         if (b.Has("allowOpenExtensions"))
             Config.Set("kiosk.allowOpenExtensions",
                 new JsonArray(b.StrArray("allowOpenExtensions").Select(x => (JsonNode)x.TrimStart('.').ToLowerInvariant()).ToArray()));

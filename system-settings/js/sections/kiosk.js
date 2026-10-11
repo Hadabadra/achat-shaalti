@@ -207,6 +207,7 @@
       body: '<p class="muted">סוגי קבצים שמותר לפתוח בתוכנות אחרות גם בזמן נעילה (למשל pdf). הפרידו בפסיקים.</p>',
       fields: [
         { name: 'ext', label: 'סיומות מותרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
+        { name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברת קבצים בזמן נעילה (סייר הקבצים יציג בלבד)' },
         { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
         { name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }
       ],
@@ -217,7 +218,7 @@
         return bad.length ? 'סיומת לא תקינה: ' + bad[0] : '';
       },
       onSubmit: async function (x) {
-        await SS.bridge.call('/kiosk/settings', { password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim() });
+        await SS.bridge.call('/kiosk/settings', { password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(), readOnly: !!x.ro });
         return true;
       }
     });

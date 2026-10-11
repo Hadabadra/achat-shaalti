@@ -116,6 +116,7 @@
     kiosk: {
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
+      readOnly: false,
       allowOpenExtensions: ['pdf', 'txt']
     },
     password: null,
@@ -242,6 +243,7 @@
       checkPw(b.password, false);
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
+      if (typeof b.readOnly === 'boolean') M.kiosk.readOnly = b.readOnly;
       return clone(M.kiosk);
     }
   };

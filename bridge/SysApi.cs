@@ -32,7 +32,11 @@ public static class SysApi
         Server.Route("/sys/bluetooth/pair", BtPair);
         Server.Route("/sys/bluetooth/unpair", BtUnpair);
         Server.Route("/sys/wifi/networks", _ => Wifi.Networks());
-        Server.Route("/sys/wifi/connect", b => Wifi.Connect(b.Req("ssid"), b.Str("password")));
+        Server.Route("/sys/wifi/connect", b =>
+        {
+            Kiosk.EnsureNetworkAllowed();
+            return Wifi.Connect(b.Req("ssid"), b.Str("password"));
+        });
         Server.Route("/sys/wifi/disconnect", _ =>
         {
             Config.Run("netsh", "wlan disconnect");
@@ -128,6 +132,7 @@ public static class SysApi
 
     private static async Task<object> RadiosSet(JsonElement b)
     {
+        Kiosk.EnsureNetworkAllowed();
         string kind = b.Req("kind");
         bool on = b.Bool("on");
         var access = await Radio.RequestAccessAsync();
@@ -184,6 +189,7 @@ public static class SysApi
 
     private static async Task<object> BtPair(JsonElement b)
     {
+        Kiosk.EnsureNetworkAllowed();
         var d = await DeviceInformation.CreateFromIdAsync(b.Req("id"));
         if (d.Pairing.IsPaired) return new { paired = true };
         if (!d.Pairing.CanPair) throw BridgeException.Unsupported("לא ניתן להצמיד מכשיר זה");

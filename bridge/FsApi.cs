@@ -206,6 +206,7 @@ public static class FsApi
 
     private static object Mkdir(JsonElement b)
     {
+        Kiosk.EnsureFileWriteAllowed();
         string path = FullPath(b.Req("path"));
         if (Exists(path)) throw BridgeException.Exists("כבר קיים: " + path);
         Directory.CreateDirectory(path);
@@ -215,6 +216,7 @@ public static class FsApi
     /// <summary>שינוי התכונות "מוסתר" ו"קריאה בלבד" של קובץ או תיקייה; מחזיר את המאפיינים החדשים</summary>
     private static object SetAttributes(JsonElement b)
     {
+        Kiosk.EnsureFileWriteAllowed();
         string path = FullPath(b.Req("path"));
         if (!Exists(path)) throw BridgeException.NotFound("לא נמצא: " + path);
         EnsureNotProtected(path);
@@ -229,6 +231,7 @@ public static class FsApi
 
     private static object Rename(JsonElement b)
     {
+        Kiosk.EnsureFileWriteAllowed();
         string path = FullPath(b.Req("path"));
         string newName = b.Req("newName").Trim();
         if (newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || newName is "." or "..")
@@ -256,6 +259,7 @@ public static class FsApi
 
     private static object Transfer(JsonElement b, bool move)
     {
+        Kiosk.EnsureFileWriteAllowed();
         string destDir = FullPath(b.Req("destDir"));
         if (!Directory.Exists(destDir)) throw BridgeException.NotFound("תיקיית היעד לא נמצאה: " + destDir);
         string conflict = b.Str("conflict", "rename");
@@ -364,6 +368,7 @@ public static class FsApi
 
     private static object Delete(JsonElement b)
     {
+        Kiosk.EnsureFileWriteAllowed();
         bool permanent = b.Bool("permanent");
         int deleted = 0;
         var failed = new List<object>();
@@ -447,6 +452,7 @@ public static class FsApi
 
     private static object WriteText(JsonElement b)
     {
+        Kiosk.EnsureFileWriteAllowed();
         string path = FullPath(b.Req("path"));
         string content = b.Str("content", "");
         bool overwrite = b.Bool("overwrite");
