@@ -21,7 +21,7 @@
 
 | רכיב | מיקום | הרשאות |
 |---|---|---|
-| השירות `OtzariaBridgeService` | `%ProgramFiles%\OtzariaBridge\OtzariaBridge.exe --service` | LocalSystem, הפעלה אוטומטית, הפעלה מחדש אם קרס |
+| השירות "תורת אסתר" (`OtzariaBridgeService`) | `%ProgramFiles%\OtzariaBridge\OtzariaBridge.exe --service` | LocalSystem, הפעלה אוטומטית, הפעלה מחדש אם קרס |
 | מצב וסוד | `%ProgramData%\OtzariaBridge\hardlock.json` (ויומן `service.log`) | ‏ACL: רק SYSTEM ומנהלים כותבים, משתמשים קוראים |
 | ערוץ | Named Pipe `\\.\pipe\OtzariaBridgeService`, שורת JSON לבקשה ושורה לתשובה | משתמשים מחוברים: קריאה וכתיבה |
 

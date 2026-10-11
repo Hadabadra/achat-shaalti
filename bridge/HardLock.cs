@@ -256,10 +256,10 @@ public static class HardLock
 
             string bin = "\"" + ServiceExe + "\" --service";
             if (!exists)
-                Sc($"create {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"Otzaria Bridge Service\"");
+                Sc($"create {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"תורת אסתר\"");
             else
-                Sc($"config {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto");
-            Sc($"description {ServiceName} \"נעילה מוקשחת לגשר אוצריא (Otzaria Bridge hardened lock)\"");
+                Sc($"config {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"תורת אסתר\"");
+            Sc($"description {ServiceName} \"תורת אסתר — נעילה מוקשחת לגשר אוצריא\"");
             Sc($"failure {ServiceName} reset= 86400 actions= restart/5000/restart/5000/restart/30000");
 
             using var sc = new ServiceController(ServiceName);
