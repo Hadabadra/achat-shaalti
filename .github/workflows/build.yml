@@ -1,0 +1,157 @@
+name: כלי מערכת — בנייה, שחרור ופרסום
+
+# דחיפה לענף: בניית הגשר + ולידציה של שני התוספים + צילומי מסך (artifacts בלבד).
+# שינוי <Version> ב-bridge/OtzariaBridge.csproj לגרסה שאין לה עדיין Release = Release (ניסיון) עם ה-exe ושני קובצי .otzplugin.
+# פרסום לחנות אוצריא — ידני בלבד, אחרי בדיקה על Windows אמיתי: Actions → Run workflow → store = true.
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["bridge-v*"]
+    paths:
+      - "bridge/**"
+      - "system-settings/**"
+      - "file-explorer/**"
+      - "system-settings-screenshots/**"
+      - "tools/screens/**"
+      - "CHANGELOG.md"
+      - ".github/workflows/bridge.yml"
+  workflow_dispatch:
+    inputs:
+      store:
+        description: "לפרסם את שני התוספים לחנות אוצריא"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: אריזת התוספים כמשאב מוטמע
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force bridge/plugins | Out-Null
+          Compress-Archive -Path system-settings/* -DestinationPath bridge/plugins/system-settings.zip -Force
+          Get-ChildItem file-explorer -Exclude WIP.md | Compress-Archive -DestinationPath bridge/plugins/file-explorer.zip -Force
+          Move-Item bridge/plugins/system-settings.zip bridge/plugins/system-settings.otzplugin -Force
+          Move-Item bridge/plugins/file-explorer.zip bridge/plugins/file-explorer.otzplugin -Force
+          Get-ChildItem bridge/plugins
+
+      - name: Publish
+        run: dotnet publish bridge/OtzariaBridge.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OtzariaBridge
+          path: |
+            out/OtzariaBridge.exe
+            bridge/plugins/*.otzplugin
+          if-no-files-found: error
+
+      - name: האם לשחרר גרסה?
+        id: rel
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ver = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $tag = "v$ver"
+          gh release view $tag -R ${{ github.repository }} *> $null
+          $exists = $LASTEXITCODE -eq 0
+          $global:LASTEXITCODE = 0
+          $do = ("${{ github.ref }}" -eq "refs/heads/main") -and (-not $exists)
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "do=$($do.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Host "version=$ver tag=$tag exists=$exists release=$do"
+
+      # גרסה חדשה ב-OtzariaBridge.csproj (תג שעוד לא קיים) = Release אוטומטי
+      - name: Release
+        if: steps.rel.outputs.do == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: כלי מערכת לאוצריא ${{ steps.rel.outputs.tag }} (ניסיון)
+          prerelease: true
+          files: |
+            out/OtzariaBridge.exe
+            bridge/plugins/system-settings.otzplugin
+            bridge/plugins/file-explorer.otzplugin
+          body: |
+            **גשר אוצריא** + **סייר קבצים** + **הגדרות מערכת** — גרסת ניסיון.
+
+            1. מורידים את `OtzariaBridge.exe` ומפעילים פעם אחת: הגשר מותקן, עולה עם Windows, ופותח את תיקיית התוספים.
+            2. מתקינים את שני קובצי ה-`.otzplugin` מתוך אוצריא (התקנת תוסף מקובץ).
+
+            ⚠️ עדיין לא נבדק על מחשבי Windows אמיתיים. לא להפעיל "נעילה קפדנית" לפני שרושמים את קוד השחזור.
+
+            * אנגלית: תפריט המגש → English, או `OtzariaBridge.exe --lang en`.
+            * ביטול נעילה בחירום: `OtzariaBridge.exe --unlock <קוד שחזור>`
+            * הסרה: `OtzariaBridge.exe --uninstall`
+            * הערות ותקלות: כפתור "שליחת הערה" בשני התוספים.
+            * מה חדש: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/CHANGELOG.md)
+
+            ---
+            **Otzaria Bridge + File Explorer + System Settings** — trial release. Run `OtzariaBridge.exe` once, then install both `.otzplugin` files from inside Otzaria. Not yet tested on real Windows machines.
+
+  plugins:
+    name: ולידציה, צילומים ופרסום לחנות
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 20
+    env:
+      STORE: ${{ github.event.inputs.store == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: צילומי מסך לסייר הקבצים
+        run: |
+          set -e
+          mkdir -p file-explorer-screenshots /tmp/shot
+          cp -r file-explorer/. /tmp/shot/
+          cp tools/screens/fx-demo.js /tmp/shot/
+          sed -i '0,/<script src="js\/i18n.js"><\/script>/s//<script src="fx-demo.js"><\/script>\n  &/' /tmp/shot/index.html
+          grep -c fx-demo /tmp/shot/index.html
+          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          for L in he en; do
+            N=$([ "$L" = he ] && echo 01 || echo 02)
+            "$CHROME" --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
+              --window-size=1280,800 --virtual-time-budget=6000 --allow-file-access-from-files \
+              --screenshot="$PWD/file-explorer-screenshots/$N.png" "file:///tmp/shot/index.html?lang=$L"
+          done
+          ls -la file-explorer-screenshots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: file-explorer-screenshots
+          path: file-explorer-screenshots/*.png
+
+      - name: הגדרות מערכת — ולידציה ופרסום
+        uses: Otzaria/otzaria-plugin-validator@v1
+        with:
+          path: system-settings
+          publish: ${{ env.STORE == 'true' && 'auto' || 'false' }}
+          otzaria-user: ${{ env.STORE == 'true' && secrets.OTZARIA_USER || '' }}
+          otzaria-password: ${{ env.STORE == 'true' && secrets.OTZARIA_PASSWORD || '' }}
+          screenshots: 'system-settings-screenshots/01.png,system-settings-screenshots/02.png'
+          reports-consent: 'true'
+
+      - name: סייר קבצים — ולידציה ופרסום
+        if: always()
+        uses: Otzaria/otzaria-plugin-validator@v1
+        with:
+          path: file-explorer
+          publish: ${{ env.STORE == 'true' && 'auto' || 'false' }}
+          otzaria-user: ${{ env.STORE == 'true' && secrets.OTZARIA_USER || '' }}
+          otzaria-password: ${{ env.STORE == 'true' && secrets.OTZARIA_PASSWORD || '' }}
+          screenshots: 'file-explorer-screenshots/01.png,file-explorer-screenshots/02.png'
+          reports-consent: 'true'
