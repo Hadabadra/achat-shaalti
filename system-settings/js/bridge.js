@@ -116,7 +116,7 @@
     kiosk: {
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
-      allowOpenExtensions: ['pdf', 'txt']
+      allowOpenExtensions: ['pdf', 'txt'], warnings: []
     },
     programs: [],
     autoTorah: false,
