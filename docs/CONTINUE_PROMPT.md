@@ -1,17 +1,19 @@
 # פרומפט להמשך עבודה (להדבקה בשיחה חדשה)
 
 ```
-המשך כלי מערכת לאוצריא אחרי גרסה 3.0.0.
-ריפו: e0548433917-gif/otzaria-system-tools (ענף main).
+המשך כלי מערכת לאוצריא — ענף next (לא main), בלי להוציא גרסה.
+ריפו: e0548433917-gif/otzaria-system-tools.
 
 התחלה:
-- שכפל עם --depth 1 וקרא docs/ROADMAP.md (הסעיף "להמשך"), docs/PROGRESS.md, docs/KNOWLEDGE.md ו-docs/HARDLOCK.md.
-- בנייה מקומית של הגשר: ראו KNOWLEDGE.md ("קומפילציה מקומית").
+- שכפל עם --depth 1 -b next וקרא רק docs/ROADMAP.md, הסעיף "ממתין לגרסה הבאה" ו"המשימות הבאות".
+- בצע את סעיף ב (תיקוני הבאגים מה-PR-ים של יאיר) ואז סעיף א 3–4 (שומר מסך). א1–א2 הן פעולות של המשתמשת.
+- PR-ים של יאיר: לאמץ את השינוי לענף next (cherry-pick או העתקה ידנית), לא למזג ל-main. אחרי אימוץ — להגיב ב-PR שהתיקון נכנס ל-next.
 
 כללים:
 - קומיטים רק בשם Claude <noreply@anthropic.com>; בלי השם או האימייל של המשתמשת.
-- CSS רק עם טוקנים ו-em; בלי font-family: inherit. תיאור במניפסט עד 150 תווים.
-- דחיפה ל-main עם שינוי ב-bridge/, system-settings/, file-explorer/ או CHANGELOG.md בונה; גרסה חדשה ב-OtzariaBridge.csproj = Release אוטומטי מהסעיף העליון ב-CHANGELOG.
-- פרסום לחנות: Actions → Run workflow → store=true (רק באישור).
-- להעלות גרסה בכל המקומות: bridge/OtzariaBridge.csproj, bridge/Program.cs (Version), שני manifest.json, SS.VERSION ב-system-settings/js/app.js, FX.VERSION ב-file-explorer/js/app.js, והגרסה בגשר המדומה (system-settings/js/bridge.js).
+- לא לשנות גרסה (שינוי גרסה = Release אוטומטי). לא לדחוף ל-main. לא לפרסם לחנות.
+- grep+sed במקום קריאת קבצים שלמים; בלי סוכנים.
+- קומפילציה: ראו KNOWLEDGE.md. אם התקנת .NET חסומה — לסמן "טרם קומפל" ב-ROADMAP.
+- CSS רק עם טוקנים ו-em; כל timeoutMs ל-fetchStream ≤ 120000.
+- בסוף: לעדכן ROADMAP (מה בוצע/נשאר), לדחוף ל-next, וסיכום של 3 שורות.
 ```

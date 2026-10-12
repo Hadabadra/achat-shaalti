@@ -7,7 +7,7 @@ namespace OtzariaBridge;
 
 public static class Program
 {
-    public const string Version = "3.2.1";
+    public const string Version = "3.4.0";
     public static int Port { get; set; }
 
     [DllImport("kernel32.dll")] private static extern bool AttachConsole(int pid);
@@ -65,6 +65,7 @@ public static class Program
             Application.SetCompatibleTextRenderingDefault(false);
 
             Tray.Init();
+            Outbox.Init();
             Port = Server.Start();
             Kiosk.RestoreOnStartup();
             HardLock.StartSync();
@@ -75,6 +76,7 @@ public static class Program
         catch (Exception ex)
         {
             Config.Log("fatal: " + ex);
+            Outbox.Add("fatal", ex.ToString());
             // קריסה בעלייה לא משאירה מסך שחור: אם אין נעילה פעילה, מחזירים את שולחן העבודה
             try { if (!Kiosk.IsActive) Kiosk.BootGuard(); } catch { }
             return 1;
@@ -180,10 +182,20 @@ public static class Config
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
         };
         using var p = Process.Start(psi);
-        string output = p.StandardOutput.ReadToEnd();
-        p.WaitForExit(timeoutMs);
-        return output;
+        if (p == null) return "";
+        // קוראים את שני הזרמים במקביל (async). אחרת, אם הילד ממלא את ה-buffer של stderr (שלא נקרא),
+        // הוא נחסם, לא סוגר את stdout, ו-ReadToEnd נתקע לנצח — לפני ש-WaitForExit בכלל רץ, כך שה-timeout
+        // לא עוזר. בנוסף: הריגה בפועל בטיים-אאוט, לא רק Dispose.
+        var outTask = p.StandardOutput.ReadToEndAsync();
+        var errTask = p.StandardError.ReadToEndAsync();
+        if (!p.WaitForExit(timeoutMs))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+        }
+        try { Task.WaitAll(new Task[] { outTask, errTask }, 3000); } catch { }
+        return outTask.Status == TaskStatus.RanToCompletion ? (outTask.Result ?? "") : "";
     }
 }

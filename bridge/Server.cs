@@ -106,6 +106,10 @@ public static class Server
             string origin = req.Headers.Origin.ToString();
             if (origin.Length > 0 && origin != "null")
                 throw BridgeException.Forbidden("מקור הבקשה אינו מורשה");
+            // הגנה מ-DNS rebinding: רק פנייה לכתובת הלוקאלית עצמה
+            string host = req.Host.Host;
+            if (!(host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1"))
+                throw BridgeException.Forbidden("כתובת היעד אינה מורשית");
             if (req.Headers["X-Otzaria-Bridge"].ToString() != "1")
                 throw BridgeException.Forbidden("חסרה הכותרת X-Otzaria-Bridge");
 
@@ -130,6 +134,17 @@ public static class Server
             if (!HttpMethods.IsPost(req.Method))
                 throw new BridgeException("bad_request", "יש להשתמש ב-POST", 405);
 
+            // ביקורת #30 ממצא 7: בודקים טוקן לפני קריאת הגוף; לבקשת צימוד (בלי טוקן) הגוף מוגבל ל-16KB
+            bool pairReq = path.Equals("/pair/request", StringComparison.OrdinalIgnoreCase);
+            if (!pairReq && !Pairing.IsValid(req.Headers[Pairing.TokenHeader].ToString()))
+                throw new BridgeException("unpaired", "התוסף אינו מצומד לגשר. יש לאשר את החיבור בחלון שנפתח במחשב", 401);
+            if (pairReq)
+            {
+                var sizeFeature = ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+                if (sizeFeature != null && !sizeFeature.IsReadOnly) sizeFeature.MaxRequestBodySize = 16 * 1024;
+                if (req.ContentLength > 16 * 1024) throw BridgeException.BadRequest("בקשה גדולה מדי");
+            }
+
             using var doc = await ReadBody(req);
             var body = doc.RootElement;
 
@@ -139,9 +154,6 @@ public static class Server
                 await WriteOk(ctx, await Pairing.Request(body));
                 return;
             }
-            if (!Pairing.IsValid(req.Headers[Pairing.TokenHeader].ToString()))
-                throw new BridgeException("unpaired", "התוסף אינו מצומד לגשר. יש לאשר את החיבור בחלון שנפתח במחשב", 401);
-
             if (path.Equals("/fs/search", StringComparison.OrdinalIgnoreCase))
             {
                 await FsApi.Search(ctx, body);
@@ -162,7 +174,7 @@ public static class Server
         {
             if (ctx.Response.HasStarted) return;
             var (code, status, message) = Map(ex);
-            if (code == "internal") Config.Log(req.Path + ": " + ex);
+            if (code == "internal") { Config.Log(req.Path + ": " + ex); Outbox.Add("api-error", req.Path + "\n" + ex); }
             ctx.Response.StatusCode = status;
             ctx.Response.ContentType = "application/json; charset=utf-8";
             await ctx.Response.WriteAsync(JsonSerializer.Serialize(

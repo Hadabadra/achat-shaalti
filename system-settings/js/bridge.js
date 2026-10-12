@@ -164,7 +164,7 @@
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
       allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, clock: true, clockPosition: 'bottom-left',
-      restScreen: true, fullscreenOtzaria: true,
+      restScreen: true, restIdleMinutes: 0, zmanimLocation: '', fullscreenOtzaria: true,
       openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer'],
       allSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth', 'airplane', 'usb']
     },
@@ -262,7 +262,7 @@
     },
     '/kiosk/status': function () { return Object.assign(clone(M.kiosk), { hard: clone(M.hard) }); },
     '/kiosk/set-password': function (b) {
-      if (!b.newPassword || b.newPassword.length < 4) throw mockErr('bad_request', 'הסיסמה חייבת להכיל לפחות 4 תווים');
+      if (!b.newPassword || b.newPassword.length < 6) throw mockErr('bad_request', 'הסיסמה חייבת להכיל לפחות 6 תווים');
       if (M.kiosk.hasPassword) {
         checkPw(b.oldPassword, false);
         M.password = b.newPassword;
@@ -295,6 +295,8 @@
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
       ['readOnly', 'clock', 'restScreen', 'fullscreenOtzaria'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
+      if (typeof b.restIdleMinutes === 'number') M.kiosk.restIdleMinutes = Math.max(0, Math.min(240, b.restIdleMinutes | 0));
+      if (typeof b.zmanimLocation === 'string') M.kiosk.zmanimLocation = b.zmanimLocation;
       if (b.clockPosition) M.kiosk.clockPosition = b.clockPosition;
       if (Array.isArray(b.openSections)) M.kiosk.openSections = b.openSections.slice();
       return clone(M.kiosk);
@@ -437,7 +439,7 @@
     async probe() {
       await delay(250);
       if (/[?&]offline=1/.test(location.search)) return null;
-      return { name: 'otzaria-bridge', version: '3.2.1', port: 47917, auth: 'token', paired: true, kioskActive: M.kiosk.active, platform: 'windows' };
+      return { name: 'otzaria-bridge', version: '3.4.0', port: 47917, auth: 'token', paired: true, kioskActive: M.kiosk.active, platform: 'windows' };
     },
     async call(path, body) {
       await delay(180);

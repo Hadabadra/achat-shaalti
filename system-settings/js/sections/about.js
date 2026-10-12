@@ -89,7 +89,16 @@
         '<dt>גרסת הגשר</dt><dd dir="ltr">' + ui.esc(h.version) + '</dd>' +
         '<dt>פורט</dt><dd dir="ltr">127.0.0.1:' + ui.esc(h.port || SS.bridge.port) + '</dd>' +
         '<dt>מערכת</dt><dd dir="ltr">' + ui.esc(h.platform || '') + '</dd>' +
-        '<dt>מצב נעילה</dt><dd>' + (h.kioskActive ? 'פעיל' : 'לא פעיל') + '</dd></dl>';
+        '<dt>מצב נעילה</dt><dd>' + (h.kioskActive ? 'פעיל' : 'לא פעיל') + '</dd></dl>' +
+        '<div class="setting-row"><div class="setting-text"><b>שליחת תקלות אוטומטית</b><span class="muted">קריסות ושגיאות של הגשר נשלחות למפתחת דרך מערכת הדיווח של אוצריא, בלי סיסמאות. בלי חיבור – יישלחו כשיחזור.</span></div>' + ui.switchHtml('ss-autoreport', true, 'שליחת תקלות אוטומטית') + '</div>';
+      var sw = slot.querySelector('#ss-autoreport');
+      SS.bridge.call('/diag/pending', {}, { timeoutMs: 15000 }).then(function (p) { if (p) ui.setSwitch(sw, p.enabled !== false); }).catch(function () { /* גשר ישן */ });
+      sw.addEventListener('click', function () {
+        var on = sw.getAttribute('aria-checked') !== 'true';
+        SS.bridge.call('/diag/ack', { ids: [], enabled: on }, { timeoutMs: 15000 })
+          .then(function (x) { ui.setSwitch(sw, !!(x && x.enabled)); })
+          .catch(function () { ui.toast('נדרש גשר בגרסה חדשה יותר', 'info'); });
+      });
       checkUpdate(body.querySelector('[data-slot=update]'), true);
     }
   });

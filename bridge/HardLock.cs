@@ -299,12 +299,23 @@ public static class HardLock
     /// <summary>התיקייה: SYSTEM ומנהלים — שליטה מלאה; משתמשים — קריאה בלבד</summary>
     private static void SecureDir(string dir)
     {
+        // תיקייה שנוצרה מראש בידי משתמש רגיל (הוא נשאר הבעלים ויכול לשנות הרשאות) — מוחקים ויוצרים מחדש
+        try
+        {
+            var owner = new DirectoryInfo(dir).GetAccessControl().GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
+            if (owner != null && !owner.IsWellKnown(WellKnownSidType.LocalSystemSid) && !owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid))
+            {
+                Directory.Delete(dir, true);
+                Directory.CreateDirectory(dir);
+            }
+        }
+        catch (Exception ex) { SvcLog("secure-dir owner: " + ex.Message); }
         var ds = new DirectorySecurity();
+        ds.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
         ds.SetAccessRuleProtection(true, false);
         var inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
         ds.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
         ds.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
-        ds.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null), FileSystemRights.ReadAndExecute, inherit, PropagationFlags.None, AccessControlType.Allow));
         new DirectoryInfo(dir).SetAccessControl(ds);
     }
 
@@ -432,20 +443,64 @@ public class HardLockService : ServiceBase
                 ps.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null), PipeAccessRights.ReadWrite, AccessControlType.Allow));
                 ps.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
                 ps.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
-                using var pipe = NamedPipeServerStreamAcl.Create(HardLock.PipeName, PipeDirection.InOut, 8,
+                var pipe = NamedPipeServerStreamAcl.Create(HardLock.PipeName, PipeDirection.InOut, 8,
                     PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 4096, 4096, ps);
-                await pipe.WaitForConnectionAsync(ct);
-                var r = new StreamReader(pipe, Encoding.UTF8);
-                var w = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
-                var lineTask = r.ReadLineAsync(ct).AsTask();
-                if (await Task.WhenAny(lineTask, Task.Delay(5000, ct)) != lineTask) continue;
-                JsonObject res;
-                try { res = Handle(JsonNode.Parse(lineTask.Result ?? "{}") as JsonObject ?? new JsonObject()); }
-                catch (Exception ex) { res = Err("internal", ex.Message); HardLock.SvcLog("pipe: " + ex); }
-                await w.WriteLineAsync(res.ToJsonString());
+                try { await pipe.WaitForConnectionAsync(ct); }
+                catch { pipe.Dispose(); throw; }
+                // ביקורת #30 ממצא 5: כל חיבור מטופל בנפרד, עם מגבלת אורך ודדליין, כך שלקוח תקוע
+                // לא חוסם את הבאים אחריו (ולא דוחף את הגשר ל-fallback של config.json)
+                _ = Task.Run(() => ServeOne(pipe, ct));
             }
             catch (OperationCanceledException) { return; }
             catch (Exception ex) { HardLock.SvcLog("pipe loop: " + ex.Message); await Task.Delay(1000); }
+        }
+    }
+
+    private const int PipeMaxLine = 64 * 1024;
+    [ThreadStatic] private static bool _clientAdmin;
+
+    private async Task ServeOne(NamedPipeServerStream pipe, CancellationToken ct)
+    {
+        using (pipe)
+        using (var cts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+        {
+            cts.CancelAfter(5000);
+            try
+            {
+                var buf = new byte[4096];
+                var line = new MemoryStream();
+                bool done = false;
+                while (!done)
+                {
+                    int n = await pipe.ReadAsync(buf, 0, buf.Length, cts.Token);
+                    if (n <= 0) break;
+                    int nl = Array.IndexOf(buf, (byte)'\n', 0, n);
+                    line.Write(buf, 0, nl < 0 ? n : nl);
+                    if (line.Length > PipeMaxLine) { HardLock.SvcLog("pipe: line too long"); return; }
+                    done = nl >= 0;
+                }
+                if (!done && line.Length == 0) return;
+                string text = Encoding.UTF8.GetString(line.ToArray()).TrimEnd('\r');
+                bool admin = false;
+                try
+                {
+                    pipe.RunAsClient(() =>
+                    {
+                        using var id = WindowsIdentity.GetCurrent();
+                        admin = new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);
+                    });
+                }
+                catch { admin = false; }
+                _clientAdmin = admin;
+                JsonObject res;
+                try { res = Handle(JsonNode.Parse(text.Length == 0 ? "{}" : text) as JsonObject ?? new JsonObject()); }
+                catch (Exception ex) { res = Err("internal", ex.Message); HardLock.SvcLog("pipe: " + ex); }
+                byte[] outb = new UTF8Encoding(false).GetBytes(res.ToJsonString() + "\n");
+                await pipe.WriteAsync(outb, 0, outb.Length, cts.Token);
+                await pipe.FlushAsync(cts.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { HardLock.SvcLog("pipe conn: " + ex.Message); }
         }
     }
 
@@ -468,6 +523,8 @@ public class HardLockService : ServiceBase
 
                 case "setup":
                     if (Configured) return Err("bad_request", "כבר הוגדר");
+                    // ביקורת #30 ממצא 2: רק מנהל (תהליך מורם) רשאי להגדיר לראשונה
+                    if (!_clientAdmin) return Err("forbidden", "הגדרה ראשונה דורשת הרשאות מנהל");
                     foreach (var k in new[] { "passwordHash", "salt", "recoveryHash", "recoverySalt" })
                     {
                         string v = q[k]?.ToString();
@@ -502,7 +559,7 @@ public class HardLockService : ServiceBase
                 case "set-password":
                     if ((e = Check(q["old"]?.ToString(), true)) != null) return e;
                     string np = q["new"]?.ToString() ?? "";
-                    if (np.Length < 4) return Err("bad_request", "הסיסמה חייבת להכיל לפחות 4 תווים");
+                    if (np.Length < 6) return Err("bad_request", "הסיסמה חייבת להכיל לפחות 6 תווים");
                     byte[] salt = RandomNumberGenerator.GetBytes(16);
                     _state["salt"] = Convert.ToBase64String(salt);
                     _state["passwordHash"] = Hash(np, salt);
@@ -539,10 +596,10 @@ public class HardLockService : ServiceBase
         if (Interlocked.Exchange(ref _tickBusy, 1) == 1) return;
         try
         {
-            bool active;
-            lock (_gate) active = Active;
+            bool active, blockUsb;
+            lock (_gate) { active = Active; blockUsb = _state["blockUsbStorage"]?.GetValue<bool>() == true; }
             EnforcePolicies(active);
-            EnforceUsb(active && _state["blockUsbStorage"]?.GetValue<bool>() == true);
+            EnforceUsb(active && blockUsb);
             if (active) EnsureBridgeInSessions();
         }
         catch (Exception ex) { HardLock.SvcLog("tick: " + ex.Message); }
@@ -552,7 +609,9 @@ public class HardLockService : ServiceBase
     /// <summary>מדיניות בכל חשבון מחובר (HKEY_USERS\SID): מנהל המשימות ועורך הרישום חסומים; מוחזרת אם נמחקה</summary>
     private void EnforcePolicies(bool active)
     {
-        var touched = (_state["touched"] as JsonArray)?.Select(x => x?.ToString()).Where(x => x != null).ToHashSet()
+        HashSet<string> touched;
+        lock (_gate)
+            touched = (_state["touched"] as JsonArray)?.Select(x => x?.ToString()).Where(x => x != null).ToHashSet()
                       ?? new HashSet<string>();
         bool changed = false;
         foreach (string sid in Registry.Users.GetSubKeyNames().Where(n => UserSid.IsMatch(n)))
@@ -593,6 +652,13 @@ public class HardLockService : ServiceBase
         {
             using var k = Registry.LocalMachine.OpenSubKey(UsbStorKey, true);
             if (k == null) return;
+            bool hasOriginal;
+            int orig;
+            lock (_gate)
+            {
+                hasOriginal = _state["usbOriginal"] != null;
+                orig = hasOriginal ? _state["usbOriginal"].GetValue<int>() : 3;
+            }
             int cur = k.GetValue("Start") is int v ? v : 3;
             if (block && cur != 4)
             {
@@ -600,9 +666,8 @@ public class HardLockService : ServiceBase
                 k.SetValue("Start", 4, RegistryValueKind.DWord);
                 HardLock.SvcLog("service: אחסון USB נחסם");
             }
-            else if (!block && _state["usbOriginal"] != null)
+            else if (!block && hasOriginal)
             {
-                int orig = _state["usbOriginal"].GetValue<int>();
                 k.SetValue("Start", orig == 4 ? 3 : orig, RegistryValueKind.DWord);
                 lock (_gate) { _state.Remove("usbOriginal"); Save(); }
                 HardLock.SvcLog("service: אחסון USB שוחרר");

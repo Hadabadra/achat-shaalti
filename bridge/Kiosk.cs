@@ -169,6 +169,14 @@ public static class Kiosk
     /// <summary>אימות סיסמה לשימוש מודולים אחרים (בלי קוד שחזור)</summary>
     internal static void RequirePassword(string password) => Verify(password, allowRecovery: false);
 
+    [StructLayout(LayoutKind.Sequential)] private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO lii);
+    private static long IdleMs()
+    {
+        var lii = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+        return GetLastInputInfo(ref lii) ? unchecked((uint)Environment.TickCount - lii.dwTime) : 0;
+    }
+
     [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
     [DllImport("user32.dll")] private static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] private static extern bool BringWindowToTop(IntPtr hWnd);
@@ -233,6 +241,8 @@ public static class Kiosk
         clock = Config.Get("kiosk.clock", true),
         clockPosition = Config.Get("kiosk.clockPosition", "bottom-left"),
         restScreen = Config.Get("kiosk.restScreen", true),
+        restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 0),
+        zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
         fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
         sideBar = Config.Get("kiosk.sideBar", true),
         resetOnShutdown = Config.Get("kiosk.resetOnShutdown", false),
@@ -250,9 +260,9 @@ public static class Kiosk
         string otz = OtzariaPath();
         if (string.IsNullOrEmpty(otz) || !File.Exists(otz))
         {
-            // בלי אוצריא בחשבון הזה לא נועלים (אחרת לא היה נשאר שום ממשק) — רק מתעדים
-            LogThrottled("noOtz", "hardlock: נעילה מוקשחת פעילה, אבל אוצריא לא נמצאה בחשבון הזה — הנעילה לא הוחלה", 300);
-            return;
+            // ביקורת #30 ממצא 4: לא נכשלים פתוח. הנעילה מוחלת גם בלי אוצריא; מסך המנוחה מוצג
+            // עם הודעה, והיציאה היא בסיסמה או בקוד השחזור (Ctrl+Alt+Shift+F12) כרגיל.
+            LogThrottled("noOtz", "hardlock: אוצריא לא נמצאה בחשבון הזה — הנעילה מוחלת בכל זאת", 300);
         }
         Config.Log("hardlock: הנעילה הוחלה לפי רכיב ההקשחה");
         Config.Set("kiosk.active", true);
@@ -271,12 +281,17 @@ public static class Kiosk
     private static object SetPassword(JsonElement b)
     {
         string newPassword = b.Str("newPassword") ?? "";
-        if (newPassword.Length < 4) throw BridgeException.BadRequest("הסיסמה חייבת להכיל לפחות 4 תווים");
+        if (newPassword.Length < 6) throw BridgeException.BadRequest("הסיסמה חייבת להכיל לפחות 6 תווים");
         string recovery = null;
-        if (HasPassword) Verify(b.Str("oldPassword"), allowRecovery: true);
-        if (HasPassword && HardLock.Available) HardLock.SetPassword(b.Str("oldPassword"), newPassword);
+        if (HasPassword)
+        {
+            // שינוי סיסמה קיימת: אימות הישנה, וסנכרון לרכיב ההקשחה אם מותקן. קוד השחזור הקיים נשמר
+            Verify(b.Str("oldPassword"), allowRecovery: true);
+            if (HardLock.Available) HardLock.SetPassword(b.Str("oldPassword"), newPassword);
+        }
         else
         {
+            // הגדרה ראשונה: יוצרים קוד שחזור חד-פעמי
             recovery = NewRecoveryCode();
             StoreSecret(recovery, "kiosk.recoveryHash", "kiosk.recoverySalt");
         }
@@ -331,6 +346,13 @@ public static class Kiosk
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
         foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "resetOnShutdown" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
+        if (b.Has("restIdleMinutes")) Config.Set("kiosk.restIdleMinutes", (int)Math.Clamp(b.Long("restIdleMinutes", 0), 0, 240));
+        if (b.Has("zmanimLocation"))
+        {
+            string loc = (b.Str("zmanimLocation") ?? "").Trim();
+            if (loc.Length > 0 && Zmanim.ParseLocation(loc) == null) throw BridgeException.BadRequest("מיקום לא תקין: יש להקליד קו רוחב, קו אורך (למשל 31.78, 35.22)");
+            Config.Set("kiosk.zmanimLocation", loc);
+        }
         string cp = b.Str("clockPosition");
         if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right") Config.Set("kiosk.clockPosition", cp);
         if (b.Has("openSections"))
@@ -738,6 +760,7 @@ public static class Kiosk
             {
                 if (!string.IsNullOrEmpty(path) && File.Exists(path))
                     Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) });
+                else if (!Overlay.RestVisible) Overlay.ShowRest(IntPtr.Zero, idle: true); // אין אוצריא: מסך סגור עם הודעה
                 return;
             }
 
@@ -746,6 +769,10 @@ public static class Kiosk
 
             // אוצריא תמיד ממוקסמת: בלי מזעור, בלי חלון קטן, ובלי חור במקום שורת המשימות
             // אוצריא ממוזערת: מסך מנוחה עם סמל אוצריא, שעה ותאריך, במקום החזרה מיידית
+            // שומר מסך אחרי זמן ללא פעילות (0 = כבוי), גם כשאוצריא פתוחה
+            int idleMin = Config.Get("kiosk.restIdleMinutes", 0);
+            if (idleMin > 0 && !Overlay.RestVisible && IdleMs() >= idleMin * 60000L) { Overlay.ShowRest(hwnd, idle: true); return; }
+            if (Overlay.RestIdle) return;
             if (IsIconic(hwnd))
             {
                 if (Config.Get("kiosk.restScreen", true)) { Overlay.ShowRest(hwnd); return; }
