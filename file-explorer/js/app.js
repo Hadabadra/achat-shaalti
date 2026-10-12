@@ -60,7 +60,7 @@
     try { console.warn('openUrl failed', lastErr); } catch (e) { /* אין קונסול */ }
     /* גיבוי: מעתיקים את הקישור ללוח, כדי שאפשר להדביק אותו בדפדפן */
     var ok = await copyText(url);
-    ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + url, 'error');
+    ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + ui.isolateLtr(url), 'error');
   }
   async function copyText(text) {
     try {
@@ -100,7 +100,7 @@
     $('fx-dl').addEventListener('click', function () { openUrl(FX.BRIDGE_URL); });
     $('fx-copy-link').addEventListener('click', async function () {
       var ok = await copyText(FX.BRIDGE_URL);
-      ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + FX.BRIDGE_URL, ok ? 'success' : 'error');
+      ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + ui.isolateLtr(FX.BRIDGE_URL), ok ? 'success' : 'error');
     });
     $('fx-retry').addEventListener('click', function () {
       var btn = this; btn.disabled = true;
@@ -801,7 +801,7 @@
     if (clash.length) {
       var ans = await ui.dialog({
         title: 'פריטים בשם זהה', icon: 'warning',
-        body: '<p>' + FX.formatNumber(clash.length) + ' מהפריטים כבר קיימים בתיקייה הזו (למשל <b>' + FX.esc(S.prov.nameOf(clash[0])) + '</b>). מה לעשות?</p>',
+        body: '<p>' + FX.formatNumber(clash.length) + ' מהפריטים כבר קיימים בתיקייה הזו (למשל <b>' + ui.isolateLtr(FX.esc(S.prov.nameOf(clash[0]))) + '</b>). מה לעשות?</p>',
         actions: [{ label: 'ביטול', value: false }, { label: 'דילוג', value: 'skip' }, { label: 'החלפה', value: 'overwrite' }, { label: 'שמירת שניהם', value: 'rename', kind: 'primary' }]
       });
       if (!ans) return;
@@ -879,7 +879,7 @@
   }
   async function purgeSel() {
     var sel = selected();
-    var what = sel.length === 1 ? '<b>' + FX.esc(sel[0].name) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
+    var what = sel.length === 1 ? '<b>' + ui.isolateLtr(FX.esc(sel[0].name)) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
     var ok = await ui.confirm('מחיקה לצמיתות', '<p>' + what + ' יימחקו <b>לצמיתות</b> מסל המיחזור. לא ניתן לשחזר אותם.</p>', 'מחיקה לצמיתות', 'danger');
     if (!ok) return;
     busy(true, 'מוחק…');
@@ -907,7 +907,7 @@
     var sel = selected();
     var p = S.prov;
     var perm = !!permanent || !p.caps.recycle;
-    var what = sel.length === 1 ? '<b>' + FX.esc(sel[0].name) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
+    var what = sel.length === 1 ? '<b>' + ui.isolateLtr(FX.esc(sel[0].name)) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
     var body = perm
       ? '<p>' + what + ' יימחקו <b>לצמיתות</b>. לא ניתן לשחזר אותם.</p>' + (!p.caps.recycle && p.capReasons ? '<p class="muted small">' + FX.esc(p.capReasons.recycle) + '</p>' : '')
       : '<p>' + what + ' יועברו לסל המיחזור.</p><p class="muted small">Shift+Delete מוחק לצמיתות.</p>';

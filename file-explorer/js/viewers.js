@@ -33,9 +33,13 @@
     try { if (cur.cleanup) cur.cleanup(); } catch (e) { /* כלום */ }
     cur.el.remove();
     document.removeEventListener('keydown', cur.onKey, true);
+    var prevFocus = cur.prevFocus;
     cur = null;
+    /* החזרת פוקוס לאלמנט שהיה ממוקד לפני פתיחת הצופה (למשל השורה בסייר שנפתחה) */
+    if (prevFocus && prevFocus.focus && document.contains(prevFocus)) prevFocus.focus();
   }
   function openShell(entry, opts) {
+    var prevFocus = document.activeElement;
     closeViewer();
     var ic = FX.icon;
     var el = FX.ui.el(
@@ -48,9 +52,12 @@
       '</div><div class="fx-vbody" tabindex="0">' + FX.ui.loading(FX.t('טוען…')) + '</div></div>');
     document.body.appendChild(el);
     var state = {
-      el: el, body: el.querySelector('.fx-vbody'), cleanup: null,
+      el: el, body: el.querySelector('.fx-vbody'), cleanup: null, prevFocus: prevFocus,
       onKey: function (e) {
         if (e.key === 'Escape' && !document.querySelector('#dialogs .dlg-scrim')) { e.preventDefault(); e.stopPropagation(); closeViewer(); return; }
+        /* לכידת פוקוס: Tab/Shift+Tab מסתובבים רק בתוך שכבת הצופה, לא חוזרים אל הסייר שמאחוריה.
+           כשיש דיאלוג פתוח מעל הצופה (למשל מאפיינים/אישור) — הוא זה שלוכד את הפוקוס, לא הצופה. */
+        if (!document.querySelector('#dialogs .dlg-scrim')) FX.ui.trapTab(el, e);
         if (opts.onKey) opts.onKey(e);
       }
     };

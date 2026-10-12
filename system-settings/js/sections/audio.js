@@ -21,7 +21,7 @@
     var slot = body.querySelector('[data-slot=vol]');
     var a;
     try { a = await SS.bridge.call('/sys/audio/get'); }
-    catch (e) { slot.innerHTML = ui.errorBox(e); return; }
+    catch (e) { slot.innerHTML = ui.errorBox(e, function () { loadVol(body); }); return; }
     slot.innerHTML =
       '<div class="slider-row">' +
       '<button class="icon-btn big" data-act="mute" title="השתקה">' + ui.icon(a.muted ? 'mute' : 'speaker') + '</button>' +
@@ -65,7 +65,7 @@
     var slot = body.querySelector('[data-slot=dev]');
     var d;
     try { d = await SS.bridge.call('/sys/audio/devices'); }
-    catch (e) { slot.innerHTML = ui.errorBox(e); return; }
+    catch (e) { slot.innerHTML = ui.errorBox(e, function () { loadDevices(body); }); return; }
     var list = d.devices || [];
     if (!list.length) { slot.innerHTML = '<p class="muted">לא נמצאו התקני פלט.</p>'; return; }
     slot.innerHTML = '<ul class="list">' + list.map(function (x) {

@@ -94,6 +94,9 @@
     t.innerHTML = html.trim();
     return t.content.firstElementChild;
   };
+  /* בידוד bidi: שם/נתיב/SSID באנגלית שמוטמע בתוך משפט עברי (טוסט, כותרת) לא "יסחוב" איתו את כיוון
+     התצוגה של שאר המשפט. שקול ל-<bdi dir="ltr"> אבל עובד גם בטקסט רגיל (למשל הודעת toast), לא רק ב-HTML. */
+  ui.isolateLtr = function (s) { return '⁦' + s + '⁩'; };
   ui.debounce = function (fn, ms) {
     var t = null;
     return function () {
@@ -144,6 +147,22 @@
   };
   ui.error = function (e, prefix) { ui.toast((prefix ? prefix + ': ' : '') + ui.errText(e), 'error'); };
 
+  /* ---------- לכידת פוקוס (Tab/Shift+Tab) לחלונות מודאליים: דיאלוגים וצופה הקבצים ---------- */
+  ui.focusables = function (root) {
+    return Array.prototype.filter.call(
+      root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+      function (x) { return !x.disabled && x.offsetParent !== null; }
+    );
+  };
+  ui.trapTab = function (root, e) {
+    if (e.key !== 'Tab') return;
+    var list = ui.focusables(root);
+    if (!list.length) return;
+    var i = list.indexOf(document.activeElement);
+    if (e.shiftKey) { if (i <= 0) { e.preventDefault(); list[list.length - 1].focus(); } }
+    else { if (i === list.length - 1 || i === -1) { e.preventDefault(); list[0].focus(); } }
+  };
+
   /* ---------- dialogs ---------- */
   /* options: title, body (html), icon, tone (danger|primary), actions [{label, value, kind}], fields [{name,label,type,placeholder,value}],
      onSubmit(values) -> may throw to keep dialog open (shows message), dismissible */
@@ -151,6 +170,7 @@
     return new Promise(function (resolve) {
       var host = document.getElementById('dialogs');
       Array.prototype.forEach.call(host.querySelectorAll('.dlg-scrim:not(.open)'), function (x) { x.remove(); });
+      var prevFocus = document.activeElement; /* להחזרת הפוקוס לאחר סגירת הדיאלוג */
       var fieldsHtml = (opt.fields || []).map(function (f) {
         if (f.type === 'checkbox') {
           return '<label class="check-row"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + '>' +
@@ -180,7 +200,7 @@
       var msg = d.querySelector('.dlg-msg');
       requestAnimationFrame(function () { d.classList.add('open'); });
       var first = form.querySelector('input:not([type=checkbox])');
-      setTimeout(function () { if (first) first.focus(); }, 60);
+      setTimeout(function () { if (first) first.focus(); else { var f = ui.focusables(form)[0]; if (f) f.focus(); } }, 60);
 
       function values() {
         var v = {};
@@ -195,6 +215,7 @@
         d.style.pointerEvents = 'none';
         document.removeEventListener('keydown', onKey);
         setTimeout(function () { d.remove(); }, 200);
+        if (prevFocus && prevFocus.focus && document.contains(prevFocus)) prevFocus.focus();
         resolve(result);
       }
       function setBusy(b) {
@@ -237,7 +258,10 @@
       form.querySelectorAll('button[type=button]').forEach(function (b) {
         b.addEventListener('click', function () { act(actions[+b.dataset.i]); });
       });
-      function onKey(e) { if (e.key === 'Escape' && opt.dismissible !== false) close(null); }
+      function onKey(e) {
+        if (e.key === 'Escape' && opt.dismissible !== false) { close(null); return; }
+        ui.trapTab(form, e);
+      }
       document.addEventListener('keydown', onKey);
       d.addEventListener('mousedown', function (e) { if (e.target === d && opt.dismissible !== false) close(null); });
       if (opt.onOpen) opt.onOpen(form);
@@ -255,9 +279,22 @@
   ui.loading = function (text) {
     return '<div class="loading"><div class="spinner"></div><span>' + ui.esc(text || 'טוען…') + '</span></div>';
   };
-  ui.errorBox = function (e, retryId) {
+  /* כפתור "נסה שוב": onRetry היא פונקציה שמריצה מחדש את הפעולה שנכשלה (בדרך כלל ה-load של האותו מסך).
+     נרשמת במילון פנימי ומופעלת דרך האזנה אחת (event delegation) ב-document, כדי שלא יהיה צורך
+     לצרף מאזין לכל כפתור בנפרד אחרי הזרקת ה-HTML ל-innerHTML. */
+  var retryHandlers = {};
+  var retrySeq = 0;
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-retry]');
+    if (!btn) return;
+    var fn = retryHandlers[btn.getAttribute('data-retry')];
+    if (fn) fn();
+  });
+  ui.errorBox = function (e, onRetry) {
+    var id = '';
+    if (onRetry) { id = 'r' + (++retrySeq); retryHandlers[id] = onRetry; }
     return '<div class="state-box error">' + ui.icon('warning') + '<div><b>' + ui.esc(ui.errText(e)) + '</b>' +
-      (retryId ? '<button class="btn btn-text" data-retry="' + retryId + '">' + ui.icon('refresh') + 'נסה שוב</button>' : '') + '</div></div>';
+      (onRetry ? '<button class="btn btn-text" data-retry="' + id + '">' + ui.icon('refresh') + 'נסה שוב</button>' : '') + '</div></div>';
   };
   ui.switchHtml = function (id, on, label) {
     return '<button class="switch' + (on ? ' on' : '') + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" id="' + id + '" aria-label="' + ui.esc(label || '') + '"><span class="knob"></span></button>';
