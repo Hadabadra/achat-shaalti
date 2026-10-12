@@ -136,7 +136,8 @@ public static class Kiosk
         Config.Set(hashKey, Hash(secret, salt));
     }
 
-    private static string NormalizeRecovery(string s) => (s ?? "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
+    // internal (ולא private) כדי שפרויקט הבדיקות יוכל לבדוק נורמליזציה (מקפים/רווחים/אותיות) ישירות
+    internal static string NormalizeRecovery(string s) => (s ?? "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
 
     /// <summary>בודק סיסמה או קוד שחזור, עם השהיה אחרי 5 ניסיונות שגויים</summary>
     private static void Verify(string password, bool allowRecovery)
