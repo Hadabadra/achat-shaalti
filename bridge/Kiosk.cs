@@ -201,8 +201,14 @@ public static class Kiosk
         openSections = OpenSections,
         allSections = AllSections,
         warnings = Warnings(),
+        twoFactor = TwoFactor.Enabled,
+        twoFactorAvailable = TwoFactor.Available(),
         hard = HardLock.Status(),
     };
+
+    /// <summary>האם הטקסט שהוקלד הוא קוד השחזור (פטור מאימות דו-שלבי בביטול חירום)</summary>
+    private static bool IsRecoveryCode(string s) =>
+        Matches(NormalizeRecovery(s), "kiosk.recoveryHash", "kiosk.recoverySalt");
 
     /// <summary>רכיב ההקשחה אומר "נעול" (למשל אחרי עריכת config.json או בחשבון Windows אחר) — נועלים גם כאן</summary>
     public static void ForceActivate(string servicePath)
@@ -281,8 +287,12 @@ public static class Kiosk
 
     private static object Disable(JsonElement b)
     {
-        Verify(b.Str("password"), allowRecovery: true);
-        if (HardLock.Available) HardLock.Disable(b.Str("password"));
+        string pw = b.Str("password");
+        bool viaRecovery = IsRecoveryCode(pw);
+        Verify(pw, allowRecovery: true);
+        // קוד שחזור פטור מ-2FA (ביטול חירום); סיסמה רגילה דורשת גם Windows Hello אם מופעל
+        if (!viaRecovery) TwoFactor.Require("ביטול נעילת המחשב");
+        if (HardLock.Available) HardLock.Disable(pw);
         Release();
         return new { active = false };
     }
@@ -290,6 +300,21 @@ public static class Kiosk
     private static object Settings(JsonElement b)
     {
         Verify(b.Str("password"), allowRecovery: false);
+        // שינוי הגדרות דורש Windows Hello כשהאימות הדו-שלבי כבר פעיל (הפעלה ראשונה מטופלת למטה)
+        TwoFactor.Require("שינוי הגדרות הנעילה");
+        if (b.Has("twoFactor"))
+        {
+            bool want = b.Bool("twoFactor");
+            if (want && !TwoFactor.Enabled)
+            {
+                // הפעלה ראשונה: לוודא ש-Hello זמין ושהמנהל מצליח לעבור אותו עכשיו — אחרת נעילה-עצמית
+                if (!TwoFactor.Available())
+                    throw BridgeException.BadRequest("Windows Hello אינו מוגדר במחשב הזה. הגדירו זיהוי פנים/טביעת אצבע/PIN ב-Windows ונסו שוב.");
+                if (!TwoFactor.Verify("אישור הפעלת אימות דו-שלבי"))
+                    throw new BridgeException("two_factor", "האימות נכשל — האימות הדו-שלבי לא הופעל", 401);
+            }
+            Config.Set("kiosk.twoFactor", want);
+        }
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
         foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));

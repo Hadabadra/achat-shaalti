@@ -346,7 +346,9 @@
       { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
       { name: 'rest', type: 'checkbox', label: 'מסך מנוחה כשאוצריא ממוזערת', value: st.restScreen !== false, hint: 'סמל אוצריא, שעה ותאריך במסך מלא. לחיצה בכל מקום מחזירה לאוצריא' },
       { name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' },
-      { name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' }
+      { name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' },
+      { name: 'tfa', type: 'checkbox', label: 'אימות דו-שלבי (Windows Hello)', value: !!st.twoFactor,
+        hint: (st.twoFactorAvailable ? 'ביטול הנעילה ושינוי ההגדרות ידרשו גם זיהוי פנים/טביעת אצבע/PIN, בנוסף לסיסמה. קוד השחזור ימשיך לעבוד לחירום.' : '⚠ Windows Hello אינו מוגדר במחשב הזה — הגדירו אותו ב-Windows כדי להפעיל') }
     ];
     all.forEach(function (id) {
       fields.push({ name: 'sec_' + id, type: 'checkbox', label: 'פתוח בנעילה: ' + (SECTION_NAMES[id] || id), value: open.indexOf(id) >= 0 });
@@ -367,7 +369,7 @@
       onSubmit: async function (x) {
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
-          readOnly: !!x.ro, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, clockPosition: x.pos.trim(),
+          readOnly: !!x.ro, twoFactor: !!x.tfa, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, clockPosition: x.pos.trim(),
           openSections: all.filter(function (id) { return x['sec_' + id]; })
         });
         return true;
