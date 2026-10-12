@@ -81,7 +81,6 @@ begin
     Form.ClientHeight := ScaleY(150);
   try
     Form.Caption := 'הסרת תורת אסתר';
-    Form.RightToLeft := True;
     Lbl := TNewStaticText.Create(Form);
     Lbl.Parent := Form;
     Lbl.Caption := 'הקלידו את סיסמת הנעילה (או קוד שחזור) כדי להסיר:';
