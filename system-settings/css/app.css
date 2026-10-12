@@ -477,3 +477,13 @@ select.input { appearance: auto; cursor: pointer; }
   .nav-search, .nav-group { display: none; }
   #nav-list { flex-direction: row; }
 }
+
+/* נגישות: טבעת פוקוס אחידה למקלדת (Tab) — טבעת-בתוך-טבעת, קריאה גם על רקעים כהים */
+.btn:focus-visible,
+.nav-item:focus-visible,
+.topbar-btn:focus-visible,
+.icon-btn:focus-visible,
+.power-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0.1875em var(--color-surface), 0 0 0 0.3125em var(--color-primary);
+}
