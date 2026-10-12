@@ -32,7 +32,7 @@
 ### שלב 1 — הגשר (סשן 1)  ✅
 קבצים: `bridge/OtzariaBridge.csproj`, `bridge/Program.cs`, `bridge/Server.cs` (Kestrel + middleware כותרות/Origin + מעטפת תשובה), `bridge/FsApi.cs`, `bridge/SysApi.cs`, `bridge/Kiosk.cs`, `bridge/Installer.cs`, `bridge/Tray.cs`, `.github/workflows/bridge.yml` (בענף הזה בלבד, `windows-latest`, `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true`, העלאת artifact + Release עם תג `bridge-v*`).
 - לקרוא מהחוזה רק את הטבלה של הקבוצה שכותבים כרגע (`grep -n '^## '` ואז `sed`).
-- **התקנה (`--install`)**: מעתיק את עצמו ל-`%LOCALAPPDATA%\OtzariaBridge`, HKCU Run, **קיצור דרך בשולחן העבודה** "גשר אוצריא" (WScript.Shell דרך COM), ומתקין את שני התוספים ששמורים כמשאבים מוטמעים (`.otzplugin` שנארזים ב-CI מ-`system-settings/` ו-`file-explorer/`) — ראו שאלה פתוחה 2.
+- **התקנה (`--install`)**: מעתיק את עצמו ל-`%LOCALAPPDATA%\OtzariaBridge`, HKCU Run, **קיצור דרך בשולחן העבודה** "תוכנת חסימת אוצריא" (WScript.Shell דרך COM), ומתקין את שני התוספים ששמורים כמשאבים מוטמעים (`.otzplugin` שנארזים ב-CI מ-`system-settings/` ו-`file-explorer/`) — ראו שאלה פתוחה 2.
 - מערכת (`/sys/*`): שמע דרך Core Audio COM, בהירות WMI, Wi-Fi דרך `netsh wlan`, רדיו/בלוטות׳ דרך `Windows.Devices.Radios` (TFM `net8.0-windows10.0.19041.0`). מה שלא נתמך מחזיר `unsupported`.
 - נעילה קפדנית (החלפת Shell): **כבויה כברירת מחדל**, מאחורי הגדרה מפורשת.
 - הערכה: פלט ~25–35K, + סבב/שניים של CI ~10–15K.

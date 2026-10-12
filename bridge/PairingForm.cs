@@ -30,7 +30,7 @@ internal sealed class PairingForm : Form
 
     private PairingForm()
     {
-        Text = Lang.T("צימוד תוספים — תורת אסתר", "Plugin pairing — Torat Esther");
+        Text = Lang.T("צימוד תוספים — " + Program.AppName, "Plugin pairing — " + Program.AppNameEn);
         try { Icon = Overlay.AppIcon(); } catch { }
         RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
         RightToLeftLayout = !Lang.En;

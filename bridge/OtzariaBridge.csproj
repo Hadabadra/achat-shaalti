@@ -11,9 +11,9 @@
     <AssemblyName>OtzariaBridge</AssemblyName>
     <RootNamespace>OtzariaBridge</RootNamespace>
     <Version>3.4.0</Version>
-    <Product>תורת אסתר</Product>
-    <AssemblyTitle>תורת אסתר — גשר אוצריא</AssemblyTitle>
-    <Company>תורת אסתר</Company>
+    <Product>תוכנת חסימת אוצריא</Product>
+    <AssemblyTitle>תוכנת חסימת אוצריא - גמח תורת אסתר</AssemblyTitle>
+    <Company>גמח תורת אסתר</Company>
     <ApplicationIcon>..\assets\icon.ico</ApplicationIcon>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>

@@ -222,7 +222,7 @@ internal sealed class ChangelogForm : Form
 
     private ChangelogForm()
     {
-        Text = Lang.T("יומן שינויים — תורת אסתר", "Changelog — Torat Esther");
+        Text = Lang.T("יומן שינויים — " + Program.AppName, "Changelog — " + Program.AppNameEn);
         Icon = Overlay.AppIcon();
         RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
         RightToLeftLayout = !Lang.En;
