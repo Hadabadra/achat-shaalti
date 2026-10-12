@@ -16,6 +16,18 @@ on:
       - "tools/screens/**"
       - "CHANGELOG.md"
       - ".github/workflows/build.yml"
+  # בדיקת בנייה בלבד ל-PR-ים (ל-main ול-next): בלי שחרור/פרסום, שתלויים ב-github.ref == refs/heads/main
+  # שלעולם אינו מתקיים באירוע pull_request (שם ה-ref הוא refs/pull/<n>/merge).
+  pull_request:
+    branches: ["main", "next"]
+    paths:
+      - "bridge/**"
+      - "system-settings/**"
+      - "file-explorer/**"
+      - "system-settings-screenshots/**"
+      - "tools/screens/**"
+      - "CHANGELOG.md"
+      - ".github/workflows/build.yml"
   workflow_dispatch:
     inputs:
       store:
