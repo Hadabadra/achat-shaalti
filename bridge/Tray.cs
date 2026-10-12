@@ -51,6 +51,23 @@ public static class Tray
             }
             catch { }
         });
+        // בדיקה (מוזזת מבדיקת העדכון, כדי לא להתנגש בבועה) שעותק רכיב ההקשחה המותקן תואם לגרסת הגשר.
+        // אחרי עדכון עצמי הגשר מתעדכן, אבל עותק השירות ב-Program Files לא — צריך עדכון ידני (עם סיסמה)
+        // דרך "הגדרות מערכת → נעילה" (לא ניגשים לשירות אוטומטית בלי הסיסמה — זו גבול האבטחה שלו).
+        Task.Delay(TimeSpan.FromMinutes(2)).ContinueWith(_ =>
+        {
+            try
+            {
+                if (!HardLock.ServiceInstalled()) return;
+                var st = (dynamic)HardLock.Status(fresh: true);
+                if (st.needsUpdate == true)
+                    Invoke(() => _icon.ShowBalloonTip(8000, Lang.T("תורת אסתר", "Torat Esther"),
+                        Lang.T("רכיב ההקשחה בגרסה ישנה מהגשר. עדכנו ב\"הגדרות מערכת → נעילה\" (נדרשת סיסמת הנעילה).",
+                               "The hardening component is on an older version than the bridge. Update it in “System Settings → Lock” (lock password required)."),
+                        ToolTipIcon.Warning));
+            }
+            catch { }
+        });
         Application.ApplicationExit += (_, _) =>
         {
             _icon.Visible = false;
