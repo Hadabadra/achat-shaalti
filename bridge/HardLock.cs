@@ -291,8 +291,12 @@ public static class HardLock
         }, password));
 
     /// <summary>דילוג על הנעילה המתוזמנת הקרובה עד הזמן הנתון (מ"ביטול הנעילה" באזהרה) — בלי 2FA, זו פעולת חירום מהבאנר</summary>
+    /// <summary>
+    /// דילוג על הנעילה המתוזמנת הקרובה עד הזמן הנתון (מ"ביטול הנעילה" באזהרה). עד 36 שעות, ולכן דורש
+    /// גם 2FA כשהוא פעיל — אחרת סיסמה לבדה הייתה יכולה לנטרל את התזמון לצמיתות (חזרה על הדילוג כל 36ש').
+    /// </summary>
     public static void Skip(string password, string untilIso) =>
-        Must(Call(new JsonObject { ["op"] = "skip", ["password"] = password ?? "", ["until"] = untilIso ?? "" }));
+        Must(CallSensitive(new JsonObject { ["op"] = "skip", ["password"] = password ?? "", ["until"] = untilIso ?? "" }, password));
 
     /// <summary>קוד שחזור משורת הפקודה: מבטל גם בשירות (פטור מ-2FA — ביטול חירום)</summary>
     public static bool EmergencyDisable(string code)
@@ -917,6 +921,7 @@ public class HardLockService : ServiceBase
 
                 case "skip":
                     if ((e = Check(pw, false)) != null) return e;
+                    if ((e = Need2fa(q, pw)) != null) return e;
                     {
                         // ריק = ניקוי הדילוג; אחרת חייב להיות תאריך תקין, לכל היותר 36 שעות קדימה
                         string until = q["until"]?.ToString() ?? "";
