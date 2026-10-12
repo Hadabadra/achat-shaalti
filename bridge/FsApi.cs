@@ -71,6 +71,48 @@ public static class FsApi
     /// <summary>אזורים מוגנים: מחיקה, העברה ושינוי שם אסורים</summary>
     internal static void EnsureNotProtected(string p)
     {
+        // ביקורת #30 ממצא 3: השוואת מחרוזות לבדה עקיפה דרך \\?\, שמות 8.3 וצמתים.
+        // בודקים גם את הנתיב כפי שנכתב וגם את הנתיב הסופי שמערכת הקבצים מחזירה.
+        if (p.StartsWith(@"\\?\") || p.StartsWith(@"\\.\") || p.StartsWith(@"\??\"))
+            throw BridgeException.Forbidden("נתיב מסוג התקן אינו נתמך");
+        EnsureNotProtectedCore(p);
+        string canon = CanonicalPath(p);
+        if (!string.Equals(canon, Path.GetFullPath(p), StringComparison.OrdinalIgnoreCase)) EnsureNotProtectedCore(canon);
+    }
+
+    /// <summary>הנתיב הסופי (שמות ארוכים, צמתים וקישורים מפוענחים) של הנתיב או של ההורה הקיים הקרוב</summary>
+    internal static string CanonicalPath(string p)
+    {
+        string full = Path.GetFullPath(p);
+        string probe = full, tail = "";
+        while (!string.IsNullOrEmpty(probe) && !File.Exists(probe) && !Directory.Exists(probe))
+        {
+            tail = Path.Combine(Path.GetFileName(probe), tail);
+            probe = Path.GetDirectoryName(probe);
+        }
+        if (string.IsNullOrEmpty(probe)) return full;
+        try
+        {
+            using var h = CreateFileW(probe, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero); // FILE_FLAG_BACKUP_SEMANTICS
+            if (h.IsInvalid) return full;
+            var sb = new System.Text.StringBuilder(1024);
+            uint n = GetFinalPathNameByHandleW(h, sb, (uint)sb.Capacity, 0);
+            if (n == 0 || n >= sb.Capacity) return full;
+            string r = sb.ToString();
+            if (r.StartsWith(@"\\?\UNC\")) r = @"\\" + r.Substring(8);
+            else if (r.StartsWith(@"\\?\")) r = r.Substring(4);
+            return tail.Length == 0 ? r : Path.Combine(r, tail.TrimEnd('\\'));
+        }
+        catch { return full; }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr sa, uint disp, uint flags, IntPtr tmpl);
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetFinalPathNameByHandleW(Microsoft.Win32.SafeHandles.SafeFileHandle h, System.Text.StringBuilder buf, uint len, uint flags);
+
+    private static void EnsureNotProtectedCore(string p)
+    {
         string full = Path.GetFullPath(p).TrimEnd('\\');
         string root = Path.GetPathRoot(full)?.TrimEnd('\\') ?? "";
         if (full.Length == 0 || full.Equals(root, StringComparison.OrdinalIgnoreCase))
