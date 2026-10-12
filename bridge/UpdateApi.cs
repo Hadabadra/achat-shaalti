@@ -134,14 +134,27 @@ public static class UpdateApi
         catch (Exception ex) { throw new BridgeException("internal", "ההורדה נכשלה: " + ex.Message, 502); }
 
         string hash = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
-        if (info.SumsUrl != null)
-        {
-            string sums = await Http.GetStringAsync(info.SumsUrl);
-            var m = Regex.Match(sums, @"([0-9a-fA-F]{64})\s+\*?OtzariaBridge\.exe", RegexOptions.IgnoreCase);
-            if (m.Success && !string.Equals(m.Groups[1].Value, hash, StringComparison.OrdinalIgnoreCase))
-                throw new BridgeException("failed", "הקובץ שהורד אינו תואם לחתימת ה-SHA256 שבהוצאה. העדכון בוטל.", 500);
-        }
+
+        // אימות חובה (fail-closed): בלי SHA256SUMS תקין ותואם — לא מריצים דבר.
+        // קודם היה "אם יש sums ותואם"; חוסר קובץ או regex שלא תפס → ריצה בלי אימות.
+        if (info.SumsUrl == null)
+            throw new BridgeException("failed", "בהוצאה " + info.Tag + " אין SHA256SUMS.txt לאימות. העדכון בוטל.", 500);
+        string sums;
+        try { sums = await Http.GetStringAsync(info.SumsUrl); }
+        catch (Exception ex) { throw new BridgeException("internal", "הורדת קובץ האימות נכשלה: " + ex.Message, 502); }
+        var m = Regex.Match(sums, @"([0-9a-fA-F]{64})\s+\*?OtzariaBridge\.exe", RegexOptions.IgnoreCase);
+        if (!m.Success)
+            throw new BridgeException("failed", "קובץ האימות של ההוצאה אינו בפורמט צפוי. העדכון בוטל.", 500);
+        if (!string.Equals(m.Groups[1].Value, hash, StringComparison.OrdinalIgnoreCase))
+            throw new BridgeException("failed", "הקובץ שהורד אינו תואם לחתימת ה-SHA256 שבהוצאה. העדכון בוטל.", 500);
+
         await File.WriteAllBytesAsync(exe, data);
+
+        // מניעת TOCTOU: תיקיית הזמנית ציבורית, אז מאמתים מחדש את הקובץ שעל הדיסק רגע לפני ההרצה —
+        // כך אין חלון שבו תהליך מקומי מחליף את ה-exe בין הכתיבה להרצה.
+        string onDisk = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(exe))).ToLowerInvariant();
+        if (!string.Equals(onDisk, hash, StringComparison.OrdinalIgnoreCase))
+            throw new BridgeException("failed", "הקובץ שנכתב לדיסק שונה מהמאומת. העדכון בוטל.", 500);
         Config.Log("update: " + info.Current + " -> " + info.Latest + " sha256=" + hash);
 
         // המתקין החדש סוגר את הגשר הזה, מעתיק את עצמו ומפעיל מחדש
