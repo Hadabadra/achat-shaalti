@@ -13,7 +13,7 @@ namespace OtzariaBridge;
 /// </summary>
 internal sealed class SideBar : Form
 {
-    private sealed class Item { public string Name; public bool Running; public Programs.Entry Entry; }
+    private sealed class Item { public string Name; public bool Running; public Programs.Entry Entry; public Bitmap Icon; }
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 150 };
     private List<Item> _items = new();
     private bool _expanded;
@@ -51,19 +51,33 @@ internal sealed class SideBar : Form
 
     private float S => DeviceDpi / 96f;
     private int RowH => (int)(46 * S);
-    private int FullW => (int)(176 * S);
+    private bool IconsOnly => Config.Get("kiosk.sideBarIconsOnly", false);
+    private int FullW => (int)((IconsOnly ? 60 : 196) * S);
     private int StripW => (int)(12 * S);
 
     public void Rebuild()
     {
-        var list = new List<Item> { new Item { Name = Lang.T("אוצריא", "Otzaria"), Running = true } };
-        try { foreach (var e in Programs.Load()) list.Add(new Item { Name = e.Name, Entry = e }); } catch { }
+        var list = new List<Item> { new Item { Name = Lang.T("אוצריא", "Otzaria"), Running = true, Icon = IconOf(Kiosk.OtzariaPath()) } };
+        try { foreach (var e in Programs.Load()) list.Add(new Item { Name = e.Name, Entry = e, Icon = IconOf(e.Path) }); } catch { }
+        foreach (var old in _items) old.Icon?.Dispose();
         _items = list;
         if (_items.Count <= 1) { Hide(); return; }   // אין תוכנות מותרות — אין מה להציג
         Place();
         if (!Visible) Show();
         _tick.Start();
         Scan();
+    }
+
+    /// <summary>האייקון המקורי של קובץ ההפעלה (מה-exe עצמו); null אם אין קובץ או שהשליפה נכשלה</summary>
+    private static Bitmap IconOf(string path)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            using var ic = Icon.ExtractAssociatedIcon(path);
+            return ic?.ToBitmap();
+        }
+        catch (Exception ex) { Config.Log("sidebar icon: " + ex.Message); return null; }
     }
 
     private void Place()
@@ -142,16 +156,42 @@ internal sealed class SideBar : Form
             var row = new Rectangle((int)(6 * S), (int)(8 * S) + i * RowH, r.Width - (int)(12 * S), RowH - (int)(4 * S));
             if (i == _hover)
                 using (var hb = new SolidBrush(Color.FromArgb(70, 100, 150, 220))) g.FillRectangle(hb, row);
-            var dot = new Rectangle(row.Left + (int)(8 * S), row.Top + (row.Height - (int)(10 * S)) / 2, (int)(10 * S), (int)(10 * S));
-            using (var db = new SolidBrush(_items[i].Running ? Color.FromArgb(80, 200, 120) : Color.FromArgb(110, 120, 135))) g.FillEllipse(db, dot);
-            var tr = new RectangleF(dot.Right + 6 * S, row.Top, row.Width - dot.Width - 22 * S, row.Height);
-            g.DrawString(_items[i].Name, f, Brushes.White, tr, rtl);
+            var it = _items[i];
+            int isz = (int)(30 * S);
+            // ימין לשמאל: האייקון בצד הימני של השורה, השם משמאלו
+            var ir = IconsOnly
+                ? new Rectangle(row.Left + (row.Width - isz) / 2, row.Top + (row.Height - isz) / 2, isz, isz)
+                : new Rectangle(row.Right - isz - (int)(8 * S), row.Top + (row.Height - isz) / 2, isz, isz);
+            if (it.Icon != null)
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(it.Icon, ir);
+            }
+            else
+            {
+                // אין אייקון: עיגול עם האות הראשונה
+                using var ib = new SolidBrush(Color.FromArgb(70, 90, 120));
+                g.FillEllipse(ib, ir);
+                using var lf = new Font("Segoe UI", 12f, FontStyle.Bold, GraphicsUnit.Point);
+                var cf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                g.DrawString(string.IsNullOrEmpty(it.Name) ? "?" : it.Name.Substring(0, 1), lf, Brushes.White, ir, cf);
+            }
+            // נקודת "פתוח" קטנה בפינת האייקון
+            int ds = (int)(10 * S);
+            var dot = new Rectangle(ir.Left - ds / 3, ir.Bottom - ds + ds / 3, ds, ds);
+            using (var ring = new SolidBrush(BackColor)) g.FillEllipse(ring, Rectangle.Inflate(dot, (int)(2 * S), (int)(2 * S)));
+            using (var db = new SolidBrush(it.Running ? Color.FromArgb(80, 200, 120) : Color.FromArgb(110, 120, 135))) g.FillEllipse(db, dot);
+            if (!IconsOnly)
+            {
+                var tr = new RectangleF(row.Left + 6 * S, row.Top, ir.Left - row.Left - 14 * S, row.Height);
+                g.DrawString(it.Name, f, Brushes.White, tr, rtl);
+            }
         }
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _tick.Dispose();
+        if (disposing) { _tick.Dispose(); foreach (var it in _items) it.Icon?.Dispose(); }
         base.Dispose(disposing);
     }
 }

@@ -4,6 +4,8 @@
   var I = window.I18N;
   var t = function (s) { return I.t(s); };
   I.add({
+    'סרגל התוכנות: אייקונים בלבד': 'Programs bar: icons only',
+    'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה': 'A narrower bar without names. Off (default): icon with the program name next to it',
     'לעילוי נשמת הנערה הצדקנית': 'In loving memory of the righteous young woman',
     'אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א': 'Esther Gitta Diner, daughter of Rabbi Michael Shalom HaLevi, may he live long',
     'תהא נשמתה צרורה בצרור החיים. תנצב"ה': 'May her soul be bound up in the bond of eternal life.',

@@ -245,6 +245,7 @@ public static class Kiosk
         zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
         fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
         sideBar = Config.Get("kiosk.sideBar", true),
+        sideBarIconsOnly = Config.Get("kiosk.sideBarIconsOnly", false),
         resetOnShutdown = Config.Get("kiosk.resetOnShutdown", false),
         openSections = OpenSections,
         allSections = AllSections,
@@ -344,7 +345,7 @@ public static class Kiosk
     {
         Verify(b.Str("password"), allowRecovery: false);
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
-        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "resetOnShutdown" })
+        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restIdleMinutes")) Config.Set("kiosk.restIdleMinutes", (int)Math.Clamp(b.Long("restIdleMinutes", 0), 0, 240));
         if (b.Has("zmanimLocation"))
