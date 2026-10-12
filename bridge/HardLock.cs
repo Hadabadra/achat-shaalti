@@ -443,20 +443,52 @@ public class HardLockService : ServiceBase
                 ps.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null), PipeAccessRights.ReadWrite, AccessControlType.Allow));
                 ps.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
                 ps.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
-                using var pipe = NamedPipeServerStreamAcl.Create(HardLock.PipeName, PipeDirection.InOut, 8,
+                var pipe = NamedPipeServerStreamAcl.Create(HardLock.PipeName, PipeDirection.InOut, 8,
                     PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 4096, 4096, ps);
-                await pipe.WaitForConnectionAsync(ct);
-                var r = new StreamReader(pipe, Encoding.UTF8);
-                var w = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
-                var lineTask = r.ReadLineAsync(ct).AsTask();
-                if (await Task.WhenAny(lineTask, Task.Delay(5000, ct)) != lineTask) continue;
-                JsonObject res;
-                try { res = Handle(JsonNode.Parse(lineTask.Result ?? "{}") as JsonObject ?? new JsonObject()); }
-                catch (Exception ex) { res = Err("internal", ex.Message); HardLock.SvcLog("pipe: " + ex); }
-                await w.WriteLineAsync(res.ToJsonString());
+                try { await pipe.WaitForConnectionAsync(ct); }
+                catch { pipe.Dispose(); throw; }
+                // ביקורת #30 ממצא 5: כל חיבור מטופל בנפרד, עם מגבלת אורך ודדליין, כך שלקוח תקוע
+                // לא חוסם את הבאים אחריו (ולא דוחף את הגשר ל-fallback של config.json)
+                _ = Task.Run(() => ServeOne(pipe, ct));
             }
             catch (OperationCanceledException) { return; }
             catch (Exception ex) { HardLock.SvcLog("pipe loop: " + ex.Message); await Task.Delay(1000); }
+        }
+    }
+
+    private const int PipeMaxLine = 64 * 1024;
+
+    private async Task ServeOne(NamedPipeServerStream pipe, CancellationToken ct)
+    {
+        using (pipe)
+        using (var cts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+        {
+            cts.CancelAfter(5000);
+            try
+            {
+                var buf = new byte[4096];
+                var line = new MemoryStream();
+                bool done = false;
+                while (!done)
+                {
+                    int n = await pipe.ReadAsync(buf, 0, buf.Length, cts.Token);
+                    if (n <= 0) break;
+                    int nl = Array.IndexOf(buf, (byte)'\n', 0, n);
+                    line.Write(buf, 0, nl < 0 ? n : nl);
+                    if (line.Length > PipeMaxLine) { HardLock.SvcLog("pipe: line too long"); return; }
+                    done = nl >= 0;
+                }
+                if (!done && line.Length == 0) return;
+                string text = Encoding.UTF8.GetString(line.ToArray()).TrimEnd('\r');
+                JsonObject res;
+                try { res = Handle(JsonNode.Parse(text.Length == 0 ? "{}" : text) as JsonObject ?? new JsonObject()); }
+                catch (Exception ex) { res = Err("internal", ex.Message); HardLock.SvcLog("pipe: " + ex); }
+                byte[] outb = new UTF8Encoding(false).GetBytes(res.ToJsonString() + "\n");
+                await pipe.WriteAsync(outb, 0, outb.Length, cts.Token);
+                await pipe.FlushAsync(cts.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { HardLock.SvcLog("pipe conn: " + ex.Message); }
         }
     }
 
