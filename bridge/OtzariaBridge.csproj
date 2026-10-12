@@ -34,4 +34,9 @@
     <EmbeddedResource Include="plugins\*.otzplugin" LogicalName="plugins.%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- חושף internal (למשל Kiosk.NormalizeRecovery) לפרויקט הבדיקות בלבד -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="OtzariaBridge.Tests" />
+  </ItemGroup>
+
 </Project>
