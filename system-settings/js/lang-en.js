@@ -67,6 +67,8 @@
     'לא נתמך במחשב זה': 'Not supported on this computer',
     'הפעולה חסומה במצב נעילה': 'This action is blocked in lock mode',
     'הסיסמה שגויה': 'Wrong password',
+    'נעילה והגבלה של סייר הקבצים': 'Lock and restrict File Explorer',
+    'אפשר לנעול את סייר הקבצים בסיסמת המנהל, או להגביל אותו לתיקיות מסוימות (למשל שולחן העבודה). ההגדרה נמצאת בתוסף „סייר קבצים”: הגדרות ← נעילה והגבלה, ונאכפת בגשר.': 'You can lock File Explorer with the admin password, or restrict it to certain folders (e.g. the Desktop). The setting is in the File Explorer plugin: Settings, Lock and restrict, and it is enforced in the bridge.',
     'הפעולה אינה מותרת': 'This action is not allowed',
     'הפריט לא נמצא': 'Item not found',
     'הפריט כבר קיים': 'The item already exists',

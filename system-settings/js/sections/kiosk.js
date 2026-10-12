@@ -103,6 +103,7 @@
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
       html += programsCard(progs, found, !!st.autoTorah);
+      html += fxCard();
       html += hardCard(st.hard || {});
       html += pairCard(pairs);
       html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
@@ -388,6 +389,12 @@
       }
     });
     if (ok) { ui.toast('ההגדרות נשמרו', 'success'); load(body); }
+  }
+
+  /* מדיניות סייר הקבצים נערכת בתוסף "סייר קבצים" עצמו; כאן רק מפנים אליה */
+  function fxCard() {
+    return '<div class="card subtle"><div class="card-title">נעילה והגבלה של סייר הקבצים</div>' +
+      '<p class="muted">אפשר לנעול את סייר הקבצים בסיסמת המנהל, או להגביל אותו לתיקיות מסוימות (למשל שולחן העבודה). ההגדרה נמצאת בתוסף „סייר קבצים”: הגדרות ← נעילה והגבלה, ונאכפת בגשר.</p></div>';
   }
 
   function programsCard(progs, found, autoTorah) {

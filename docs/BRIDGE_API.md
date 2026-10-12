@@ -14,7 +14,8 @@
   חוץ מ-`GET /health`.
 - תשובה: `{ "ok": true, "data": ... }` או `{ "ok": false, "error": { "code": "...", "message": "הודעה בעברית" } }`
   עם סטטוס HTTP מתאים. קודי שגיאה: `bad_request`, `not_found`, `forbidden`, `exists`,
-  `locked` (הפעולה חסומה במצב נעילה), `wrong_password`, `unsupported`, `internal`.
+  `locked` (הפעולה חסומה במצב נעילה), `wrong_password`, `unsupported`, `internal`,
+  `fx_locked` (סייר הקבצים נעול עד הזנת סיסמה, HTTP 423) ו-`fx_outside_policy` (הנתיב מחוץ לתיקיות שהמנהל התיר, HTTP 403).
 - נתיבים: נתיבי Windows מלאים (`C:\Users\...`). מחרוזת UTF-8 רגילה.
 
 ## /health (GET)
@@ -43,6 +44,21 @@
 
 אזורים מוגנים: מחיקה/העברה/שינוי שם של `C:\Windows`, `C:\Program Files*`, `C:\ProgramData`,
 שורש כונן, ותיקיית הגשר עצמה — `forbidden`.
+
+## מדיניות סייר הקבצים — /fs/policy/*
+
+מצב `off` (ברירת מחדל), `restricted` (רק בתיקיות שנבחרו) או `locked` (נעול עד הזנת סיסמת מנהל, ואז פתוח `unlockMinutes` דקות).
+המדיניות נאכפת בגשר על **כל** נתיב ש-`/fs/*` ו-`/recycle/*` מקבלים: הנתיב מנורמל וקנוני (בלי `..`, בלי `\\?\`/התקנים/זרמי נתונים חלופיים,
+צמתים וקישורים סימבוליים ושמות 8.3 מפוענחים) ונבדק בהשוואה לא רגישה לרישיות עם גבול תיקייה. כשל בפענוח = חסום. בהעתקה/העברה/שינוי שם נבדק גם היעד.
+במצב `restricted`: `/fs/roots` מחזיר רק את התיקיות המותרות, `parent` מחוץ להן מוסתר, `/fs/reveal` ופתיחת תיקייה/קיצור דרך חסומים,
+הסל מסונן לפי המיקום המקורי ו-`/recycle/empty` חסום. תיקייה מותרת שלא קיימת מדולגת; אם לא נשארה אף אחת, המצב הוא `locked` ולא פתוח.
+
+| נתיב | גוף | data |
+|---|---|---|
+| `/fs/policy/get` | `{}` | `{ mode, effective: "open"\|"restricted"\|"locked", locked, fallback, roots, activeRoots, invalidRoots, unlockMinutes, unlockedSeconds, passwordConfigured, defaults: [{id,name,path}] }` — לא דורש סיסמה |
+| `/fs/policy/set` | `{ password, mode, roots: [path], unlockMinutes?: 15 }` | כמו get. דורש סיסמת נעילה או קוד שחזור (נעילת ניסיונות כמו שאר הנתיבים); אם אין סיסמה — `no_password` |
+| `/fs/policy/unlock` | `{ password }` | כמו get. פותח זמנית (מצב `locked`). הפתיחה בזיכרון בלבד: הפעלה מחדש של הגשר נועלת |
+| `/fs/policy/lock` | `{}` | כמו get. נועל מיד |
 
 ## סל המיחזור — /recycle/*
 

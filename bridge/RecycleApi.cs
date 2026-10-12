@@ -157,7 +157,9 @@ public static class RecycleApi
 
     private static object List()
     {
+        FxPolicy.EnsureAvailable();
         var items = LoadAll()
+            .Where(i => FxPolicy.IsPathAllowed(i.OriginalPath))   // במצב מוגבל: רק פריטים שמקורם בתיקיות המותרות
             .OrderByDescending(i => i.Deleted)
             .Select(i => new
             {
@@ -190,6 +192,7 @@ public static class RecycleApi
                 string dest = it.OriginalPath;
                 string parent = Path.GetDirectoryName(dest);
                 if (string.IsNullOrEmpty(parent)) throw BridgeException.Forbidden("אין לשחזר לשורש כונן");
+                FxPolicy.EnsurePathAllowed(dest);
                 FsApi.EnsureNotProtected(dest);
                 Directory.CreateDirectory(parent);
                 if (File.Exists(dest) || Directory.Exists(dest))
@@ -202,6 +205,7 @@ public static class RecycleApi
                 try { File.Delete(it.IPath); } catch { }
                 restored++;
             }
+            catch (BridgeException bx) when (bx.Code.StartsWith("fx_")) { throw; }
             catch (Exception ex)
             {
                 failed.Add(new { id, message = ex.Message });
@@ -219,6 +223,7 @@ public static class RecycleApi
             try
             {
                 var it = Resolve(id);
+                FxPolicy.EnsurePathAllowed(it.OriginalPath);
                 if (it.IsDir) DeleteTree(it.RPath);
                 else
                 {
@@ -228,6 +233,7 @@ public static class RecycleApi
                 File.Delete(it.IPath);
                 deleted++;
             }
+            catch (BridgeException bx) when (bx.Code.StartsWith("fx_")) { throw; }
             catch (Exception ex)
             {
                 failed.Add(new { id, message = ex.Message });
@@ -241,6 +247,8 @@ public static class RecycleApi
 
     private static object Empty()
     {
+        FxPolicy.EnsureAvailable();
+        if (FxPolicy.IsRestricted) throw FxPolicy.Outside("במצב מוגבל אי אפשר לרוקן את כל סל המיחזור");
         const uint NoConfirmation = 0x1, NoProgressUi = 0x2, NoSound = 0x4;
         int hr = SHEmptyRecycleBin(IntPtr.Zero, null, NoConfirmation | NoProgressUi | NoSound);
         // 0x8000FFFF — הסל כבר ריק (בחלק מגרסאות Windows)
