@@ -40,7 +40,7 @@
   async function rawRequest(url, method, bodyObj, timeoutMs) {
     var headers = Object.assign({}, HEADERS);
     if (token) headers['X-Otzaria-Token'] = token;
-    var params = { url: url, method: method, headers: headers, timeoutMs: timeoutMs || 15000 };
+    var params = { url: url, method: method, headers: headers, timeoutMs: Math.min(Math.max(timeoutMs || 15000, 1000), 120000) };
     if (method !== 'GET') params.body = JSON.stringify(bodyObj || {});
     var it = window.Otzaria.call('network.fetchStream', params);
     if (it && typeof it.then === 'function') it = await it;
@@ -92,7 +92,7 @@
       if (pairing) return pairing;
       pairing = (async function () {
         var r = await rawRequest("http://127.0.0.1:" + real.port + "/pair/request", "POST",
-          { client: 'system-settings', name: 'הגדרות מערכת' }, 130000);
+          { client: 'system-settings', name: 'הגדרות מערכת' }, 120000);
         if (!r.json.ok) { var er = r.json.error || {}; throw BridgeError(er.code || 'forbidden', er.message || '', r.status); }
         await saveToken(r.json.data.token);
       })();

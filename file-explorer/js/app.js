@@ -5,7 +5,7 @@
   var ui = window.SS.ui;
   FX.ui = ui;
   FX.t = window.I18N ? window.I18N.t : function (x) { return x; };
-  FX.VERSION = '3.0.0';
+  FX.VERSION = '3.0.1';
   FX.CHANGELOG_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/blob/main/CHANGELOG.md';
   FX.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
 
