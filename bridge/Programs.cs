@@ -19,14 +19,15 @@ public static class Programs
     private const string Key = "kiosk.programs";
     private const string AutoKey = "kiosk.autoTorahPrograms";
     private const string KeywordsKey = "kiosk.autoTorahKeywords";
-    private const int MaxPrograms = 20;
+    internal const int MaxPrograms = 20;
     private const int GraceSeconds = 30;
 
     // מעטפות ומנהלי מערכת שאסור להוסיף לרשימה (עוקף את הנעילה)
     private static readonly HashSet<string> Blocked = new(StringComparer.OrdinalIgnoreCase)
     {
         "explorer", "cmd", "powershell", "pwsh", "wscript", "cscript", "mshta", "regedit",
-        "taskmgr", "mmc", "control", "conhost", "wt", "rundll32", "msiexec"
+        "taskmgr", "mmc", "control", "conhost", "wt", "rundll32", "msiexec",
+        "powershell_ise", "windowsterminal", "openconsole", "wsl", "bash"
     };
 
     private static DateTime _graceUntil = DateTime.MinValue;
@@ -52,7 +53,11 @@ public static class Programs
     private static List<Entry> _autoCache = new();
     private static DateTime _autoAt = DateTime.MinValue;
 
-    public static bool AutoEnabled => Config.Get(AutoKey, true);
+    // כשרכיב ההקשחה מותקן, הרשימה והגדרות הזיהוי האוטומטי נקראות מהעותק שלו (config.json כתיב למשתמש המחובר);
+    // אחרת — מ-config.json כמו תמיד. ראו HardLock.Policy
+    public static bool AutoEnabled => HardLock.Policy?.AutoTorah ?? Config.Get(AutoKey, true);
+
+    private static string[] Keywords => HardLock.Policy?.AutoTorahKeywords ?? Config.GetList(KeywordsKey);
 
     public static void Register()
     {
@@ -80,7 +85,7 @@ public static class Programs
     private static List<Entry> LoadManual()
     {
         var list = new List<Entry>();
-        foreach (var s in Config.GetList(Key))
+        foreach (var s in HardLock.Policy?.Programs ?? Config.GetList(Key))
         {
             try
             {
@@ -97,17 +102,33 @@ public static class Programs
         return list;
     }
 
-    private static void Save(List<Entry> list)
+    private static JsonArray ToJson(List<Entry> list) => new(list.Select(e => (JsonNode)new JsonObject
     {
-        var arr = new JsonArray(list.Select(e => (JsonNode)new JsonObject
-        {
-            ["id"] = e.Id,
-            ["name"] = e.Name,
-            ["path"] = e.Path,
-            ["procs"] = new JsonArray(e.Procs.Select(p => (JsonNode)p).ToArray()),
-        }).ToArray());
-        Config.Set(Key, arr);
+        ["id"] = e.Id,
+        ["name"] = e.Name,
+        ["path"] = e.Path,
+        ["procs"] = new JsonArray(e.Procs.Select(p => (JsonNode)p).ToArray()),
+    }).ToArray());
+
+    /// <summary>
+    /// שמירת הרשימה הידנית. כשרכיב ההקשחה מותקן היא נשלחת קודם אליו (הוא מקור האמת, והשליחה מאומתת בסיסמה);
+    /// אם השליחה נכשלה — לא שומרים גם מקומית, כדי שהשניים לא יתפצלו
+    /// </summary>
+    private static void Save(List<Entry> list, string password)
+    {
+        if (HardLock.Available) HardLock.SetPrograms(password, ToJson(list), AutoEnabled, Keywords);
+        Config.Set(Key, ToJson(list));
         Config.Save();
+    }
+
+    /// <summary>
+    /// הגירה לרכיב ההקשחה (בהתקנה/עדכון שלו): אם עוד אין לו רשימה, מעבירים את הרשימה וההגדרות הנוכחיות מ-config.json
+    /// </summary>
+    internal static void SyncToService(string password)
+    {
+        var pol = HardLock.Policy;
+        if (pol == null || pol.Programs != null) return;
+        HardLock.SetPrograms(password, ToJson(LoadManual()), AutoEnabled, Keywords);
     }
 
     private static string[] ProcNames(Entry e) =>
@@ -134,6 +155,7 @@ public static class Programs
     private static object SetAuto(JsonElement b)
     {
         Kiosk.RequirePassword(b.Str("password"));
+        if (HardLock.Available) HardLock.SetPrograms(b.Str("password"), ToJson(LoadManual()), b.Bool("enabled"), Keywords);
         Config.Set(AutoKey, JsonValue.Create(b.Bool("enabled")));
         Config.Save();
         lock (AutoGate) _autoAt = DateTime.MinValue; // סריקה מחדש
@@ -234,7 +256,7 @@ public static class Programs
             Path = path,
             Procs = procs.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
         });
-        Save(list);
+        Save(list, b.Str("password"));
         return ListResult();
     }
 
@@ -246,7 +268,7 @@ public static class Programs
             throw BridgeException.BadRequest("תוכנה שזוהתה אוטומטית אי אפשר להסיר. כבו את הזיהוי האוטומטי");
         var list = LoadManual();
         if (list.RemoveAll(x => x.Id == id) == 0) throw BridgeException.NotFound("התוכנה אינה ברשימה");
-        Save(list);
+        Save(list, b.Str("password"));
         return ListResult();
     }
 
@@ -393,7 +415,7 @@ public static class Programs
                 if (word != null) AddAuto(found, "Word", word, new[] { "WINWORD" });
                 foreach (var (kn, kp, kprocs) in KnownTorah()) AddAuto(found, kn, kp, kprocs);
 
-                var keywords = TorahKeywords.Concat(Config.GetList(KeywordsKey)).Select(k => k.ToLowerInvariant()).ToArray();
+                var keywords = TorahKeywords.Concat(Keywords).Select(k => k.ToLowerInvariant()).ToArray();
                 foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
                     foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
                     {
@@ -572,6 +594,44 @@ public static class Programs
         if (Blocked.Contains(n)) return true;
         string otz = System.IO.Path.GetFileNameWithoutExtension(Kiosk.OtzariaPath() ?? "otzaria");
         return n.Equals(otz, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>שם קובץ/תהליך (בלי סיומת) שאסור להוסיף לרשימה ולא להגדיר כאוצריא — לשימוש גם באימות שבשירות</summary>
+    internal static bool IsBlockedName(string stem) => !string.IsNullOrEmpty(stem) && Blocked.Contains(stem);
+
+    /// <summary>שם תהליך תקין לרשימה (אותו כלל כמו בהוספה דרך הגשר)</summary>
+    internal static bool IsValidProcName(string n) =>
+        !string.IsNullOrEmpty(n) && Regex.IsMatch(n, @"^[\w .\-]{1,60}$") && !Blocked.Contains(n);
+
+    // מעטפות פקודה, מסופים ומארחי סקריפטים: חלון כזה בחזית בזמן נעילה נסגר בידי השומר.
+    // הגשר מפעיל בעצמו cmd/powershell לפקודות עזר, אבל תמיד בלי חלון (CreateNoWindow), ולכן הם אף פעם לא בחזית
+    private static readonly HashSet<string> ShellHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "cmd", "powershell", "pwsh", "powershell_ise", "wscript", "cscript", "mshta",
+        "conhost", "openconsole", "wt", "windowsterminal", "wsl", "bash",
+    };
+
+    /// <summary>האם התהליך הוא מעטפת פקודה/מסוף/מארח סקריפטים</summary>
+    public static bool IsShellHost(Process p)
+    {
+        try { return ShellHosts.Contains(p.ProcessName); }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// האם התהליך בחזית הוא תוכנה מותרת. כמו ShouldYieldTo, אבל מעטפות, מארחי סקריפטים ומנהלי מערכת (Blocked)
+    /// לעולם אינם "מותרים" — גם בחלון החסד שאחרי פתיחת תוכנה, וגם כשהם תהליך בן של תוכנה מהרשימה
+    /// (למשל חלון שנפתח מתוך דיאלוג פתיחת קובץ של תוכנה מותרת).
+    /// </summary>
+    public static bool IsAllowedForeground(uint foregroundPid)
+    {
+        try
+        {
+            using var p = Process.GetProcessById((int)foregroundPid);
+            if (p.Id != Environment.ProcessId && Blocked.Contains(p.ProcessName)) return false;
+        }
+        catch { /* תהליך שנסגר: ההחלטה נשארת ל-ShouldYieldTo */ }
+        return ShouldYieldTo(foregroundPid);
     }
 
     private static bool StartedAfterLaunch(Process p)
