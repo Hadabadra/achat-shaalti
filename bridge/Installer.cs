@@ -44,12 +44,12 @@ public static class Installer
         catch (Exception ex) { Config.Log("shortcut: " + ex.Message); }
 
         int plugins = DeployPlugins();
+        bool canInstall = plugins > 0 && OtzariaProtocolRegistered();
 
         Process.Start(new ProcessStartInfo(InstalledExe, "--background") { UseShellExecute = false, WorkingDirectory = Config.Dir });
 
         if (showMessage)
         {
-            bool canInstall = plugins > 0 && OtzariaProtocolRegistered();
             string msg = Lang.T("תורת אסתר (גשר אוצריא) הותקן ויעלה אוטומטית עם כניסה ל-Windows.",
                 "Otzaria Bridge is installed and will start automatically when you sign in to Windows.");
             if (canInstall)
@@ -65,9 +65,12 @@ public static class Installer
             else
                 MessageBox.Show(msg, "תורת אסתר", MessageBoxButtons.OK, MessageBoxIcon.Information,
                     MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
-            if (canInstall) InstallPluginsInOtzaria();
-            else if (plugins > 0) OpenPluginsFolder();
+            if (!canInstall && plugins > 0) OpenPluginsFolder();
         }
+
+        // גם בהתקנה שקטה (מתקין Inno): מבקשים מאוצריא להתקין את התוספים, ומחכים עד שכולם נשלחו —
+        // אחרת התהליך יוצא והחוט ברקע נהרג לפני התוסף השני
+        if (canInstall) InstallPluginsInOtzaria(wait: true);
     }
 
     /// <summary>האם אוצריא רשמה את סכמת otzaria:// (היא עושה זאת בעלייה הראשונה שלה)</summary>
@@ -84,11 +87,11 @@ public static class Installer
 
     /// <summary>פותח באוצריא את זרימת ההתקנה של כל תוסף (otzaria://plugin/install-local), אחד אחרי השני.
     /// אוצריא מציגה את בקשת אישור ההרשאות; המשתמש מאשר בעצמו.</summary>
-    public static void InstallPluginsInOtzaria()
+    public static void InstallPluginsInOtzaria(bool wait = false)
     {
         var files = Directory.Exists(PluginsDir) ? Directory.GetFiles(PluginsDir, "*.otzplugin") : Array.Empty<string>();
         Array.Sort(files, StringComparer.OrdinalIgnoreCase);
-        new Thread(() =>
+        var t = new Thread(() =>
         {
             foreach (var f in files)
             {
@@ -100,7 +103,9 @@ public static class Installer
                 catch (Exception ex) { Config.Log("install-local: " + ex.Message); }
                 Thread.Sleep(6000);
             }
-        }) { IsBackground = true }.Start();
+        }) { IsBackground = true };
+        t.Start();
+        if (wait) t.Join();
     }
 
     /// <summary>פורס את קובצי ה-.otzplugin המוטמעים לתיקיית plugins</summary>
