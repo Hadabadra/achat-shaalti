@@ -57,7 +57,7 @@ public static class Tray
                 if (!HardLock.ServiceInstalled()) return;
                 var st = (dynamic)HardLock.Status(fresh: true);
                 if (st.needsUpdate == true)
-                    Invoke(() => _icon.ShowBalloonTip(8000, Lang.T("תורת אסתר", "Torat Esther"),
+                    Invoke(() => _icon.ShowBalloonTip(8000, Lang.T(Program.AppName, Program.AppNameEn),
                         Lang.T("רכיב ההקשחה בגרסה ישנה מהגשר. עדכנו ב\"הגדרות מערכת → נעילה\" (נדרשת סיסמת הנעילה).",
                                "The hardening component is on an older version than the bridge. Update it in “System Settings → Lock” (lock password required)."),
                         ToolTipIcon.Warning));

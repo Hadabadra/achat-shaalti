@@ -48,7 +48,7 @@ public static class Program
             {
                 int i = Array.IndexOf(args, "--hello-helper");
                 string nonce = i >= 0 && i + 1 < args.Length ? args[i + 1] : "";
-                bool ok = TwoFactor.Verify(Lang.T("אימות פעולה ברכיב ההקשחה של תורת אסתר", "Verify an action in the Torat Esther hardened lock"));
+                bool ok = TwoFactor.Verify(Lang.T("אימות פעולה ברכיב ההקשחה של " + AppName, "Verify an action in the " + AppNameEn + " hardened lock"));
                 HardLock.Call(new JsonObject { ["op"] = "hello-done", ["nonce"] = nonce, ["ok"] = ok });
                 return ok ? 0 : 2;
             }

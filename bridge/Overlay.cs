@@ -569,11 +569,32 @@ internal sealed class LockCountdown : Form
 
     private void DoCancel()
     {
-        try { Kiosk.ScheduleSkipCurrent(_pw.Text); }
-        catch (BridgeException ex) { _err.Text = ex.Message; _pw.SelectAll(); _pw.Focus(); CenterRows(); return; }
-        catch (Exception ex) { _err.Text = ex.Message; CenterRows(); return; }
-        _tick.Stop();
-        Hide();
+        // הדילוג עובר דרך השירות ועשוי לדרוש Windows Hello (עד כ-75 שניות) — חוט נפרד כדי שהבאנר לא יקפא
+        string pw = _pw.Text;
+        _confirm.Enabled = _back.Enabled = false;
+        _err.Text = Lang.T("מאמת…", "Verifying…");
+        CenterRows();
+        Task.Run(() =>
+        {
+            Exception error = null;
+            try { Kiosk.ScheduleSkipCurrent(pw); } catch (Exception ex) { error = ex; }
+            try
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    _confirm.Enabled = _back.Enabled = true;
+                    if (error != null)
+                    {
+                        _err.Text = error.Message;
+                        _pw.SelectAll(); _pw.Focus(); CenterRows();
+                        return;
+                    }
+                    _tick.Stop();
+                    Hide();
+                }));
+            }
+            catch { }
+        });
     }
 
     protected override void Dispose(bool disposing)

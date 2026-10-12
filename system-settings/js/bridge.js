@@ -164,8 +164,9 @@
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
       allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left',
-      sideBarPosition: 'right',
+      sideBar: true, sideBarIconsOnly: false, sideBarPosition: 'right', resetOnShutdown: false,
       restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
+      zmanimElevation: 0, zmanimFallbackEngine: 'noaa',
       candleLightingMinutes: 18, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
       activatedBy: 'manual',
       schedule: { enabled: false, start: '20:00', end: '02:00', warn: true },
@@ -298,11 +299,13 @@
       checkPw(b.password, false);
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
-      ['readOnly', 'twoFactor', 'clock', 'restScreen', 'fullscreenOtzaria'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
+      ['readOnly', 'twoFactor', 'clock', 'restScreen', 'fullscreenOtzaria', 'sideBar', 'sideBarIconsOnly', 'resetOnShutdown'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
       if (typeof b.restIdleMinutes === 'number') M.kiosk.restIdleMinutes = Math.max(0, Math.min(240, b.restIdleMinutes | 0));
       if (typeof b.zmanimLocation === 'string') M.kiosk.zmanimLocation = b.zmanimLocation;
       if (typeof b.zmanimCity === 'string') M.kiosk.zmanimCity = b.zmanimCity;
       if (typeof b.zmanimDiaspora === 'boolean') M.kiosk.zmanimDiaspora = b.zmanimDiaspora;
+      if (typeof b.zmanimElevation === 'number') M.kiosk.zmanimElevation = Math.max(0, Math.min(5000, b.zmanimElevation));
+      if (typeof b.zmanimFallbackEngine === 'string') M.kiosk.zmanimFallbackEngine = b.zmanimFallbackEngine;
       if (typeof b.candleLightingMinutes === 'number') M.kiosk.candleLightingMinutes = Math.max(0, Math.min(90, b.candleLightingMinutes | 0));
       if (Array.isArray(b.zmanimShow)) M.kiosk.zmanimShow = b.zmanimShow.slice();
       if (typeof b.yahrzeitMonth === 'string') M.kiosk.yahrzeitMonth = b.yahrzeitMonth;

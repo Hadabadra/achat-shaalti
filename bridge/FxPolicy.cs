@@ -166,8 +166,8 @@ public static class FxPolicy
     }
 
     /// <summary>
-    /// שער ההרשאה לפעולות ניהול על המדיניות. אימות דו-שלבי (2FA) עתידי יתווסף כאן כקריאה נוספת אחת.
-    /// שינוי מדיניות מקבל גם קוד שחזור, כדי שהמנהל לא יינעל מחוץ למדיניות.
+    /// שער ההרשאה לפעולות ניהול על המדיניות. דורש גם Windows Hello כשהאימות הדו-שלבי פעיל, חוץ מביטול
+    /// חירום בקוד שחזור. שינוי מדיניות מקבל גם קוד שחזור, כדי שהמנהל לא יינעל מחוץ למדיניות.
     /// </summary>
     private static void AdminGate(JsonElement b, bool allowRecovery)
     {
@@ -175,7 +175,7 @@ public static class FxPolicy
             throw new BridgeException("no_password", "יש להגדיר סיסמת נעילה בהגדרות הנעילה לפני שינוי מדיניות סייר הקבצים", 400);
         string pw = b.Str("password");
         if (allowRecovery) Kiosk.RequirePasswordOrRecovery(pw); else Kiosk.RequirePassword(pw);
-        // TODO(2FA): כאן תתווסף בדיקה נוספת (למשל Kiosk.RequireSecondFactor(b)).
+        if (!Kiosk.IsRecoveryCode(pw)) TwoFactor.Require("שינוי מדיניות סייר הקבצים");
     }
 
     private static object Set(JsonElement b)

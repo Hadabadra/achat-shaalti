@@ -354,8 +354,8 @@ public static class Kiosk
         }
     }
 
-    /// <summary>האם הטקסט שהוקלד הוא קוד השחזור (פטור מאימות דו-שלבי בביטול חירום)</summary>
-    private static bool IsRecoveryCode(string s) =>
+    /// <summary>האם הטקסט שהוקלד הוא קוד השחזור (פטור מאימות דו-שלבי בביטול חירום) — internal כדי ש-FxPolicy ישתמש באותו כלל</summary>
+    internal static bool IsRecoveryCode(string s) =>
         Matches(Secret.NormalizeRecovery(s), "kiosk.recoveryHash", "kiosk.recoverySalt");
 
     /// <summary>רכיב ההקשחה אומר "נעול" (למשל אחרי עריכת config.json או בחשבון Windows אחר) — נועלים גם כאן</summary>
