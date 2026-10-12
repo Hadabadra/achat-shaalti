@@ -173,6 +173,7 @@ public static class Kiosk
     [DllImport("user32.dll")] private static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] private static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] private static extern bool IsHungAppWindow(IntPtr hWnd);
 
     /// <summary>
     /// מביא חלון לחזית באמת: משחזר חלון מוקטן, ועוקף את חסימת Windows להעברת פוקוס מתהליך רקע
@@ -190,9 +191,13 @@ public static class Kiosk
         bool a1 = false, a2 = false;
         try
         {
-            if (fgThread != 0 && fgThread != cur) a1 = AttachThreadInput(cur, fgThread, true);
-            if (target != 0 && target != cur) a2 = AttachThreadInput(cur, target, true);
-            keybd_event(0x12, 0, 0, UIntPtr.Zero);       // Alt למטה ולמעלה: Windows מתירה אז החלפת חזית
+            // לא מתחברים לחוט של חלון תקוע: זה היה עלול לתקוע גם את הגשר
+            if (fgThread != 0 && fgThread != cur && !IsHungAppWindow(fg)) a1 = AttachThreadInput(cur, fgThread, true);
+            if (target != 0 && target != cur && !IsHungAppWindow(hwnd)) a2 = AttachThreadInput(cur, target, true);
+            // Alt למטה ולמעלה: Windows מתירה אז החלפת חזית. מקש לא מוקצה (0xE8) באמצע מונע מהתוכנה להפעיל את תפריט Alt שלה
+            keybd_event(0x12, 0, 0, UIntPtr.Zero);
+            keybd_event(0xE8, 0, 0, UIntPtr.Zero);
+            keybd_event(0xE8, 0, 2, UIntPtr.Zero);
             keybd_event(0x12, 0, 2, UIntPtr.Zero);
             SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); // TOPMOST, בלי שינוי גודל
             SetWindowPos(hwnd, new IntPtr(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); // חזרה ל-NOTOPMOST (נשאר בחזית)

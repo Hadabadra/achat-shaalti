@@ -5,7 +5,7 @@
   var ui = window.SS.ui;
   FX.ui = ui;
   FX.t = window.I18N ? window.I18N.t : function (x) { return x; };
-  FX.VERSION = '3.2.0';
+  FX.VERSION = '3.2.1';
   FX.CHANGELOG_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/blob/main/CHANGELOG.md';
   FX.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
 
@@ -123,7 +123,7 @@
     cancelSearch();
     if (p.kind === 'fallback') await p.init();
     S.prov = p;
-    S.back = []; S.fwd = []; S.clip = null;
+    S.back = []; S.fwd = []; S.clip = null; S.tabs = null; S.tab = 0;
     setChip();
     renderCmds();
     var prefs = loadPrefs();
@@ -1365,9 +1365,9 @@
     $('fx-search').addEventListener('input', FX.debounce(function () {
       var v = $('fx-search').value.trim();
       if (!v && S.search) exitSearch();
-      else if (v.length >= 2) runSearch(v);    /* חי: התוצאות מתעדכנות תוך כדי הקלדה, כמו ב-Everything */
+      else if (v.length >= 2 && !(S.isRoot && !S.search && $('fx-content').checked)) runSearch(v);    /* חיפוש בתוכן על כל הכוננים רק ב-Enter, כדי לא להעמיס. חי: התוצאות מתעדכנות תוך כדי הקלדה, כמו ב-Everything */
     }, 260));
-    $('fx-content').addEventListener('change', function () { var v = $('fx-search').value.trim(); if (v.length >= 2) runSearch(v); });
+    $('fx-content').addEventListener('change', function () { var v = $('fx-search').value.trim(); if (v.length >= 2 && !(S.isRoot && !S.search && $('fx-content').checked)) runSearch(v); });
     $('fx-search').addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { e.preventDefault(); exitSearch(); $('fx-main').focus(); }
     });

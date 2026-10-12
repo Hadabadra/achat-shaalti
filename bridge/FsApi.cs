@@ -689,7 +689,10 @@ public static class FsApi
             var en = z.GetEntry(name);
             if (en == null) continue;
             using var rd = new StreamReader(en.Open(), Encoding.UTF8);
-            string xml = rd.ReadToEnd();
+            var buf = new char[8_000_000];
+            int got = 0, n;
+            while (got < buf.Length && (n = rd.Read(buf, got, buf.Length - got)) > 0) got += n;   // תקרה נגד קובץ שמתפוצץ בפריסה
+            string xml = new string(buf, 0, got);
             xml = Regex.Replace(xml, @"</(w:p|a:p|text:p|text:h|si)>", "\n");
             sb.Append(System.Net.WebUtility.HtmlDecode(Regex.Replace(xml, "<[^>]+>", ""))).Append('\n');
             if (sb.Length > 8_000_000) break;

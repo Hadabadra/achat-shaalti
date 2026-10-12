@@ -278,6 +278,12 @@ internal static class Diagnostics_
 
     public static void Report()
     {
+        if (Kiosk.IsActive)
+        {
+            MessageBox.Show(Lang.T("בזמן נעילה אי אפשר לפתוח דיווח (הוא פותח דפדפן). בטלו את הנעילה ונסו שוב.", "Reporting is unavailable while lock mode is on (it opens a browser). Turn off lock mode and try again."),
+                Lang.T("דיווח באג", "Report a bug"));
+            return;
+        }
         string consent = Lang.T(
             "ייווצר קובץ zip בשולחן העבודה עם יומן הגשר והגדרות (בלי סיסמאות, קודים ומפתחות), ויפתח דף דיווח ב-GitHub.\nשום דבר לא נשלח אוטומטית: אתם מצרפים את הקובץ ושולחים בעצמכם.\n\nלהמשיך?",
             "A zip with the bridge log and settings (no passwords, codes or keys) will be created on your desktop, and a GitHub issue page will open.\nNothing is sent automatically: you attach the file and submit it yourself.\n\nContinue?");
