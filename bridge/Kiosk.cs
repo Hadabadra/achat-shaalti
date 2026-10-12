@@ -515,6 +515,8 @@ public static class Kiosk
         {
             string p = b.Str("otzariaPath", "");
             if (p.Length > 0 && !File.Exists(p)) throw BridgeException.NotFound("הקובץ לא נמצא: " + p);
+            // כשרכיב ההקשחה מותקן הנתיב נשמר קודם אצלו (מקור האמת); כישלון שם עוצר גם את השמירה המקומית
+            if (HardLock.Available) HardLock.SetOtzariaPath(b.Str("password"), p);
             Config.Set("kiosk.otzariaPath", p);
         }
         bool schedChanged = false;
@@ -554,7 +556,10 @@ public static class Kiosk
 
     public static string OtzariaPath()
     {
-        string configured = Config.Get<string>("kiosk.otzariaPath", null);
+        // כשרכיב ההקשחה מותקן ויש לו נתיב — הוא מקור האמת, ו-config.json (כתיב למשתמש המחובר) לא נקרא.
+        // נתיב ריק אצלו = זיהוי אוטומטי; נתיב שלא קיים בחשבון הזה = זיהוי אוטומטי (ולא ערך מ-config.json)
+        string servicePath = HardLock.Policy?.OtzariaPath;
+        string configured = servicePath ?? Config.Get<string>("kiosk.otzariaPath", null);
         if (!string.IsNullOrEmpty(configured) && File.Exists(configured)) return configured;
 
         try
@@ -905,6 +910,23 @@ public static class Kiosk
 
     private static int _watchBusy;
 
+    /// <summary>
+    /// מעטפת פקודה/מסוף/מארח סקריפטים בחזית בזמן נעילה נסגרת (כמו מנהל המשימות כשהמדיניות לא נכתבה).
+    /// מדיניות DisableTaskMgr/DisableRegistryTools לא חוסמת אותם, והחזרת אוצריא לחזית לבדה לא עוצרת תהליך שכבר רץ.
+    /// </summary>
+    private static void CloseShellWindow(uint fgPid, int session)
+    {
+        try
+        {
+            using var p = Process.GetProcessById((int)fgPid);
+            if (p.SessionId != session || !Programs.IsShellHost(p)) return;
+            string n = p.ProcessName;
+            p.Kill();
+            LogThrottled("shell:" + n, "watchdog: חלון " + n + " נסגר (מעטפות ומארחי סקריפטים חסומים בנעילה)", 60);
+        }
+        catch { /* נסגר כבר או ללא הרשאה */ }
+    }
+
     private static void Watch()
     {
         if (!IsActive || Interlocked.Exchange(ref _watchBusy, 1) == 1) return;
@@ -962,7 +984,8 @@ public static class Kiosk
 
             GetWindowThreadProcessId(GetForegroundWindow(), out uint fgPid);
             if (fgPid == otz.Id || fgPid == Environment.ProcessId) return;
-            if (Programs.ShouldYieldTo(fgPid)) return; // תוכנה מותרת (רשימה מוגדרת בסיסמה) בחזית
+            CloseShellWindow(fgPid, session);
+            if (Programs.IsAllowedForeground(fgPid)) return; // תוכנה מותרת (רשימה מוגדרת בסיסמה) בחזית
             try
             {
                 using var fgp = Process.GetProcessById((int)fgPid);
@@ -1010,7 +1033,7 @@ public static class Kiosk
         {
             GetWindowThreadProcessId(GetForegroundWindow(), out uint pid);
             if (pid == 0 || pid == (uint)Environment.ProcessId || IsOtzariaPid(pid)) return false;
-            return Programs.ShouldYieldTo(pid);
+            return Programs.IsAllowedForeground(pid);
         }
         catch { return false; }
     }
