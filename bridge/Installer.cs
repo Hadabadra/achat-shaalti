@@ -9,8 +9,8 @@ public static class Installer
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunValue = "OtzariaBridge";
-    private const string ShortcutName = "תורת אסתר.lnk";
-    private const string OldShortcutName = "גשר אוצריא.lnk"; // עד 3.0.0
+    private const string ShortcutName = "תוכנת חסימת אוצריא.lnk";
+    private static readonly string[] OldShortcutNames = { "גשר אוצריא.lnk", "תורת אסתר.lnk" }; // שמות קודמים, עד 3.0.0 ועד שינוי השם
 
     public static string InstalledExe => Path.Combine(Config.Dir, "OtzariaBridge.exe");
     public static string PluginsDir => Path.Combine(Config.Dir, "plugins");
@@ -39,7 +39,8 @@ public static class Installer
         using (var k = Registry.CurrentUser.CreateSubKey(RunKey))
             k.SetValue(RunValue, "\"" + InstalledExe + "\" --background");
 
-        try { string old = Path.Combine(Path.GetDirectoryName(ShortcutPath)!, OldShortcutName); if (File.Exists(old)) File.Delete(old); } catch { }
+        foreach (string old in OldShortcutNames)
+            try { string p = Path.Combine(Path.GetDirectoryName(ShortcutPath)!, old); if (File.Exists(p)) File.Delete(p); } catch { }
         try { CreateShortcut(); }
         catch (Exception ex) { Config.Log("shortcut: " + ex.Message); }
 
@@ -50,8 +51,8 @@ public static class Installer
         if (showMessage)
         {
             bool canInstall = plugins > 0 && OtzariaProtocolRegistered();
-            string msg = Lang.T("תורת אסתר (גשר אוצריא) הותקן ויעלה אוטומטית עם כניסה ל-Windows.",
-                "Otzaria Bridge is installed and will start automatically when you sign in to Windows.");
+            string msg = Lang.T(Program.AppFullName + " הותקן ויעלה אוטומטית עם כניסה ל-Windows.",
+                Program.AppFullNameEn + " is installed and will start automatically when you sign in to Windows.");
             if (canInstall)
                 msg += Lang.T("\n\nעכשיו אוצריא תיפתח ותציע להתקין את התוספים \"סייר קבצים\" ו\"הגדרות מערכת\" — אשרו בחלון ההתקנה של אוצריא.",
                        "\n\nOtzaria will now open and offer to install the \"File Explorer\" and \"System Settings\" plugins — confirm in Otzaria's install window.");
@@ -61,9 +62,9 @@ public static class Installer
                        "\n\nThe folder that opened contains the \"File Explorer\" and \"System Settings\" plugins. " +
                        "Install them from inside Otzaria (install plugin from file).");
             if (Lang.En)
-                MessageBox.Show(msg, "Otzaria Bridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(msg, Program.AppNameEn, MessageBoxButtons.OK, MessageBoxIcon.Information);
             else
-                MessageBox.Show(msg, "תורת אסתר", MessageBoxButtons.OK, MessageBoxIcon.Information,
+                MessageBox.Show(msg, Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information,
                     MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
             if (canInstall) InstallPluginsInOtzaria();
             else if (plugins > 0) OpenPluginsFolder();
@@ -137,7 +138,7 @@ public static class Installer
             lnk.TargetPath = InstalledExe;
             lnk.Arguments = "--background";
             lnk.WorkingDirectory = Config.Dir;
-            lnk.Description = "תורת אסתר — גשר אוצריא";
+            lnk.Description = Program.AppFullName;
             lnk.IconLocation = InstalledExe + ",0";
             lnk.Save();
             System.Runtime.InteropServices.Marshal.FinalReleaseComObject(lnk);

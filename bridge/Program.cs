@@ -10,6 +10,15 @@ public static class Program
     public const string Version = "3.4.0";
     public static int Port { get; set; }
 
+    // שם המוצר: הוחלף מ"תורת אסתר" לשם שמתאר בעברית פשוטה את מה שהתוכנה עושה, כי "קיוסק" ואפילו
+    // "תורת אסתר" לבדו לא היו ברורים למשתמשים בלי רקע טכני. "תורת אסתר" נשאר כשם ההנצחה (הגמ"ח).
+    public const string AppName = "תוכנת חסימת אוצריא";
+    public const string AppNameEn = "Otzaria Blocking Software";
+    public const string GemachName = "גמח תורת אסתר";
+    public const string GemachNameEn = "Torat Esther Gemach";
+    public const string AppFullName = AppName + " - " + GemachName;
+    public const string AppFullNameEn = AppNameEn + " — " + GemachNameEn;
+
     [DllImport("kernel32.dll")] private static extern bool AttachConsole(int pid);
 
     [STAThread]
