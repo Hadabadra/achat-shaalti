@@ -410,6 +410,16 @@
     fields.push({ name: 'zloc', label: cityOptions.length > 1 ? 'קואורדינטות (כש"מותאם אישית" נבחר למעלה)' : 'מיקום לזמני היום בשומר המסך (קו רוחב, קו אורך)',
       value: st.zmanimLocation || '', dir: 'ltr', placeholder: '31.78, 35.22',
       hint: 'ריק וגם בלי עיר שנבחרה = בלי זמני היום בשומר המסך' });
+    /* גיבוי מקומי (כשאוצריא סגורה/ישנה בלבד): שני מנועי חישוב לבחירה, ראו קרדיט בחלון "אודות" */
+    fields.push({ name: 'zengine', type: 'select', label: 'מנוע חישוב זמני גיבוי (כשאוצריא סגורה או ישנה)',
+      value: st.zmanimFallbackEngine || 'noaa',
+      options: [
+        { value: 'noaa', label: 'ישן (קירוב אסטרונומי פשוט)' },
+        { value: 'kosherjava', label: 'חדש (ספריית KosherJava — זמנים הלכתיים מלאים, כולל תיקון גובה)' }
+      ],
+      hint: 'ישן: קירוב NOAA פשוט, הנץ/שקיעה בגובה פני הים בלבד, זמנים מעטים. חדש: ספריית KosherJava, זמנים הלכתיים מלאים עם תיקון גובה, אך קוד צד-שלישי שעלול להיבדל מעט בזמנים גבוליים' });
+    fields.push({ name: 'zelev', label: 'גובה מעל פני הים במיקום (מטרים)', value: String(st.zmanimElevation || 0), dir: 'ltr', placeholder: '0',
+      hint: 'משפיע רק כשנבחר מנוע הגיבוי "חדש" (KosherJava) למעלה. 0 עד 5000 מטר' });
     fields.push({ name: 'diaspora', type: 'checkbox', label: 'חוץ לארץ (יום טוב שני)', value: !!st.zmanimDiaspora,
       hint: 'משפיע על זיהוי כניסת/יציאת חג של יום טוב שני של גלויות' });
     fields.push({ name: 'candle', label: 'הדלקת נרות: דקות לפני השקיעה', value: String(st.candleLightingMinutes != null ? st.candleLightingMinutes : 18), dir: 'ltr', placeholder: '18' });
@@ -458,6 +468,8 @@
         if (!x.pw) return 'יש להקליד את סיסמת הנעילה';
         if (!/^\d{1,3}$/.test(String(x.idle).trim()) || +x.idle > 240) return 'זמן שומר המסך: מספר דקות בין 0 ל-240';
         if (x.zloc.trim() && !/^-?\d{1,2}(\.\d+)?\s*,\s*-?\d{1,3}(\.\d+)?$/.test(x.zloc.trim())) return 'מיקום לא תקין: קו רוחב, קו אורך (למשל 31.78, 35.22)';
+        if (!/^\d{1,4}$/.test(String(x.zelev).trim()) || +x.zelev > 5000) return 'גובה: מספר מטרים בין 0 ל-5000';
+        if (['noaa', 'kosherjava'].indexOf(x.zengine) < 0) return 'מנוע חישוב גיבוי לא תקין';
         if (!/^\d{1,3}$/.test(String(x.candle).trim()) || +x.candle > 90) return 'הדלקת נרות: מספר דקות בין 0 ל-90';
         if (['bottom-left', 'bottom-right', 'top-left', 'top-right'].indexOf(x.pos.trim()) < 0) return 'מיקום שעון לא תקין';
         if (x.sched && (!/^\d{1,2}:\d{2}$/.test(x.schedStart || '') || !/^\d{1,2}:\d{2}$/.test(x.schedEnd || ''))) return 'יש להזין שעת התחלה ושעת סיום לתזמון';
@@ -482,6 +494,7 @@
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
           readOnly: !!x.ro, twoFactor: !!x.tfa, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos.trim(),
           restIdleMinutes: +String(x.idle).trim() || 0, zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
+          zmanimElevation: +String(x.zelev).trim() || 0, zmanimFallbackEngine: x.zengine,
           zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
           zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
           yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim(),
