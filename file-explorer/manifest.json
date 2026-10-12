@@ -31,6 +31,7 @@
     "toolTab": {
       "title": "סייר קבצים",
       "order": 910,
+      "allowOrderBeforeBuiltIns": true,
       "defaultPinned": false,
       "iconName": "folder_24_regular"
     },
