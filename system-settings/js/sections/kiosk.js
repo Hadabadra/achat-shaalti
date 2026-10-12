@@ -256,15 +256,22 @@
   function hardCard(h) {
     var state = !h.installed ? 'לא מותקן' : !h.running ? 'מותקן אבל לא רץ' :
       (h.active ? 'פעיל — הנעילה מוקשחת' : 'מותקן, ממתין להפעלת הנעילה') + (h.version ? ' · גרסה ' + ui.esc(h.version) : '');
+    // כפתור "עדכון" בשורת המצב הרגילה רק כשהבעיה היא שהשירות לא רץ; פער גרסה מוצג בכרטיס אזהרה בולט למטה
     var actions = !h.installed
       ? '<button class="btn btn-primary" data-act="hard-install">' + ui.icon('shield') + 'התקנה</button>'
-      : (h.needsUpdate || !h.running ? '<button class="btn btn-tonal" data-act="hard-install">' + ui.icon('shield') + 'עדכון</button>' : '') +
+      : (!h.needsUpdate && !h.running ? '<button class="btn btn-tonal" data-act="hard-install">' + ui.icon('shield') + 'עדכון</button>' : '') +
         '<button class="btn btn-tonal" data-act="hard-settings">' + ui.icon('edit') + 'הגדרות</button>' +
         '<button class="btn btn-tonal" data-act="hard-remove">' + ui.icon('close') + 'הסרה</button>';
+    var updateWarning = (h.installed && h.needsUpdate)
+      ? '<div class="state-box error"><div>' + ui.icon('warning') + '</div><div><b>רכיב ההקשחה בגרסה ישנה מהגשר</b>' +
+        '<span class="muted">גרסה ' + ui.esc(h.version || '') + ' · מומלץ לעדכן כדי לשמור על תאימות מלאה</span>' +
+        '<button class="btn btn-tonal" data-act="hard-install">' + ui.icon('shield') + 'עדכון עכשיו</button></div></div>'
+      : '';
     return '<div class="card"><div class="card-title">נעילה מוקשחת (רכיב שירות)</div>' +
       '<p class="muted">רכיב אופציונלי שרץ ברקע בהרשאות מערכת. הוא שומר את הסיסמה ואת מצב הנעילה במקום שהתלמיד אינו יכול לשנות, ' +
       'מפעיל את הגשר מחדש אם נסגר (גם בחשבון Windows אחר), מחזיר את חסימת מנהל המשימות ועורך הרישום אם נמחקה, ויכול לחסום התקני אחסון USB. ' +
       'ההתקנה דורשת אישור מנהל פעם אחת.</p>' +
+      updateWarning +
       '<div class="setting-row"><div class="setting-text"><b>מצב</b><span class="muted">' + state +
       (h.blockUsbStorage ? ' · אחסון USB חסום' : '') + '</span></div>' + actions + '</div>' +
       '<p class="muted small">הרכיב אינו משנה את הכניסה ל-Windows ואינו רץ במצב בטוח, כך שאינו יכול להשבית את המחשב. ' +
