@@ -164,7 +164,8 @@
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
       allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, clock: true, clockPosition: 'bottom-left',
-      restScreen: true, restIdleMinutes: 0, zmanimLocation: '', fullscreenOtzaria: true,
+      restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
+      candleLightingMinutes: 18, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
       openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer'],
       allSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth', 'airplane', 'usb']
     },
@@ -297,10 +298,18 @@
       ['readOnly', 'clock', 'restScreen', 'fullscreenOtzaria'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
       if (typeof b.restIdleMinutes === 'number') M.kiosk.restIdleMinutes = Math.max(0, Math.min(240, b.restIdleMinutes | 0));
       if (typeof b.zmanimLocation === 'string') M.kiosk.zmanimLocation = b.zmanimLocation;
+      if (typeof b.zmanimCity === 'string') M.kiosk.zmanimCity = b.zmanimCity;
+      if (typeof b.zmanimDiaspora === 'boolean') M.kiosk.zmanimDiaspora = b.zmanimDiaspora;
+      if (typeof b.candleLightingMinutes === 'number') M.kiosk.candleLightingMinutes = Math.max(0, Math.min(90, b.candleLightingMinutes | 0));
+      if (Array.isArray(b.zmanimShow)) M.kiosk.zmanimShow = b.zmanimShow.slice();
+      if (typeof b.yahrzeitMonth === 'string') M.kiosk.yahrzeitMonth = b.yahrzeitMonth;
+      if (typeof b.yahrzeitDay === 'number') M.kiosk.yahrzeitDay = Math.max(0, Math.min(30, b.yahrzeitDay | 0));
+      if (typeof b.yahrzeitLabel === 'string') M.kiosk.yahrzeitLabel = b.yahrzeitLabel;
       if (b.clockPosition) M.kiosk.clockPosition = b.clockPosition;
       if (Array.isArray(b.openSections)) M.kiosk.openSections = b.openSections.slice();
       return clone(M.kiosk);
     },
+    '/kiosk/zmanim-cache': function () { return { ok: true }; },
     '/kiosk/programs': function () {
       var list = clone(M.programs);
       if (M.autoTorah) list.push({ id: 'auto-0001', name: 'Word', path: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE', procs: [], exists: true, auto: true });

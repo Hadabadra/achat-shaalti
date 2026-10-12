@@ -152,10 +152,20 @@
       var host = document.getElementById('dialogs');
       Array.prototype.forEach.call(host.querySelectorAll('.dlg-scrim:not(.open)'), function (x) { x.remove(); });
       var fieldsHtml = (opt.fields || []).map(function (f) {
+        if (f.type === 'note') {
+          return '<div class="field-note muted small">' + f.label + '</div>';
+        }
         if (f.type === 'checkbox') {
           return '<label class="check-row"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + '>' +
             '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label +
             (f.hint ? '<small>' + f.hint + '</small>' : '') + '</span></label>';
+        }
+        if (f.type === 'select') {
+          var opts = (f.options || []).map(function (o) {
+            return '<option value="' + ui.esc(o.value) + '"' + (o.value === f.value ? ' selected' : '') + '>' + ui.esc(o.label) + '</option>';
+          }).join('');
+          return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
+            '<select class="input" name="' + f.name + '"' + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select></label>';
         }
         return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
           '<input class="input" name="' + f.name + '" type="' + (f.type || 'text') + '"' +
@@ -185,6 +195,7 @@
       function values() {
         var v = {};
         (opt.fields || []).forEach(function (f) {
+          if (f.type === 'note') return;
           var inp = form.querySelector('[name="' + f.name + '"]');
           v[f.name] = f.type === 'checkbox' ? inp.checked : inp.value;
         });

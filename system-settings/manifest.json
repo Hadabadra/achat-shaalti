@@ -13,7 +13,8 @@
   "icon": "icon/icon.png",
   "permissions": [
     "network.localhost",
-    "app.open_url"
+    "app.open_url",
+    "calendar.read"
   ],
   "network": {
     "enabled": true,

@@ -1,15 +1,38 @@
+using System.Text.Json;
+
 namespace OtzariaBridge;
 
 /// <summary>
-/// זמני היום לשומר המסך: הנץ ושקיעה גאומטריים (אלגוריתם NOAA, בלי תיקון גובה),
-/// עלות השחר (16.1°), צאת הכוכבים (8.5°), חצות, וסוף זמן ק"ש לפי המג"א (עלות–צאת 16.1°) והגר"א. המיקום מוגדר ב-kiosk.zmanimLocation
-/// בצורה "קו רוחב, קו אורך". הזמנים להצגה בלבד, ומסומנים כך על המסך.
+/// זמני היום לשומר המסך.
+/// המידע ההלכתי עצמו (זמני היום, תאריך עברי, שבת/חג) מגיע מלוח השנה המובנה של אוצריא עצמה
+/// (ה-API ‏calendar.* בתוסף "הגדרות מערכת", החל מגרסת אוצריא 0.9.97) ולא מחושב כאן מחדש.
+/// תוסף "הגדרות מערכת" (js/app.js) שולח POST ‏/kiosk/zmanim-cache מדי דקה עם מה שקיבל מאוצריא;
+/// הגשר רק שומר את זה בזיכרון (לא בקובץ ההגדרות — זה מידע זמני שמתעדכן כל דקה) ומציג אותו.
+/// אם הנתונים חסרים או ישנים מדי (מעל שעתיים — כנראה אוצריא סגורה או התוסף הושעה), מוצג "גיבוי"
+/// בסיסי המבוסס על אלגוריתם NOAA (כפי שהיה כאן לפני שנודע שלאוצריא יש API משלה ללוח השנה),
+/// בלי שבת/חג/עומר/יום-השנה (אלה דורשים לוח עברי אמיתי שאיננו רוצים לשכפל כאן).
 /// </summary>
 internal static class Zmanim
 {
-    private static DateTime _day;
-    private static string _loc;
-    private static string _line;
+    private static readonly object Gate = new();
+    private static string _cacheJson;
+    private static DateTime _cacheUtc = DateTime.MinValue;
+    private static readonly TimeSpan MaxAge = TimeSpan.FromHours(2);
+
+    /// <summary>חודשים עבריים תקינים לשדה "יום השנה" בהגדרות (כולל אדר א/ב לבחירה מפורשת)</summary>
+    internal static readonly string[] YahrzeitMonths =
+        { "תשרי", "חשון", "כסלו", "טבת", "שבט", "אדר", "אדר א", "אדר ב", "ניסן", "אייר", "סיון", "תמוז", "אב", "אלול" };
+
+    public static void Register() => Server.Route("/kiosk/zmanim-cache", CacheSet);
+
+    /// <summary>תוסף "הגדרות מערכת" דוחף לכאן את מה שקיבל מ-calendar.getDailyTimes/getJewishDate באוצריא</summary>
+    private static object CacheSet(JsonElement b)
+    {
+        lock (Gate) { _cacheJson = b.GetRawText(); _cacheUtc = DateTime.UtcNow; }
+        return new { ok = true };
+    }
+
+    // ---------- מיקום מותאם אישית (קואורדינטות): נשאר כאפשרות מתקדמת גם כשנבחרה עיר מרשימה ----------
 
     public static (double lat, double lon)? ParseLocation(string s)
     {
@@ -22,34 +45,255 @@ internal static class Zmanim
         return (lat, lon);
     }
 
-    /// <summary>שתי שורות לשומר המסך, או null אם לא הוגדר מיקום</summary>
-    public static string Line(DateTime now)
+    /// <summary>שורות לשומר המסך: זמני היום, כניסת שבת/חג, ספירת העומר ויום השנה — או מערך ריק</summary>
+    public static string[] Sections(DateTime now)
+    {
+        var list = new List<string>();
+        var cached = TryGetCache();
+        if (cached != null)
+        {
+            var (dailyTimes, jdToday, jdTomorrow) = cached.Value;
+            string zm = ZmanimLine(dailyTimes);
+            if (zm != null) list.Add(zm);
+            string ch = CandleHavdalaLine(now, dailyTimes, jdToday, jdTomorrow);
+            if (ch != null) list.Add(ch);
+            string omer = OmerLine(jdToday);
+            if (omer != null) list.Add(omer);
+            string yz = YahrzeitLine(jdToday);
+            if (yz != null) list.Add(yz);
+        }
+        else
+        {
+            string fb = FallbackLine(now);
+            if (fb != null) list.Add(fb);
+        }
+        return list.ToArray();
+    }
+
+    private static (JsonElement dailyTimes, JsonElement jewishDate, JsonElement jewishDateTomorrow)? TryGetCache()
+    {
+        string json; DateTime at;
+        lock (Gate) { json = _cacheJson; at = _cacheUtc; }
+        if (json == null || DateTime.UtcNow - at > MaxAge) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement.Clone(); // עותק עצמאי שנשאר תקף אחרי Dispose של ה-JsonDocument
+            var dt = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("dailyTimes", out var a) ? a : default;
+            var jd = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("jewishDate", out var b) ? b : default;
+            var jt = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("jewishDateTomorrow", out var c) ? c : default;
+            return (dt, jd, jt);
+        }
+        catch { return null; }
+    }
+
+    // ---------- זמני היום: מפתחות דינמיים (לא תקן קבוע באוצריא) לשמות מוכרים ----------
+
+    private static readonly (string id, string[] keys, string he, string en)[] KnownZmanim =
+    {
+        ("alot", new[] { "alotHaShachar", "alotHashachar", "alot", "dawn" }, "עלות השחר", "Dawn"),
+        ("netz", new[] { "sunrise", "netz", "hanetz", "netzHachama" }, "הנץ החמה", "Sunrise"),
+        ("shemaMga", new[] { "sofZmanShmaMGA", "sofZmanShemaMGA", "sofZmanKriatShemaMGA", "sofZmanShmaMga" }, "סוף ק\"ש (מג\"א)", "Shema (MGA)"),
+        ("shemaGra", new[] { "sofZmanShmaGRA", "sofZmanShemaGRA", "sofZmanKriatShemaGRA", "sofZmanShmaGra" }, "סוף ק\"ש (גר\"א)", "Shema (GRA)"),
+        ("tefilaMga", new[] { "sofZmanTfilaMGA", "sofZmanTefilaMGA", "sofZmanTfilaMga" }, "סוף תפילה (מג\"א)", "Tefila (MGA)"),
+        ("tefilaGra", new[] { "sofZmanTfilaGRA", "sofZmanTefilaGRA", "sofZmanTfilaGra" }, "סוף תפילה (גר\"א)", "Tefila (GRA)"),
+        ("chatzot", new[] { "chatzot", "midday", "chatzos" }, "חצות", "Midday"),
+        ("minchaGedola", new[] { "minchaGedola" }, "מנחה גדולה", "Mincha Gedola"),
+        ("minchaKetana", new[] { "minchaKetana" }, "מנחה קטנה", "Mincha Ketana"),
+        ("plag", new[] { "plagHamincha", "plagHaMincha" }, "פלג המנחה", "Plag HaMincha"),
+        ("shkia", new[] { "sunset", "shkia", "shkiah" }, "שקיעה", "Sunset"),
+        ("tzeit", new[] { "tzeit", "tzet", "tzeithakochavim", "nightfall" }, "צאת הכוכבים", "Nightfall"),
+    };
+
+    private static readonly string[] DefaultShow = { "alot", "netz", "shemaGra", "chatzot", "shkia", "tzeit" };
+
+    private static bool TryPick(JsonElement obj, out string value, params string[] keys)
+    {
+        value = null;
+        if (obj.ValueKind != JsonValueKind.Object) return false;
+        foreach (var prop in obj.EnumerateObject())
+            foreach (var k in keys)
+                if (string.Equals(prop.Name, k, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.String) { value = prop.Value.GetString(); return true; }
+                    if (prop.Value.ValueKind == JsonValueKind.Number) { value = prop.Value.ToString(); return true; }
+                }
+        return false;
+    }
+
+    private static string ZmanimLine(JsonElement dailyTimes)
+    {
+        if (dailyTimes.ValueKind != JsonValueKind.Object) return null;
+        var show = Config.HasList("kiosk.zmanimShow") ? Config.GetList("kiosk.zmanimShow") : DefaultShow;
+        var parts = new List<string>();
+        foreach (var z in KnownZmanim)
+        {
+            if (!show.Contains(z.id, StringComparer.OrdinalIgnoreCase)) continue;
+            if (!TryPick(dailyTimes, out string val, z.keys)) continue;
+            parts.Add(Lang.T(z.he + " ", z.en + " ") + val);
+        }
+        if (parts.Count == 0) return null;
+        int half = (parts.Count + 1) / 2;
+        const string sep = "   ·   ";
+        string line1 = string.Join(sep, parts.Take(half));
+        string line2 = string.Join(sep, parts.Skip(half));
+        return line2.Length > 0 ? line1 + "\n" + line2 : line1;
+    }
+
+    // ---------- כניסת שבת/חג והבדלה: מבוססים על isShabbat/holidays שמחזיר getJewishDate ----------
+
+    private static bool HasYomTov(JsonElement jd)
+    {
+        if (jd.ValueKind != JsonValueKind.Object) return false;
+        if (jd.TryGetProperty("holidays", out var hol) && hol.ValueKind == JsonValueKind.Array)
+            foreach (var h in hol.EnumerateArray())
+                if (h.ValueKind == JsonValueKind.Object && h.TryGetProperty("kind", out var k) &&
+                    k.ValueKind == JsonValueKind.String && string.Equals(k.GetString(), "yomTov", StringComparison.OrdinalIgnoreCase))
+                    return true;
+        return false;
+    }
+
+    private static bool IsHoly(JsonElement jd)
+    {
+        bool shabbat = jd.ValueKind == JsonValueKind.Object && jd.TryGetProperty("isShabbat", out var s) &&
+            (s.ValueKind == JsonValueKind.True || s.ValueKind == JsonValueKind.False) && s.GetBoolean();
+        return shabbat || HasYomTov(jd);
+    }
+
+    private static DateTime? ParseTimeOnDate(string hm, DateTime date)
+    {
+        if (string.IsNullOrWhiteSpace(hm)) return null;
+        if (DateTime.TryParse(hm, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AllowWhiteSpaces, out var t))
+            return date.Date + t.TimeOfDay;
+        return null;
+    }
+
+    private static string CandleHavdalaLine(DateTime now, JsonElement dailyTimes, JsonElement jdToday, JsonElement jdTomorrow)
+    {
+        bool tomorrowHoly = IsHoly(jdTomorrow);
+        bool todayHoly = IsHoly(jdToday);
+        if (tomorrowHoly)
+        {
+            // כניסת שבת/חג: שקיעה פחות מספר דקות הניתן להגדרה (ברירת מחדל 18). אם אין שקיעה במטמון,
+            // משתמשים בשדה candleLighting שאוצריא עצמה מחזירה (אז מספר הדקות שהוגדר כאן לא משפיע).
+            int minutes = Config.Get("kiosk.candleLightingMinutes", 18);
+            DateTime? t = null;
+            if (TryPick(dailyTimes, out string sunset, "sunset", "shkia", "shkiah"))
+                t = ParseTimeOnDate(sunset, now)?.AddMinutes(-minutes);
+            if (t == null && TryPick(dailyTimes, out string cl, "candleLighting", "candleLightingTime", "hadlakatNerot", "candlelighting"))
+                t = ParseTimeOnDate(cl, now);
+            if (t != null) return Lang.T("הדלקת נרות ", "Candle lighting ") + t.Value.ToString("H:mm");
+        }
+        else if (todayHoly)
+        {
+            DateTime? t = null;
+            if (TryPick(dailyTimes, out string tz, "tzeit", "tzet", "tzeithakochavim", "nightfall"))
+                t = ParseTimeOnDate(tz, now);
+            if (t == null && TryPick(dailyTimes, out string hv, "havdalah", "havdala", "motzaeiShabbat"))
+                t = ParseTimeOnDate(hv, now);
+            if (t != null) return Lang.T("צאת שבת/חג (הבדלה) ", "Havdala ") + t.Value.ToString("H:mm");
+        }
+        return null;
+    }
+
+    // ---------- ספירת העומר: חישוב טהור מתאריך עברי (16 בניסן עד 5 בסיון) ----------
+
+    private static string Norm(string s) => (s ?? "").Replace("\"", "").Replace("'", "").Replace("׳", "").Replace("״", "").Replace(" ", "").Trim();
+
+    private static bool NameIs(string name, params string[] candidates) =>
+        candidates.Any(c => string.Equals(Norm(name), Norm(c), StringComparison.OrdinalIgnoreCase));
+
+    private static int OmerDayNumber(JsonElement jd)
+    {
+        if (jd.ValueKind != JsonValueKind.Object) return 0;
+        if (!jd.TryGetProperty("monthName", out var mv) || mv.ValueKind != JsonValueKind.String) return 0;
+        if (!jd.TryGetProperty("day", out var dv) || dv.ValueKind != JsonValueKind.Number) return 0;
+        string month = mv.GetString();
+        int day = dv.GetInt32();
+        if (day <= 0) return 0;
+        if (NameIs(month, "ניסן", "Nisan", "Nissan") && day >= 16) return day - 15;
+        if (NameIs(month, "אייר", "Iyar", "Iyyar")) return 15 + day;
+        if (NameIs(month, "סיון", "סיוון", "Sivan") && day <= 5) return 44 + day;
+        return 0;
+    }
+
+    private static readonly string[] DayWords =
+    {
+        "", "יום אחד", "שני ימים", "שלושה ימים", "ארבעה ימים", "חמישה ימים", "ששה ימים", "שבעה ימים", "שמונה ימים", "תשעה ימים", "עשרה ימים",
+        "אחד עשר יום", "שנים עשר יום", "שלושה עשר יום", "ארבעה עשר יום", "חמישה עשר יום", "ששה עשר יום", "שבעה עשר יום", "שמונה עשר יום", "תשעה עשר יום", "עשרים יום",
+        "אחד ועשרים יום", "שנים ועשרים יום", "שלושה ועשרים יום", "ארבעה ועשרים יום", "חמישה ועשרים יום", "ששה ועשרים יום", "שבעה ועשרים יום", "שמונה ועשרים יום", "תשעה ועשרים יום", "שלושים יום",
+        "אחד ושלושים יום", "שנים ושלושים יום", "שלושה ושלושים יום", "ארבעה ושלושים יום", "חמישה ושלושים יום", "ששה ושלושים יום", "שבעה ושלושים יום", "שמונה ושלושים יום", "תשעה ושלושים יום", "ארבעים יום",
+        "אחד וארבעים יום", "שנים וארבעים יום", "שלושה וארבעים יום", "ארבעה וארבעים יום", "חמישה וארבעים יום", "ששה וארבעים יום", "שבעה וארבעים יום", "שמונה וארבעים יום", "תשעה וארבעים יום",
+    };
+    private static readonly string[] WeekWords = { "", "שבוע אחד", "שני שבועות", "שלושה שבועות", "ארבעה שבועות", "חמישה שבועות", "ששה שבועות", "שבעה שבועות" };
+    private static readonly string[] RemDayWords = { "", "יום אחד", "שני ימים", "שלושה ימים", "ארבעה ימים", "חמישה ימים", "ששה ימים" };
+
+    private static string OmerLine(JsonElement jd)
+    {
+        int day = OmerDayNumber(jd);
+        if (day <= 0 || day > 49) return null;
+        string hePhrase;
+        int weeks = day / 7, rem = day % 7;
+        if (day < 7) hePhrase = "היום " + DayWords[day] + " לעומר";
+        else hePhrase = "היום " + DayWords[day] + ", שהם " + WeekWords[weeks] + (rem > 0 ? " ו" + RemDayWords[rem] : "") + " לעומר";
+        string enPhrase = "Today is day " + day + " of the Omer" +
+            (day >= 7 ? " (" + weeks + " week" + (weeks != 1 ? "s" : "") + (rem > 0 ? " and " + rem + " day" + (rem != 1 ? "s" : "") : "") + ")" : "") + ".";
+        return Lang.T(hePhrase, enPhrase);
+    }
+
+    // ---------- יום השנה: תאריך עברי כללי שהמנהל מגדיר (לא קשור לתאריך פטירה ספציפי כלשהו) ----------
+
+    private static bool MonthMatches(string a, string b)
+    {
+        string na = Norm(a), nb = Norm(b);
+        if (na.Length == 0 || nb.Length == 0) return false;
+        if (string.Equals(na, nb, StringComparison.OrdinalIgnoreCase)) return true;
+        // אדר א/אדר ב/אדר (בשנה פשוטה): מקלים ומתאימים כל שילוב, כדי לא להחמיץ את יום השנה
+        // בגלל הבדל בין שנה מעוברת לפשוטה. ראו הערה בתיעוד ה-PR.
+        bool aAdar = na.StartsWith("אדר") || na.StartsWith("Adar", StringComparison.OrdinalIgnoreCase);
+        bool bAdar = nb.StartsWith("אדר") || nb.StartsWith("Adar", StringComparison.OrdinalIgnoreCase);
+        return aAdar && bAdar;
+    }
+
+    private static string YahrzeitLine(JsonElement jd)
+    {
+        string month = Config.Get("kiosk.yahrzeitMonth", "");
+        int day = Config.Get("kiosk.yahrzeitDay", 0);
+        if (string.IsNullOrWhiteSpace(month) || day <= 0) return null;
+        if (jd.ValueKind != JsonValueKind.Object) return null;
+        if (!jd.TryGetProperty("monthName", out var mv) || mv.ValueKind != JsonValueKind.String) return null;
+        if (!jd.TryGetProperty("day", out var dv) || dv.ValueKind != JsonValueKind.Number) return null;
+        if (dv.GetInt32() != day || !MonthMatches(month, mv.GetString())) return null;
+        string label = Config.Get("kiosk.yahrzeitLabel", "");
+        string who = string.IsNullOrWhiteSpace(label) ? "" : " " + label;
+        return Lang.T("יום השנה היום" + who, "Yahrzeit today" + who);
+    }
+
+    // ---------- גיבוי בסיסי (NOAA, בלי אוצריא): רק כשאין מטמון טרי, ורק אם הוגדר מיקום ----------
+
+    private static string FallbackLine(DateTime now)
     {
         string loc = Config.Get("kiosk.zmanimLocation", "");
         if (string.IsNullOrWhiteSpace(loc)) return null;
-        if (_day == now.Date && _loc == loc) return _line;
-        _day = now.Date; _loc = loc; _line = null;
         var p = ParseLocation(loc);
         if (p == null) return null;
         double lat = p.Value.lat, lon = p.Value.lon;
         DateTime? T(bool rise, double zenith) => SunTime(now.Date, lat, lon, rise, zenith);
         var rise = T(true, 90.833); var set = T(false, 90.833);
         if (rise == null || set == null) return null;
-        var alot = T(true, 90 + 16.1); var tzeit = T(false, 90 + 8.5); var tzeitMga = T(false, 90 + 16.1);
+        var alot = T(true, 90 + 16.1); var tzeit = T(false, 90 + 8.5);
         string H(DateTime? d) => d?.ToString("H:mm") ?? "—";
-        var gra = rise.Value + TimeSpan.FromTicks((set.Value - rise.Value).Ticks / 4);
-        DateTime? mga = alot != null && tzeitMga != null ? alot.Value + TimeSpan.FromTicks((tzeitMga.Value - alot.Value).Ticks / 4) : null;
         var chatzot = rise.Value + TimeSpan.FromTicks((set.Value - rise.Value).Ticks / 2);
-        string sep = "   ·   ";
-        _line =
+        const string sep = "   ·   ";
+        return
             Lang.T("עלות השחר ", "Dawn ") + H(alot) + sep + Lang.T("הנץ ", "Sunrise ") + H(rise) + sep +
-            Lang.T("סוף ק\"ש מג\"א ", "Shema (MA) ") + H(mga) + sep + Lang.T("גר\"א ", "GRA ") + H(gra) + "\n" +
-            Lang.T("חצות ", "Midday ") + H(chatzot) + sep + Lang.T("שקיעה ", "Sunset ") + H(set) + sep +
-            Lang.T("צאת הכוכבים ", "Nightfall ") + H(tzeit);
-        return _line;
+            Lang.T("חצות ", "Midday ") + H(chatzot) + "\n" +
+            Lang.T("שקיעה ", "Sunset ") + H(set) + sep + Lang.T("צאת הכוכבים ", "Nightfall ") + H(tzeit) + sep +
+            Lang.T("(חישוב גיבוי, בלי חיבור ללוח השנה של אוצריא)", "(fallback estimate, not from Otzaria's calendar)");
     }
 
-    /// <summary>זמן הנץ/השקיעה בשעון המקומי של המחשב (זנית 90.833°)</summary>
+    /// <summary>זמן הנץ/השקיעה בשעון המקומי של המחשב (זנית 90.833°). אלגוריתם NOAA, בלי תיקון גובה</summary>
     private static DateTime? SunTime(DateTime date, double lat, double lon, bool rise, double zenith)
     {
         static double Rad(double d) => d * Math.PI / 180;

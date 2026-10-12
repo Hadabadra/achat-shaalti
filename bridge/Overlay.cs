@@ -330,12 +330,17 @@ internal sealed class RestScreen : Form
             y += 34 * s;
             g.DrawString(Lang.T("אוצריא לא נמצאה במחשב. לביטול הנעילה: Ctrl+Alt+Shift+F12", "Otzaria was not found. To unlock: Ctrl+Alt+Shift+F12"), hintF, dim, Line(y, 30 * s), rtl);
         }
-        string zm = Zmanim.Line(now);
-        if (zm != null)
+        var zmSections = Zmanim.Sections(now);
+        if (zmSections.Length > 0)
         {
-            y += 34 * s;
             using var zmF = new Font("David", 16f, GraphicsUnit.Point);
-            g.DrawString(zm, zmF, goldB, Line(y, 64 * s), rtl);
+            foreach (var sec in zmSections)
+            {
+                y += 30 * s;
+                int lineCount = sec.Count(ch => ch == '\n') + 1;
+                g.DrawString(sec, zmF, goldB, Line(y, 26 * s * lineCount), rtl);
+                y += 26 * s * (lineCount - 1);
+            }
         }
 
         // נר הנצחה בתחתית, עם להבה מרצדת והילה חמה
