@@ -273,10 +273,15 @@ public static class Kiosk
         string newPassword = b.Str("newPassword") ?? "";
         if (newPassword.Length < 4) throw BridgeException.BadRequest("הסיסמה חייבת להכיל לפחות 4 תווים");
         string recovery = null;
-        if (HasPassword) Verify(b.Str("oldPassword"), allowRecovery: true);
-        if (HasPassword && HardLock.Available) HardLock.SetPassword(b.Str("oldPassword"), newPassword);
+        if (HasPassword)
+        {
+            // שינוי סיסמה קיימת: אימות הישנה, וסנכרון לרכיב ההקשחה אם מותקן. קוד השחזור הקיים נשמר
+            Verify(b.Str("oldPassword"), allowRecovery: true);
+            if (HardLock.Available) HardLock.SetPassword(b.Str("oldPassword"), newPassword);
+        }
         else
         {
+            // הגדרה ראשונה: יוצרים קוד שחזור חד-פעמי
             recovery = NewRecoveryCode();
             StoreSecret(recovery, "kiosk.recoveryHash", "kiosk.recoverySalt");
         }
