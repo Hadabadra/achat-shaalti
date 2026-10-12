@@ -48,18 +48,38 @@ public static class FxPolicy
 
     private static void Relock() { lock (Gate) _unlockedUntil = 0; }
 
+    // כשרכיב ההקשחה מותקן ויש לו מדיניות — היא מקור האמת (config.json כתיב למשתמש המחובר); אחרת config.json
+    private static HardLock.PolicySnapshot ServicePolicy()
+    {
+        var pol = HardLock.Policy;
+        return pol?.FxMode != null ? pol : null;
+    }
+
+    private static string RawMode(HardLock.PolicySnapshot sp) => sp?.FxMode ?? Config.Get<string>(KMode, "off");
+    private static string[] RawRoots(HardLock.PolicySnapshot sp) => sp?.FxRoots ?? Config.GetList(KRoots);
+    private static int RawMinutes(HardLock.PolicySnapshot sp) => sp?.FxUnlockMinutes ?? Config.Get(KMinutes, DefaultMinutes);
+
+    /// <summary>הגירה לרכיב ההקשחה (בהתקנה/עדכון שלו): אם עוד אין לו מדיניות, מעבירים את הנוכחית מ-config.json</summary>
+    internal static void SyncToService(string password)
+    {
+        var pol = HardLock.Policy;
+        if (pol == null || pol.FxMode != null) return;
+        HardLock.SetFxPolicy(password, RawMode(null) ?? "off", RawRoots(null), Math.Clamp(RawMinutes(null), 1, MaxMinutes));
+    }
+
     private static State Current()
     {
-        string mode = (Config.Get<string>(KMode, "off") ?? "off").ToLowerInvariant();
+        var sp = ServicePolicy();
+        string mode = (RawMode(sp) ?? "off").ToLowerInvariant();
         if (mode is not ("off" or "restricted" or "locked")) mode = "locked";   // ערך פגום: כשל סגור
-        int minutes = Math.Clamp(Config.Get(KMinutes, DefaultMinutes), 1, MaxMinutes);
+        int minutes = Math.Clamp(RawMinutes(sp), 1, MaxMinutes);
         var st = new State { Mode = mode, Minutes = minutes, UnlockedSeconds = UnlockSeconds() };
         if (mode == "off") { st.Effective = "open"; return st; }
         if (mode == "locked") { st.Effective = st.UnlockedSeconds > 0 ? "open" : "locked"; return st; }
 
         var ok = new List<string>();
         var bad = new List<string>();
-        foreach (string r in Config.GetList(KRoots))
+        foreach (string r in RawRoots(sp))
         {
             try
             {
@@ -128,13 +148,14 @@ public static class FxPolicy
     private static object Get()
     {
         var st = Current();
+        var sp = ServicePolicy();
         return new
         {
             mode = st.Mode,
             effective = st.Effective,
             locked = st.Effective == "locked",
             fallback = st.Fallback,
-            roots = st.Mode == "restricted" ? Config.GetList(KRoots) : Array.Empty<string>(),
+            roots = st.Mode == "restricted" ? RawRoots(sp) : Array.Empty<string>(),
             activeRoots = st.Roots,
             invalidRoots = st.Invalid,
             unlockMinutes = st.Minutes,
@@ -176,6 +197,8 @@ public static class FxPolicy
         if (mode == "restricted" && roots.Count == 0) throw BridgeException.BadRequest("במצב מוגבל יש לבחור לפחות תיקייה אחת");
         int minutes = (int)Math.Clamp(b.Long("unlockMinutes", DefaultMinutes), 1, MaxMinutes);
 
+        // כשרכיב ההקשחה מותקן המדיניות נשמרת קודם אצלו (מקור האמת); כישלון שם עוצר גם את השמירה המקומית
+        if (HardLock.Available) HardLock.SetFxPolicy(b.Str("password"), mode, roots, minutes);
         var arr = new JsonArray();
         foreach (string r in roots) arr.Add(r);
         Config.Set(KMode, JsonValue.Create(mode));
@@ -190,7 +213,7 @@ public static class FxPolicy
     private static object Unlock(JsonElement b)
     {
         AdminGate(b, allowRecovery: false);
-        int minutes = Math.Clamp(Config.Get(KMinutes, DefaultMinutes), 1, MaxMinutes);
+        int minutes = Math.Clamp(RawMinutes(ServicePolicy()), 1, MaxMinutes);
         lock (Gate) _unlockedUntil = Environment.TickCount64 + minutes * 60_000L;
         return Get();
     }

@@ -150,7 +150,8 @@ public static class HardLock
     {
         fields["op"] = "settings";
         fields["password"] = password ?? "";
-        Must(Call(fields));
+        // "settings" בשירות דורש Windows Hello כשהאימות הדו-שלבי פעיל — כמו SetSchedule/SetTwoFactor
+        Must(CallSensitive(fields, password));
         _cacheAt = DateTime.MinValue;
     }
 
@@ -187,6 +188,8 @@ public static class HardLock
     {
         try { OtzariaBridge.Programs.SyncToService(password); }
         catch (Exception ex) { Config.Log("hardlock sync programs: " + ex.Message); }
+        try { FxPolicy.SyncToService(password); }
+        catch (Exception ex) { Config.Log("hardlock sync fx policy: " + ex.Message); }
         try
         {
             var pol = Policy;
