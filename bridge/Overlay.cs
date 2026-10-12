@@ -47,7 +47,18 @@ public static class Overlay
 
     public static void HideRest() => Tray.Invoke(() => { if (_rest is { Visible: true }) _rest.Hide(); });
 
-    public static void HideAll() { HideRest(); HideClock(); }
+    private static SideBar _side;
+
+    public static void ShowSideBar() => Tray.Invoke(() =>
+    {
+        if (!Config.Get("kiosk.sideBar", true)) { HideSideBar(); return; }
+        _side ??= new SideBar();
+        _side.Rebuild();
+    });
+
+    public static void HideSideBar() => Tray.Invoke(() => { _side?.Hide(); });
+
+    public static void HideAll() { HideRest(); HideClock(); HideSideBar(); }
 
     [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr h);
@@ -61,8 +72,7 @@ public static class Overlay
             hwnd = Process.GetProcessesByName(name).Select(p => p.MainWindowHandle).FirstOrDefault(h => h != IntPtr.Zero);
         }
         if (hwnd == IntPtr.Zero) return;
-        ShowWindow(hwnd, 9 /* SW_RESTORE */);
-        SetForegroundWindow(hwnd);
+        Kiosk.BringToFront(hwnd);
     }
 
     internal static GraphicsPath Round(Rectangle r, int radius)
@@ -177,13 +187,23 @@ internal sealed class ClockBar : Form
     }
 }
 
-/// <summary>מסך מנוחה כשאוצריא ממוזערת: סמל, שעה ותאריך; לחיצה או מקש מחזירים לאוצריא</summary>
+/// <summary>
+/// מסך מנוחה כשאוצריא ממוזערת: סמל אוצריא גדול וברור בתוך עיגול זוהר פועם, שעה ותאריך, אותיות וכוכבים צפים.
+/// הכול נע לאט (גם הבלוק המרכזי) כדי לא לצרוב את המסך. לחיצה או מקש מחזירים לאוצריא.
+/// </summary>
 internal sealed class RestScreen : Form
 {
-    private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
+    private readonly System.Windows.Forms.Timer _tick = new() { Interval = 40 };
     private readonly Icon _icon = Overlay.AppIcon();
+    private readonly Bitmap _logo;
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly Random _rnd = new();
+    private readonly Particle[] _parts = new Particle[70];
+    private const string Letters = "אבגדהוזחטיכלמנסעפצקרשת";
     private Rectangle _btn;
     public IntPtr Target;
+
+    private struct Particle { public float X, Y, Size, Speed, Phase; public char Ch; }
 
     public RestScreen()
     {
@@ -193,12 +213,29 @@ internal sealed class RestScreen : Form
         StartPosition = FormStartPosition.Manual;
         DoubleBuffered = true;
         KeyPreview = true;
-        BackColor = Color.FromArgb(18, 24, 33);
+        BackColor = Color.FromArgb(14, 20, 30);
         Cursor = Cursors.Hand;
+        try { _logo = new Icon(_icon, 256, 256).ToBitmap(); } catch { _logo = SystemIcons.Application.ToBitmap(); }
+        for (int i = 0; i < _parts.Length; i++) _parts[i] = NewParticle(true);
         _tick.Tick += (_, _) => Invalidate();
-        _tick.Start();
         MouseClick += (_, _) => Back();
         KeyDown += (_, _) => Back();
+    }
+
+    private Particle NewParticle(bool anywhere) => new()
+    {
+        X = (float)_rnd.NextDouble(),
+        Y = anywhere ? (float)_rnd.NextDouble() : 1.05f,
+        Size = 0.6f + (float)_rnd.NextDouble() * 1.4f,
+        Speed = 0.004f + (float)_rnd.NextDouble() * 0.012f,
+        Phase = (float)(_rnd.NextDouble() * Math.PI * 2),
+        Ch = _rnd.Next(5) == 0 ? Letters[_rnd.Next(Letters.Length)] : '\0',
+    };
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (Visible) _tick.Start(); else _tick.Stop();
     }
 
     private void Back()
@@ -211,48 +248,104 @@ internal sealed class RestScreen : Form
     {
         var g = e.Graphics;
         var r = ClientRectangle;
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-        using (var bg = new LinearGradientBrush(r, Color.FromArgb(22, 34, 52), Color.FromArgb(10, 14, 20), 90f))
-            g.FillRectangle(bg, r);
-
+        float t = (float)_clock.Elapsed.TotalSeconds;
         float s = DeviceDpi / 96f;
-        int iconSize = (int)(128 * s);
-        int cx = r.Width / 2, top = (int)(r.Height * 0.22);
-        using (var bmp = new Icon(_icon, 256, 256).ToBitmap())
-            g.DrawImage(bmp, cx - iconSize / 2, top, iconSize, iconSize);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
-        var now = DateTime.Now;
-        using var timeF = new Font("Segoe UI Light", 72f, GraphicsUnit.Point);
+        // רקע: מעבר צבע איטי בין כחול עמוק לסגול-כחול
+        float k = (float)(Math.Sin(t / 18.0) * 0.5 + 0.5);
+        Color c1 = Mix(Color.FromArgb(18, 34, 58), Color.FromArgb(34, 24, 62), k);
+        Color c2 = Mix(Color.FromArgb(8, 12, 20), Color.FromArgb(10, 18, 30), k);
+        using (var bg = new LinearGradientBrush(r, c1, c2, 90f)) g.FillRectangle(bg, r);
+
+        // כוכבים ואותיות צפים כלפי מעלה
+        using (var letterFont = new Font("Segoe UI", 18f * s, GraphicsUnit.Pixel))
+        {
+            for (int i = 0; i < _parts.Length; i++)
+            {
+                ref var p = ref _parts[i];
+                p.Y -= p.Speed * 0.04f;
+                if (p.Y < -0.05f) p = NewParticle(false);
+                float px = (p.X + (float)Math.Sin(t * 0.3f + p.Phase) * 0.012f) * r.Width;
+                float py = p.Y * r.Height;
+                int a = (int)(40 + 70 * (Math.Sin(t * 0.8f + p.Phase) * 0.5 + 0.5));
+                if (p.Ch != '\0')
+                {
+                    using var lb = new SolidBrush(Color.FromArgb(a / 2, 200, 215, 255));
+                    g.DrawString(p.Ch.ToString(), letterFont, lb, px, py);
+                }
+                else
+                {
+                    float d = p.Size * 3.2f * s;
+                    using var sb = new SolidBrush(Color.FromArgb(a, 190, 210, 255));
+                    g.FillEllipse(sb, px, py, d, d);
+                }
+            }
+        }
+
+        // הבלוק המרכזי נע לאט בצורת 8 (מניעת צריבה)
+        float dx = (float)Math.Sin(t * 0.05) * r.Width * 0.06f;
+        float dy = (float)Math.Sin(t * 0.09) * r.Height * 0.035f;
+        float cx = r.Width / 2f + dx;
+        float iconSize = 168 * s;
+        float top = r.Height * 0.2f + dy;
+        float icy = top + iconSize / 2f;
+
+        // זוהר פועם: שלוש טבעות
+        for (int i = 0; i < 3; i++)
+        {
+            float ph = (t * 0.45f + i / 3f) % 1f;
+            float rad = iconSize * (0.75f + ph * 0.9f);
+            int a = (int)(70 * (1 - ph));
+            using var pen = new Pen(Color.FromArgb(a, 130, 175, 255), 2f * s);
+            g.DrawEllipse(pen, cx - rad, icy - rad, rad * 2, rad * 2);
+        }
+        // לוח עגול בהיר מאחורי הסמל, כדי שיהיה ברור גם כשהסמל כהה
+        float tile = iconSize * 1.28f;
+        using (var halo = new SolidBrush(Color.FromArgb(40, 160, 200, 255)))
+            g.FillEllipse(halo, cx - tile * 0.62f, icy - tile * 0.62f, tile * 1.24f, tile * 1.24f);
+        using (var disc = new SolidBrush(Color.FromArgb(245, 247, 252)))
+            g.FillEllipse(disc, cx - tile / 2, icy - tile / 2, tile, tile);
+        g.DrawImage(_logo, cx - iconSize / 2, icy - iconSize / 2, iconSize, iconSize);
+
+        using var nameF = new Font("Segoe UI Semibold", 26f, GraphicsUnit.Point);
+        using var timeF = new Font("Segoe UI Light", 76f, GraphicsUnit.Point);
         using var dateF = new Font("Segoe UI", 20f, GraphicsUnit.Point);
         using var hintF = new Font("Segoe UI", 13f, GraphicsUnit.Point);
         using var dim = new SolidBrush(Color.FromArgb(190, 210, 218, 228));
         var center = new StringFormat { Alignment = StringAlignment.Center };
         var rtl = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Center };
 
-        float y = top + iconSize + 24 * s;
-        g.DrawString(now.ToString("HH:mm"), timeF, Brushes.White, new RectangleF(0, y, r.Width, 140 * s), center);
-        y += 140 * s;
-        g.DrawString(Overlay.HebrewDate(now), dateF, Brushes.White, new RectangleF(0, y, r.Width, 44 * s), rtl);
-        y += 44 * s;
-        g.DrawString(now.ToString("d/M/yyyy"), dateF, dim, new RectangleF(0, y, r.Width, 44 * s), center);
-        y += 80 * s;
+        float y = icy + tile / 2 + 14 * s;
+        g.DrawString(Lang.T("אוצריא", "Otzaria"), nameF, Brushes.White, new RectangleF(cx - r.Width / 2f, y, r.Width, 50 * s), rtl);
+        y += 58 * s;
+        var now = DateTime.Now;
+        g.DrawString(now.ToString("HH:mm"), timeF, Brushes.White, new RectangleF(cx - r.Width / 2f, y, r.Width, 140 * s), center);
+        y += 138 * s;
+        g.DrawString(Overlay.HebrewDate(now), dateF, Brushes.White, new RectangleF(cx - r.Width / 2f, y, r.Width, 44 * s), rtl);
+        y += 42 * s;
+        g.DrawString(now.ToString("d/M/yyyy"), dateF, dim, new RectangleF(cx - r.Width / 2f, y, r.Width, 44 * s), center);
+        y += 72 * s;
 
-        // כפתור חזרה
         string label = Lang.T("חזרה לאוצריא", "Back to Otzaria");
         var sz = g.MeasureString(label, dateF);
-        _btn = new Rectangle((int)(cx - sz.Width / 2 - 32 * s), (int)y, (int)(sz.Width + 64 * s), (int)(sz.Height + 22 * s));
+        _btn = new Rectangle((int)(cx - sz.Width / 2 - 34 * s), (int)y, (int)(sz.Width + 68 * s), (int)(sz.Height + 22 * s));
         using (var path = Overlay.Round(_btn, (int)(_btn.Height / 2f)))
-        using (var fill = new SolidBrush(Color.FromArgb(255, 74, 128, 196)))
+        using (var fill = new LinearGradientBrush(_btn, Color.FromArgb(255, 92, 150, 220), Color.FromArgb(255, 62, 108, 186), 90f))
             g.FillPath(fill, path);
         g.DrawString(label, dateF, Brushes.White, new RectangleF(_btn.X, _btn.Y + 11 * s, _btn.Width, _btn.Height), rtl);
         g.DrawString(Lang.T("לחצו בכל מקום או על מקש כלשהו", "Click anywhere or press any key"), hintF, dim,
-            new RectangleF(0, _btn.Bottom + 16 * s, r.Width, 30 * s), rtl);
+            new RectangleF(cx - r.Width / 2f, _btn.Bottom + 16 * s, r.Width, 30 * s), rtl);
     }
+
+    private static Color Mix(Color a, Color b, float k) =>
+        Color.FromArgb((int)(a.R + (b.R - a.R) * k), (int)(a.G + (b.G - a.G) * k), (int)(a.B + (b.B - a.B) * k));
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _tick.Dispose(); _icon.Dispose(); }
+        if (disposing) { _tick.Dispose(); _icon.Dispose(); _logo.Dispose(); }
         base.Dispose(disposing);
     }
 }

@@ -5,7 +5,7 @@
   var ui = window.SS.ui;
   FX.ui = ui;
   FX.t = window.I18N ? window.I18N.t : function (x) { return x; };
-  FX.VERSION = '3.1.0';
+  FX.VERSION = '3.2.0';
   FX.CHANGELOG_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/blob/main/CHANGELOG.md';
   FX.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
 
@@ -15,6 +15,8 @@
     sel: {}, anchor: -1, focus: -1,
     back: [], fwd: [],
     sort: { key: 'name', dir: 'asc' }, showHidden: false,
+    cols: { date: true, type: true, size: true }, colw: {}, stripes: true,
+    tabs: null, tab: 0,
     clip: null,            /* { paths, cut, kind } */
     search: null,          /* { id, query, hits, cancelled, done, scanned } */
     loadId: 0, probeTimer: null, suspended: false, booted: false, busy: false
@@ -28,13 +30,16 @@
       var v = JSON.parse(localStorage.getItem(LS) || '{}');
       if (v.sort) S.sort = v.sort;
       S.showHidden = !!v.showHidden;
+      if (v.cols) S.cols = Object.assign({ date: true, type: true, size: true }, v.cols);
+      if (v.colw) S.colw = v.colw;
+      if (v.stripes != null) S.stripes = !!v.stripes;
       return v;
     } catch (e) { return {}; }
   }
   function savePrefs() {
     try {
       var v = JSON.parse(localStorage.getItem(LS) || '{}');
-      v.sort = S.sort; v.showHidden = S.showHidden;
+      v.sort = S.sort; v.showHidden = S.showHidden; v.cols = S.cols; v.colw = S.colw; v.stripes = S.stripes;
       if (S.prov) v['last.' + S.prov.kind] = S.recycle ? '' : S.path;
       localStorage.setItem(LS, JSON.stringify(v));
     } catch (e) { /* אחסון לא זמין */ }
@@ -232,7 +237,7 @@
     S.sel = {}; S.anchor = -1; S.focus = -1;
     $('fx-search').value = '';
     savePrefs();
-    renderCrumbs(); renderList(); markSide(); renderCmds();
+    renderCrumbs(); renderList(); markSide(); renderCmds(); renderTabs();
   }
   function go(path) { return load(path, true).catch(function () { /* כבר דווח */ }); }
   function refresh() {
@@ -307,6 +312,120 @@
     inp.addEventListener('blur', function () { finish(false); });
   }
 
+  /* ---------- כרטיסיות (כמו בסייר של Windows 11) ---------- */
+  function tabTitle(path) {
+    if (!path) return S.prov ? S.prov.rootLabel : 'סייר';
+    var d = S.prov.displayPath(path).replace(/[\\/]+$/, '');
+    var m = /([^\\/]+)$/.exec(d);
+    return m ? m[1] : d;
+  }
+  function ensureTabs() {
+    if (!S.tabs) { S.tabs = [{ path: S.path, back: S.back, fwd: S.fwd, title: tabTitle(S.path) }]; S.tab = 0; }
+  }
+  function saveTab() {
+    ensureTabs();
+    var t = S.tabs[S.tab];
+    if (!t) return;
+    t.path = S.path; t.back = S.back; t.fwd = S.fwd; t.title = S.recycle ? 'סל המיחזור' : tabTitle(S.path);
+  }
+  function renderTabs() {
+    var bar = $('fx-tabs');
+    if (!bar || !S.prov) return;
+    ensureTabs();
+    saveTab();
+    bar.innerHTML = S.tabs.map(function (t, i) {
+      return '<div class="fx-tab' + (i === S.tab ? ' on' : '') + '" role="tab" aria-selected="' + (i === S.tab ? 'true' : 'false') + '" data-tab="' + i + '" title="' + FX.esc(S.prov.displayPath(t.path)) + '">' +
+        ic('folder') + '<span class="fx-tab-t">' + FX.esc(t.title) + '</span>' +
+        (S.tabs.length > 1 ? '<button class="fx-tab-x" data-closetab="' + i + '" aria-label="סגירת כרטיסייה">' + ic('close') + '</button>' : '') + '</div>';
+    }).join('') + '<button class="fx-tab-new" data-newtab="1" title="כרטיסייה חדשה (Ctrl+T)" aria-label="כרטיסייה חדשה">' + ic('plus') + '</button>';
+  }
+  async function newTab(path) {
+    ensureTabs(); saveTab();
+    cancelSearch(); S.search = null;
+    S.tabs.push({ path: path || '', back: [], fwd: [], title: tabTitle(path || '') });
+    S.tab = S.tabs.length - 1;
+    S.back = S.tabs[S.tab].back; S.fwd = S.tabs[S.tab].fwd;
+    try { await load(path || '', false); } catch (e) { /* כבר דווח */ }
+    renderTabs();
+  }
+  async function switchTab(i) {
+    ensureTabs();
+    if (i === S.tab || i < 0 || i >= S.tabs.length) return;
+    saveTab(); cancelSearch(); S.search = null;
+    S.tab = i;
+    S.back = S.tabs[i].back; S.fwd = S.tabs[i].fwd;
+    try { await load(S.tabs[i].path, false); } catch (e) { /* כבר דווח */ }
+    renderTabs();
+  }
+  async function closeTab(i) {
+    ensureTabs();
+    if (S.tabs.length <= 1) return;
+    var wasActive = i === S.tab;
+    S.tabs.splice(i, 1);
+    if (!wasActive) { if (i < S.tab) S.tab--; renderTabs(); return; }
+    S.tab = Math.min(i, S.tabs.length - 1);
+    S.back = S.tabs[S.tab].back; S.fwd = S.tabs[S.tab].fwd;
+    cancelSearch(); S.search = null;
+    try { await load(S.tabs[S.tab].path, false); } catch (e) { /* כבר דווח */ }
+    renderTabs();
+  }
+
+  /* ---------- בחירת עמודות והרחבתן ---------- */
+  function columnsMenu(x, y) {
+    var m = $('fx-menu');
+    var names = { date: 'תאריך שינוי', type: 'סוג', size: 'גודל' };
+    m.innerHTML = Object.keys(names).map(function (k) {
+      return '<button class="fx-menu-item" role="menuitemcheckbox" aria-checked="' + (S.cols[k] !== false) + '" data-col="' + k + '"><span class="fx-chk">' + (S.cols[k] !== false ? '✓' : '') + '</span><span>' + names[k] + '</span></button>';
+    }).join('') + '<button class="fx-menu-item" data-colreset="1"><span class="fx-chk"></span><span>איפוס רוחב העמודות</span></button>';
+    m.hidden = false;
+    var r = m.getBoundingClientRect(), vw = document.documentElement.clientWidth;
+    m.style.left = Math.max(4, Math.min(x, vw - r.width - 4)) + 'px';
+    m.style.top = y + 'px';
+  }
+  function bindColumns() {
+    var head = $('fx-head');
+    head.addEventListener('contextmenu', function (e) { e.preventDefault(); columnsMenu(e.clientX, e.clientY); });
+    $('fx-menu').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-col],[data-colreset]');
+      if (!b) return;
+      e.stopPropagation(); hideMenu();
+      if (b.dataset.colreset) S.colw = {};
+      else S.cols[b.dataset.col] = S.cols[b.dataset.col] === false;
+      savePrefs(); renderList();
+    }, true);
+    head.addEventListener('pointerdown', function (e) {
+      var h = e.target.closest('[data-rs]');
+      if (!h) return;
+      e.preventDefault(); e.stopPropagation();
+      var key = h.dataset.rs, col = h.parentNode, startX = e.clientX, start = col.getBoundingClientRect().width;
+      var rtl = document.documentElement.dir !== 'ltr';
+      h.setPointerCapture(e.pointerId);
+      function move(ev) {
+        var dx = ev.clientX - startX;
+        S.colw[key] = Math.round(Math.max(48, Math.min(480, start + (rtl ? -dx : dx))));
+        applyGrid();
+      }
+      function up() { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); savePrefs(); }
+      h.addEventListener('pointermove', move); h.addEventListener('pointerup', up);
+    });
+    head.addEventListener('click', function (e) { if (e.target.closest('[data-rs]')) e.stopPropagation(); }, true);
+    $('fx-tabs').addEventListener('click', function (e) {
+      var x = e.target.closest('[data-closetab]');
+      if (x) { e.stopPropagation(); closeTab(+x.dataset.closetab); return; }
+      if (e.target.closest('[data-newtab]')) { newTab(''); return; }
+      var t = e.target.closest('[data-tab]');
+      if (t) switchTab(+t.dataset.tab);
+    });
+    $('fx-tabs').addEventListener('auxclick', function (e) {
+      var t = e.target.closest('[data-tab]');
+      if (e.button === 1 && t) { e.preventDefault(); closeTab(+t.dataset.tab); }
+    });
+    $('fx-side').addEventListener('auxclick', function (e) {
+      var b = e.target.closest('.nav-item[data-path]');
+      if (e.button === 1 && b) { e.preventDefault(); newTab(b.dataset.path); }
+    });
+  }
+
   /* ---------- הרשימה ---------- */
   var COLS = [
     { key: 'name', label: 'שם' },
@@ -314,15 +433,37 @@
     { key: 'type', label: 'סוג' },
     { key: 'size', label: 'גודל' }
   ];
+  function colOn(c) { return c.key === 'name' || S.cols[c.key] !== false; }
+  /* תבנית העמודות לפי העמודות שנבחרו והרוחבים ששמורים */
+  function applyGrid() {
+    var root = document.documentElement;
+    var parts = ['minmax(10em, 1fr)'];
+    COLS.forEach(function (c) {
+      if (c.key === 'name' || !colOn(c)) return;
+      var w = S.colw[c.key];
+      parts.push(w ? w + 'px' : 'var(--fx-col-' + c.key + ')');
+    });
+    root.style.setProperty('--fx-grid', parts.join(' '));
+    root.style.setProperty('--fx-grid-where', parts.concat(['var(--fx-col-where)']).join(' '));
+  }
   function renderHead() {
-    $('fx-head').innerHTML = COLS.map(function (c) {
+    applyGrid();
+    $('fx-head').innerHTML = COLS.filter(colOn).map(function (c) {
       var on = S.sort.key === c.key;
       return '<button class="fx-col fx-col-' + c.key + (on ? ' on' : '') + '" data-sort="' + c.key + '">' + (S.recycle && c.key === 'date' ? 'תאריך מחיקה' : c.label) +
-        (on ? '<span class="fx-sort-dir">' + (S.sort.dir === 'asc' ? '▲' : '▼') + '</span>' : '') + '</button>';
+        (on ? '<span class="fx-sort-dir">' + (S.sort.dir === 'asc' ? '▲' : '▼') + '</span>' : '') +
+        (c.key !== 'name' ? '<i class="fx-col-rs" data-rs="' + c.key + '" title="גררו לשינוי הרוחב"></i>' : '') + '</button>';
     }).join('') + (S.search ? '<span class="fx-col fx-col-where">מיקום</span>' : S.recycle ? '<span class="fx-col fx-col-where">מיקום מקורי</span>' : '');
     $('fx-head').classList.toggle('with-where', !!S.search || S.recycle);
   }
 
+  /* שורת הקטע מהתוכן (חיפוש בתוכן), עם הדגשת המילה */
+  function snipHtml(e) {
+    if (!S.search || !e.snippet) return '';
+    var q = S.search.query, sn = e.snippet, at = q ? sn.toLowerCase().indexOf(q.toLowerCase()) : -1;
+    var h = at < 0 ? FX.esc(sn) : FX.esc(sn.slice(0, at)) + '<mark class="fx-hit">' + FX.esc(sn.slice(at, at + q.length)) + '</mark>' + FX.esc(sn.slice(at + q.length));
+    return '<span class="fx-snip" dir="auto">' + h + '</span>';
+  }
   function rowHtml(e, i) {
     var kind = FX.kindOf(e);
     var icon = e.icon || FX.kindInfo(kind).icon;
@@ -338,18 +479,19 @@
       var orig = S.prov.parentOf(e.origPath || '') || '';
       where = '<span class="fx-cell fx-cell-where" title="' + FX.esc(e.origPath || '') + '">' + FX.esc(orig) + '</span>';
     }
-    return '<div class="fx-row' + (S.sel[e.path] ? ' sel' : '') + (i === S.focus ? ' focus' : '') + (cut ? ' cut' : '') + (e.hidden ? ' hid' : '') +
+    return '<div class="fx-row' + (e.snippet && S.search ? ' has-snip' : '') + (S.sel[e.path] ? ' sel' : '') + (i === S.focus ? ' focus' : '') + (cut ? ' cut' : '') + (e.hidden ? ' hid' : '') +
       '" role="option" aria-selected="' + (S.sel[e.path] ? 'true' : 'false') + '" data-i="' + i + '" draggable="false">' +
-      '<span class="fx-cell fx-cell-name"><span class="fx-ic k-' + kind + '">' + ic(icon) + '</span><span class="fx-name" title="' + FX.esc(e.name) + '">' + FX.esc(e.name) + '</span></span>' +
-      '<span class="fx-cell fx-cell-date">' + (e.modified ? FX.esc(FX.formatDate(e.modified)) : '') + '</span>' +
-      '<span class="fx-cell fx-cell-type">' + FX.esc(FX.typeLabel(e)) + '</span>' +
-      '<span class="fx-cell fx-cell-size">' + FX.esc(size || '') + '</span>' + where + '</div>';
+      '<span class="fx-cell fx-cell-name"><span class="fx-ic k-' + kind + '">' + ic(icon) + '</span><span class="fx-name-wrap"><span class="fx-name" title="' + FX.esc(e.name) + '">' + FX.esc(e.name) + '</span>' + snipHtml(e) + '</span></span>' +
+      (S.cols.date !== false ? '<span class="fx-cell fx-cell-date">' + (e.modified ? FX.esc(FX.formatDate(e.modified)) : '') + '</span>' : '') +
+      (S.cols.type !== false ? '<span class="fx-cell fx-cell-type">' + FX.esc(FX.typeLabel(e)) + '</span>' : '') +
+      (S.cols.size !== false ? '<span class="fx-cell fx-cell-size">' + FX.esc(size || '') + '</span>' : '') + where + '</div>';
   }
 
   function renderList() {
     renderHead();
     var list = $('fx-list');
     list.classList.toggle('with-where', !!S.search || S.recycle);
+    list.classList.toggle('striped', !!S.stripes);
     var src = S.search ? S.search.hits : S.entries;
     if (S.isRoot && !S.search) S.view = src.slice();
     else S.view = FX.sortEntries(src, S.sort.key, S.sort.dir);
@@ -468,6 +610,9 @@
     { sep: true },
     { id: 'open', icon: 'open', label: 'פתיחה', key: 'Enter' },
     { id: 'reveal', icon: 'reveal', label: 'הצגה בסייר של Windows', cap: 'reveal' },
+    { id: 'openNewTab', icon: 'open', label: 'פתיחה בכרטיסייה חדשה', menuOnly: true },
+    { id: 'openLocation', icon: 'folderOpen', label: 'פתיחת מיקום הקובץ', menuOnly: true },
+    { id: 'copyPath', icon: 'copy', label: 'העתקה כנתיב', key: 'Ctrl+Shift+C', menuOnly: true },
     { id: 'props', icon: 'info', label: 'מאפיינים', cap: 'properties', key: 'Alt+Enter' }
   ];
   function inFolder() { return !S.isRoot && !S.search && !S.recycle; }
@@ -496,6 +641,9 @@
       case 'open': return { on: n === 1 };
       case 'reveal': return { on: n >= 1 && p.caps.reveal && sel[0].type !== 'drive' };
       case 'props': return { on: (n === 1 || inFolder()) && p.caps.properties };
+      case 'openNewTab': return { on: n === 1 && (sel[0].type === 'dir' || sel[0].type === 'drive') };
+      case 'openLocation': return { on: n === 1 && !S.recycle && !!S.search };
+      case 'copyPath': return { on: n >= 1 };
     }
     return { on: false };
   }
@@ -504,7 +652,7 @@
     var bar = $('fx-cmds');
     bar.innerHTML = CMDS.filter(function (c) {
       if (S.recycle) return !c.sep && !!(c.bin || c.binOnly);
-      if (c.binOnly) return false;
+      if (c.binOnly || c.menuOnly) return false;
       if (c.sep) return true;
       if (c.cap === 'saveCopy') return !!S.prov.caps.saveCopy;
       if (c.cap === 'reveal') return !!S.prov.caps.reveal;
@@ -538,6 +686,22 @@
       case 'open': return openEntry(selected()[0]);
       case 'reveal': return S.prov.reveal(selected()[0].path).catch(function (e) { opError(e, 'ההצגה נכשלה'); });
       case 'props': return props();
+      case 'openNewTab': return newTab(selected()[0].path);
+      case 'openLocation': return openLocation(selected()[0]);
+      case 'copyPath': return copyText(selected().map(function (x) { return S.prov.displayPath(x.path); }).join('\n')).then(function () { ui.toast('הנתיב הועתק', 'success'); });
+    }
+  }
+  /* "פתיחת מיקום": קופצים לתיקייה שמכילה את הקובץ ומסמנים אותו (כמו ב-Windows) */
+  async function openLocation(e) {
+    var par = S.prov.parentOf(e.path);
+    if (S.search) { S.search.cancelled = true; S.search = null; }
+    try { await load(par, true); } catch (er) { return; }
+    var i = S.view.findIndex(function (x) { return S.prov.same(x.path, e.path); });
+    if (i >= 0) {
+      S.sel = {}; S.sel[S.view[i].path] = true; S.focus = i; S.anchor = i;
+      refreshRows();
+      var row = $('fx-list').querySelector('.fx-row.focus');
+      if (row) row.scrollIntoView({ block: 'center' });
     }
   }
 
@@ -796,6 +960,8 @@
     if (id === 'view') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('grid') + 'תצוגת הקבצים</div>' +
       setRow('פריסה', '', seg('mode', FX.layout.mode(), [['details', 'פרטים'], ['list', 'רשימה'], ['icons', 'סמלים']])) +
       setRow('גודל טקסט', 'גם ב-Ctrl+ / Ctrl- / Ctrl+0', seg('zoom', String(FX.layout.zoom()), [['0.8', 'קטן מאוד'], ['0.9', 'רגיל'], ['1', 'בינוני'], ['1.1', 'גדול'], ['1.2', 'גדול מאוד'], ['1.35', 'ענק']])) +
+      setRow('שורות מצוילות', 'צבע מתחלף בין השורות, כמו ב-Everything', setSwitch('stripes', S.stripes)) +
+      setRow('עמודות להצגה', 'אפשר גם בלחיצה ימנית על כותרת העמודות. הרחבת עמודה: גרירת הקצה שלה', seg('cols', '', [['date', 'תאריך ' + (S.cols.date !== false ? '✓' : '✗')], ['type', 'סוג ' + (S.cols.type !== false ? '✓' : '✗')], ['size', 'גודל ' + (S.cols.size !== false ? '✓' : '✗')]])) +
       setRow('הצגת קבצים מוסתרים', 'קבצים ותיקיות עם התכונה "מוסתר" יוצגו בצבע חלש', setSwitch('hidden', S.showHidden)) +
       '</div>';
     if (id === 'general') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('settings') + 'כללי</div>' +
@@ -863,6 +1029,11 @@
         } catch (err) { slot.textContent = 'בדיקת העדכון נכשלה: ' + ((err && err.message) || err); }
         return;
       }
+      if (t.dataset.sw === 'stripes') {
+        S.stripes = !S.stripes; t.classList.toggle('on', S.stripes); t.setAttribute('aria-checked', S.stripes ? 'true' : 'false');
+        savePrefs(); renderList(); return;
+      }
+      if (t.closest('[data-seg=cols]') && t.dataset.v) { S.cols[t.dataset.v] = S.cols[t.dataset.v] === false; savePrefs(); renderList(); showCat('view'); return; }
       if (t.dataset.sw === 'hidden') {
         S.showHidden = !S.showHidden;
         t.classList.toggle('on', S.showHidden); t.setAttribute('aria-checked', S.showHidden ? 'true' : 'false');
@@ -938,24 +1109,43 @@
   function openExternal(e) {
     S.prov.open(e.path).catch(function (err) { opError(err, 'הפתיחה נכשלה'); });
   }
-  async function openEntry(e) {
+  async function openEntry(e, find) {
     if (!e) return;
     if (S.recycle) { ui.toast('כדי לפתוח פריט יש לשחזר אותו קודם', 'info'); return; }
     if (e.type === 'dir' || e.type === 'drive') { go(e.path); return; }
     var ext = FX.extOf(e.name);
     var o = opts();
     var canExt = !!S.prov.caps.open;
+    if (find === undefined && S.search && $('fx-content').checked) find = S.search.query;   /* חיפוש בתוכן: פותחים במקום ההתאמה */
+    var bk = FX.kindOf(e);
     var kind = ext === 'pdf' ? 'pdf' : (ext === 'docx' || ext === 'doc') ? 'word' : FX.isTextExt(ext) ? 'text' : FX.isImageExt(ext) ? 'image' : '';
     if (kind && o[kind] === 'external' && canExt) { openExternal(e); return; }
     if (kind === 'pdf' && o.pdf === 'ocr') { openInPdfPlugin(e); return; }
     if (kind === 'word' && o.word === 'wordplugin' && ext === 'docx') { openInWordPlugin(e); return; }
     if (kind === 'pdf' && window.pdfjsLib) { FX.viewPdf(S.prov, e); return; }
-    if (kind === 'word' && window.JSZip && ext === 'docx') { FX.viewDocx(S.prov, e, o.word === 'one' ? 1 : 2); return; }
-    if (kind === 'text') { FX.viewText(S.prov, e); return; }
+    if (kind === 'word' && window.JSZip && ext === 'docx') { FX.viewDocx(S.prov, e, o.word === 'one' ? 1 : 2, find); return; }
+    if (kind === 'text') { FX.viewText(S.prov, e, find); return; }
     if (kind === 'image') { preview(e); return; }
+    /* שאר הסוגים: צופים פנימיים לכל הפורמטים הנפוצים, ופתיחה ביישום ב-Windows כשאין צופה */
+    var big = e.size != null && e.size > 50 * 1024 * 1024;
+    var mk = FX.mediaKind(ext);
+    if (mk) { if (big && canExt) { openExternal(e); return; } FX.viewMedia(S.prov, e, mk); return; }
+    if (window.JSZip && !big) {
+      if (ext === 'xlsx') { FX.viewSheet(S.prov, e, find); return; }
+      if (ext === 'pptx') { FX.viewSlides(S.prov, e, find); return; }
+      if (ext === 'odt' || ext === 'ods' || ext === 'odp') { FX.viewOdf(S.prov, e, find); return; }
+      if (ext === 'epub') { FX.viewEpub(S.prov, e, find); return; }
+      if (ext === 'zip' || ext === 'otzplugin' || ext === 'jar') { FX.viewZip(S.prov, e); return; }
+    }
+    if (ext === 'rtf') { FX.viewRtf(S.prov, e, find); return; }
+    if (bk === 'exe' || bk === 'archive' || bk === 'sheet' || bk === 'slides' || bk === 'word' || bk === 'book') {
+      if (canExt) { openExternal(e); return; }
+      FX.viewUnknown(S.prov, e); return;
+    }
+    /* סוג לא מוכר: אם התוכן טקסט — מציגים אותו; אחרת פותחים ביישום (או כרטיס פרטים) */
+    if (bk === 'file' || bk === 'code') { FX.viewUnknown(S.prov, e); return; }
     if (canExt) { openExternal(e); return; }
-    if (kind === 'word') { FX.viewDocx(S.prov, e, 2); return; }
-    ui.toast(S.prov.capReasons && S.prov.capReasons.open || 'אין אפשרות לפתוח קובץ זה', 'info');
+    FX.viewUnknown(S.prov, e);
   }
 
   /* תצוגה מקדימה פשוטה לטקסט ולתמונות */
@@ -1107,7 +1297,9 @@
     var items = [];
     var sel = selected();
     if (sel.length === 1) items.push('open');
-    if (sel.length) items.push('cut', 'copy');
+    if (sel.length === 1 && (sel[0].type === 'dir' || sel[0].type === 'drive')) items.push('openNewTab');
+    if (sel.length === 1 && S.search) items.push('openLocation');
+    if (sel.length) items.push('cut', 'copy', 'copyPath');
     if (inFolder()) items.push('paste');
     if (S.prov.caps.saveCopy && sel.length === 1) items.push('saveCopy');
     if (sel.length === 1) items.push('rename');
@@ -1173,8 +1365,9 @@
     $('fx-search').addEventListener('input', FX.debounce(function () {
       var v = $('fx-search').value.trim();
       if (!v && S.search) exitSearch();
-      else if (v.length >= 2 && !$('fx-content').checked) runSearch(v);
-    }, 450));
+      else if (v.length >= 2) runSearch(v);    /* חי: התוצאות מתעדכנות תוך כדי הקלדה, כמו ב-Everything */
+    }, 260));
+    $('fx-content').addEventListener('change', function () { var v = $('fx-search').value.trim(); if (v.length >= 2) runSearch(v); });
     $('fx-search').addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { e.preventDefault(); exitSearch(); $('fx-main').focus(); }
     });
@@ -1216,6 +1409,12 @@
     list.addEventListener('dblclick', function (e) {
       var row = e.target.closest('.fx-row');
       if (row) openEntry(S.view[+row.dataset.i]);
+    });
+    list.addEventListener('auxclick', function (e) {
+      if (e.button !== 1) return;
+      var row = e.target.closest('.fx-row');
+      var en = row && S.view[+row.dataset.i];
+      if (en && (en.type === 'dir' || en.type === 'drive')) { e.preventDefault(); newTab(en.path); }
     });
     list.addEventListener('contextmenu', function (e) {
       e.preventDefault();
@@ -1264,6 +1463,10 @@
       return;
     }
     var ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && e.key.toLowerCase() === 't' && !typing(e.target)) { e.preventDefault(); newTab(''); return; }
+    if (ctrl && e.key.toLowerCase() === 'w' && !typing(e.target)) { e.preventDefault(); closeTab(S.tab); return; }
+    if (ctrl && e.shiftKey && e.key.toLowerCase() === 'c' && !typing(e.target)) { e.preventDefault(); run('copyPath', e); return; }
+    if (ctrl && e.key === 'Tab' && S.tabs && S.tabs.length > 1) { e.preventDefault(); switchTab((S.tab + (e.shiftKey ? -1 : 1) + S.tabs.length) % S.tabs.length); return; }
     if (ctrl && e.key.toLowerCase() === 'f') { e.preventDefault(); $('fx-search').focus(); $('fx-search').select(); return; }
     if (ctrl && e.key.toLowerCase() === 'l') { e.preventDefault(); editPath(); return; }
     if (e.key === 'F5') { e.preventDefault(); refresh(); return; }
@@ -1383,6 +1586,7 @@
     $('fx-hidden').classList.toggle('on', S.showHidden);
     $('fx-hidden').setAttribute('aria-pressed', S.showHidden ? 'true' : 'false');
     bind();
+    bindColumns();
     FX.layout.init();
     connect(false);
   }

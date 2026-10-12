@@ -320,7 +320,7 @@
         if (!obj || !obj.type) return;
         if (obj.type === 'hit' || obj.type === 'dir' || obj.type === 'file') {
           var t = obj.type === 'hit' ? (obj.entryType || obj.kind || obj.itemType || guessType(obj)) : obj.type;
-          handlers.hit({ name: obj.name, path: obj.path, type: t === 'dir' ? 'dir' : 'file', size: obj.size, modified: obj.modified });
+          handlers.hit({ name: obj.name, path: obj.path, type: t === 'dir' ? 'dir' : 'file', size: obj.size, modified: obj.modified, snippet: obj.snippet });
         } else if (obj.type === 'progress') handlers.progress({ scanned: obj.scanned, current: obj.current });
         else if (obj.type === 'done') { summary = obj; handlers.progress({ scanned: obj.scanned, current: '' }); }
       }, isCancelled, { timeoutMs: 120000 }).then(function (r) {

@@ -56,6 +56,13 @@
       '<li>' + ui.icon('lock') + '<span><b>יציאה רק עם סיסמה</b> — מכאן, מתוך התוסף. הנעילה חוזרת אוטומטית גם אחרי הפעלה מחדש.</span></li>' +
       '</ul></div>';
 
+    html += '<div class="card explain"><div class="card-title">מה קורה בכיבוי, בהפעלה מחדש ובחשבון Windows אחר?</div><ul class="feature-list">' +
+      '<li>' + ui.icon('lock') + '<span><b>כיבוי או הפעלה מחדש:</b> כברירת מחדל הנעילה <b>נשמרת</b>. הגשר עולה עם Windows וננעל שוב, ואוצריא נפתחת. אם רוצים שבכיבוי הנעילה תתאפס, מסמנים "ביטול נעילה בכיבוי המחשב" בהגדרות הנעילה (לא פועל עם נעילה מוקשחת).</span></li>' +
+      '<li>' + ui.icon('computer') + '<span><b>חשבון Windows אחר:</b> נעילה רגילה חלה רק בחשבון שבו הופעלה. מחשבון אחר אפשר לעצור את הגשר. <b>נעילה מוקשחת</b> (אופציונלית) מפעילה את הגשר גם בחשבונות אחרים וחוסמת בהם את מנהל המשימות.</span></li>' +
+      '<li>' + ui.icon('shield') + '<span><b>הכי בטוח לעמדת לימוד:</b> חשבון Windows <b>רגיל</b> (בלי הרשאות מנהל) ללא גישה להגדרות המחשב, שבו מפעילים את הנעילה; חשבון המנהל נשאר עם סיסמה נפרדת.</span></li>' +
+      '<li>' + ui.icon('key') + '<span><b>חירום:</b> קיצור Ctrl+Alt+Shift+F12 פותח חלון קוד שחזור לביטול הנעילה כולה. בלי הקוד אי אפשר לבטל, כדי שלא יהיה קיצור שעוקף את הנעילה.</span></li>' +
+      '</ul></div>';
+
     if ((st.warnings || []).indexOf('admin') >= 0) {
       html += '<div class="card"><div class="card-title">' + ui.icon('warning') + 'אזהרה: חשבון עם הרשאות מנהל</div>' +
         '<p class="muted">המחשב מופעל בחשבון Windows עם הרשאות מנהל, שממנו אפשר לעקוף את הנעילה. ' +
@@ -345,6 +352,8 @@
       { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
       { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
       { name: 'rest', type: 'checkbox', label: 'מסך מנוחה כשאוצריא ממוזערת', value: st.restScreen !== false, hint: 'סמל אוצריא, שעה ותאריך במסך מלא. לחיצה בכל מקום מחזירה לאוצריא' },
+      { name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' },
+      { name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' },
       { name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' },
       { name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' }
     ];
@@ -367,7 +376,7 @@
       onSubmit: async function (x) {
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
-          readOnly: !!x.ro, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, clockPosition: x.pos.trim(),
+          readOnly: !!x.ro, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, resetOnShutdown: !!x.reset, clockPosition: x.pos.trim(),
           openSections: all.filter(function (id) { return x['sec_' + id]; })
         });
         return true;
@@ -378,9 +387,9 @@
 
   function programsCard(progs, found, autoTorah) {
     var rows = progs.map(function (p) {
-      return '<div class="setting-row"><div class="setting-text"><b>' + ui.esc(p.name) + '</b>' + (p.auto ? ' <span class="muted small">(זוהתה אוטומטית)</span>' : '') +
+      return '<div class="setting-row"><div class="setting-text"><b>' + ui.esc(p.name) + '</b>' + (p.auto ? ' <span class="muted small">(זוהתה אוטומטית)</span>' : '') + (p.running ? ' <span class="muted small">· פתוחה עכשיו</span>' : '') +
         '<span class="muted path"><bdi dir="ltr">' + ui.esc(p.path) + '</bdi>' + (p.exists ? '' : ' · הקובץ לא נמצא') + '</span></div>' +
-        '<button class="btn btn-tonal" data-act="prog-open-' + ui.esc(p.id) + '"' + (p.exists ? '' : ' disabled') + '>' + ui.icon('computer') + 'פתיחה</button>' +
+        '<button class="btn btn-tonal" data-act="prog-open-' + ui.esc(p.id) + '"' + (p.exists ? '' : ' disabled') + '>' + ui.icon('computer') + (p.running ? 'העבר לחזית' : 'פתיחה') + '</button>' +
         (p.auto ? '' : '<button class="btn btn-tonal" data-act="prog-del-' + ui.esc(p.id) + '" aria-label="הסרה">' + ui.icon('close') + '</button>') + '</div>';
     }).join('');
     var suggest = found.map(function (f, i) {

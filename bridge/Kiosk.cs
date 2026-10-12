@@ -169,11 +169,42 @@ public static class Kiosk
     /// <summary>אימות סיסמה לשימוש מודולים אחרים (בלי קוד שחזור)</summary>
     internal static void RequirePassword(string password) => Verify(password, allowRecovery: false);
 
-    /// <summary>מביא חלון לחזית (לתוכנות מותרות שנפתחו מתוך אוצריא)</summary>
+    [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    [DllImport("user32.dll")] private static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+    [DllImport("user32.dll")] private static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+
+    /// <summary>
+    /// מביא חלון לחזית באמת: משחזר חלון מוקטן, ועוקף את חסימת Windows להעברת פוקוס מתהליך רקע
+    /// (חיבור חוטי הקלט + לחיצת Alt שקטה + הצמדה זמנית למעלה). בלי זה התוכנה נפתחת מאחור ולא ניתן להשתמש בה.
+    /// </summary>
     internal static void BringToFront(IntPtr hwnd)
     {
+        if (hwnd == IntPtr.Zero || !IsWindow(hwnd)) return;
         if (IsIconic(hwnd)) ShowWindow(hwnd, 9 /* SW_RESTORE */);
-        if (!SetForegroundWindow(hwnd)) SwitchToThisWindow(hwnd, true);
+        else ShowWindow(hwnd, 5 /* SW_SHOW */);
+        uint cur = GetCurrentThreadId();
+        IntPtr fg = GetForegroundWindow();
+        uint fgThread = fg == IntPtr.Zero ? 0 : GetWindowThreadProcessId(fg, out _);
+        uint target = GetWindowThreadProcessId(hwnd, out _);
+        bool a1 = false, a2 = false;
+        try
+        {
+            if (fgThread != 0 && fgThread != cur) a1 = AttachThreadInput(cur, fgThread, true);
+            if (target != 0 && target != cur) a2 = AttachThreadInput(cur, target, true);
+            keybd_event(0x12, 0, 0, UIntPtr.Zero);       // Alt למטה ולמעלה: Windows מתירה אז החלפת חזית
+            keybd_event(0x12, 0, 2, UIntPtr.Zero);
+            SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); // TOPMOST, בלי שינוי גודל
+            SetWindowPos(hwnd, new IntPtr(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); // חזרה ל-NOTOPMOST (נשאר בחזית)
+            BringWindowToTop(hwnd);
+            if (!SetForegroundWindow(hwnd)) SwitchToThisWindow(hwnd, true);
+        }
+        catch (Exception ex) { Config.Log("bring to front: " + ex.Message); }
+        finally
+        {
+            if (a1) AttachThreadInput(cur, fgThread, false);
+            if (a2) AttachThreadInput(cur, target, false);
+        }
     }
 
     private static string NewRecoveryCode()
@@ -198,6 +229,8 @@ public static class Kiosk
         clockPosition = Config.Get("kiosk.clockPosition", "bottom-left"),
         restScreen = Config.Get("kiosk.restScreen", true),
         fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
+        sideBar = Config.Get("kiosk.sideBar", true),
+        resetOnShutdown = Config.Get("kiosk.resetOnShutdown", false),
         openSections = OpenSections,
         allSections = AllSections,
         warnings = Warnings(),
@@ -291,7 +324,7 @@ public static class Kiosk
     {
         Verify(b.Str("password"), allowRecovery: false);
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
-        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria" })
+        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "resetOnShutdown" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         string cp = b.Str("clockPosition");
         if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right") Config.Set("kiosk.clockPosition", cp);
@@ -309,7 +342,7 @@ public static class Kiosk
             Config.Set("kiosk.otzariaPath", p);
         }
         Config.Save();
-        if (IsActive) Apply();
+        if (IsActive) { Apply(); Overlay.ShowSideBar(); }
         return Status();
     }
 
@@ -398,6 +431,31 @@ public static class Kiosk
     }
 
     private static bool _taskMgrByPolicy;
+    private static bool _sessionHooked;
+
+    /// <summary>
+    /// אפשרות "ביטול נעילה בכיבוי": כשהמחשב מכבה או המשתמש מתנתק, הנעילה מתבטלת, ובהפעלה הבאה המחשב רגיל.
+    /// לא פועל עם נעילה מוקשחת (שם השירות הוא מקור האמת), ולא בסגירה של הגשר עצמו או בעדכון.
+    /// </summary>
+    private static void HookSessionEnding()
+    {
+        if (_sessionHooked) return;
+        _sessionHooked = true;
+        Microsoft.Win32.SystemEvents.SessionEnding += (_, _) =>
+        {
+            try
+            {
+                if (!IsActive || !Config.Get("kiosk.resetOnShutdown", false) || HardLock.ServiceActive) return;
+                Config.Set("kiosk.active", false);
+                Config.Set("kiosk.confirmed", false);
+                Config.Set("kiosk.strict", false);
+                Config.Save();
+                ClearRegistry();
+                Config.Log("kiosk: הנעילה בוטלה בכיבוי (הוגדר: ביטול נעילה בכיבוי)");
+            }
+            catch { }
+        };
+    }
 
     private static void Apply()
     {
@@ -437,7 +495,9 @@ public static class Kiosk
             }
 
             Tray.Invoke(InstallHook);
+            HookSessionEnding();
             Overlay.ShowClock(); // שורת המשימות מוסתרת — שעה ותאריך בשעון צף
+            Overlay.ShowSideBar(); // סרגל תוכנות בצד המסך: מעבר מהיר בין אוצריא לתוכנות התורניות
             _watchdog ??= new System.Threading.Timer(_ => Watch(), null, 0, 2000);
             Tray.SetKioskState(true);
         }
@@ -503,6 +563,19 @@ public static class Kiosk
         Config.Save();
         ClearRegistry();
         StartExplorer();
+        return true;
+    }
+
+    /// <summary>
+    /// קיצור חירום מהגשר הרץ (Ctrl+Alt+Shift+F12): מבטל את הנעילה כולה (גם את השירות) — אבל רק עם קוד השחזור.
+    /// קיצור בלי שום אימות היה מאפשר לכל תלמיד לבטל את הנעילה, ולכן הקוד נדרש.
+    /// </summary>
+    public static bool EmergencyRelease(string code)
+    {
+        if (!Matches(NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
+        try { HardLock.EmergencyDisable(code); } catch (Exception ex) { Config.Log("emergency: " + ex.Message); }
+        Release();
+        Config.Log("kiosk: הנעילה בוטלה בקיצור חירום עם קוד שחזור");
         return true;
     }
 
@@ -777,6 +850,12 @@ public static class Kiosk
             if (ctrl && alt && vk == 0x4F && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104) && ForegroundIsAllowedProgram())
             {
                 Task.Run(ReturnToOtzaria);
+                return (IntPtr)1;
+            }
+            // Ctrl+Alt+Shift+F12: חלון קוד שחזור לביטול חירום של הנעילה
+            if (ctrl && alt && vk == 0x7B && (GetAsyncKeyState(0x10) & 0x8000) != 0 && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104))
+            {
+                Tray.Invoke(EmergencyForm.Open);
                 return (IntPtr)1;
             }
             if (block) return (IntPtr)1;

@@ -101,3 +101,11 @@
 - **בלי שירות מותקן** לא ממתינים לצינור: `HardLock.ServiceStatus` בודק קודם את רשימת השירותים (מטמון של 30 שניות).
 - פירוט מלא: `docs/HARDLOCK.md`.
 
+
+## הבאה לחזית, סרגל תוכנות וחירום (נלמד ב-3.2.0)
+- `SetForegroundWindow` מתהליך רקע נכשל בשקט. `Kiosk.BringToFront` משתמש ב-`AttachThreadInput` + Alt שקטה + TOPMOST זמני. תמיד להשתמש בו, לא ב-`SetForegroundWindow` ישירות.
+- `Programs.Activate(entry)` פותח או מחזיר לחזית (בלי עותק שני); `Programs.ExistingWindow` מחזיר חלון גלוי או מוקטן של תוכנה מהרשימה.
+- `SideBar` (Extras.cs) ו-`RestScreen` (Overlay.cs) רצים על חוט המגש בלבד (`Tray.Invoke`).
+- קיצור חירום Ctrl+Alt+Shift+F12 נבדק ב-hook המקלדת ופותח `EmergencyForm`, שדורש את קוד השחזור. אין קיצור בלי אימות, בכוונה.
+- יומן השינויים מוטמע ב-exe (`CHANGELOG.md` כמשאב), ולכן כל שינוי בו משנה את ה-exe.
+- חיפוש תוכן ב-`FsApi.ContentSnippet` מחזיר קטע לשורת התוצאה (שדה `snippet` ב-hit); הסייר פותח את הקובץ עם `find` להדגשה (`FX.highlightIn`).

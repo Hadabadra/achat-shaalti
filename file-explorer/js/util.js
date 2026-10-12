@@ -3,7 +3,7 @@
   'use strict';
   var FX = window.FX = window.FX || {};
 
-  var TEXT_EXT = ['txt', 'md', 'json', 'csv', 'xml', 'html', 'htm', 'js', 'css', 'log', 'ini', 'tsv', 'yml', 'yaml', 'cfg', 'conf', 'bat', 'cmd', 'ps1', 'py', 'java', 'cs', 'ts', 'sql', 'srt'];
+  var TEXT_EXT = ['txt', 'md', 'json', 'csv', 'xml', 'html', 'htm', 'js', 'css', 'log', 'ini', 'tsv', 'yml', 'yaml', 'cfg', 'conf', 'bat', 'cmd', 'ps1', 'py', 'java', 'cs', 'ts', 'sql', 'srt', 'vtt', 'toml', 'tex', 'properties', 'sh', 'c', 'cpp', 'h', 'hpp', 'php', 'rb', 'go', 'rs', 'kt', 'swift', 'lua', 'r', 'pl', 'vb', 'xaml', 'jsx', 'tsx', 'scss', 'less', 'gradle', 'gitignore', 'env', 'lrc', 'rst', 'bib'];
   var IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg', 'ico'];
   var KINDS = {
     folder: { label: 'תיקיית קבצים', icon: 'folder' },
@@ -24,18 +24,18 @@
   };
   var EXT_KIND = {};
   function reg(kind, list) { list.forEach(function (e) { EXT_KIND[e] = kind; }); }
-  reg('text', ['txt', 'md', 'log', 'ini', 'csv', 'tsv', 'cfg', 'conf', 'srt']);
-  reg('code', ['json', 'xml', 'html', 'htm', 'js', 'css', 'yml', 'yaml', 'bat', 'cmd', 'ps1', 'py', 'java', 'cs', 'ts', 'sql']);
+  reg('text', ['txt', 'md', 'log', 'ini', 'csv', 'tsv', 'cfg', 'conf', 'srt', 'vtt', 'lrc', 'rst', 'bib', 'env', 'gitignore']);
+  reg('code', ['json', 'xml', 'html', 'htm', 'js', 'css', 'yml', 'yaml', 'bat', 'cmd', 'ps1', 'py', 'java', 'cs', 'ts', 'sql', 'toml', 'sh', 'c', 'cpp', 'h', 'hpp', 'php', 'rb', 'go', 'rs', 'kt', 'swift', 'lua', 'r', 'pl', 'vb', 'xaml', 'jsx', 'tsx', 'scss', 'less', 'gradle', 'tex', 'properties']);
   reg('image', IMAGE_EXT);
   reg('pdf', ['pdf']);
   reg('word', ['doc', 'docx', 'odt', 'rtf']);
   reg('sheet', ['xls', 'xlsx', 'ods']);
   reg('slides', ['ppt', 'pptx', 'odp']);
-  reg('audio', ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'wma', 'aac']);
-  reg('video', ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'webm']);
-  reg('archive', ['zip', 'rar', '7z', 'tar', 'gz', 'otzplugin']);
+  reg('audio', ['mp3', 'wav', 'ogg', 'oga', 'opus', 'flac', 'm4a', 'wma', 'aac', 'mid', 'midi', 'amr']);
+  reg('video', ['mp4', 'm4v', 'mkv', 'avi', 'mov', 'wmv', 'webm', 'mpg', 'mpeg', '3gp', 'flv', 'ogv']);
+  reg('archive', ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'cab', 'iso', 'jar', 'apk', 'otzplugin']);
   reg('exe', ['exe', 'msi', 'lnk']);
-  reg('book', ['epub', 'mobi']);
+  reg('book', ['epub', 'mobi', 'azw3', 'fb2']);
 
   FX.extOf = function (name) {
     var i = String(name || '').lastIndexOf('.');
@@ -59,6 +59,10 @@
     }
     return FX.kindInfo(k).label;
   };
+  var MIME = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac', m4a: 'audio/mp4', aac: 'audio/aac',
+    mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg', mov: 'video/quicktime' };
+  FX.mimeOf = function (ext) { return MIME[String(ext || '').toLowerCase()] || ''; };
+  FX.mediaKind = function (ext) { var k = EXT_KIND[String(ext || '').toLowerCase()]; return k === 'audio' || k === 'video' ? k : ''; };
   FX.isTextExt = function (ext) { return TEXT_EXT.indexOf(String(ext || '').toLowerCase()) >= 0; };
   FX.isImageExt = function (ext) { return IMAGE_EXT.indexOf(String(ext || '').toLowerCase()) >= 0; };
 

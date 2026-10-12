@@ -85,11 +85,11 @@
 .fx-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; outline: none; }
 .fx-head, .fx-row {
   display: grid; align-items: center; gap: var(--fx-gap);
-  grid-template-columns: minmax(10em, 1fr) var(--fx-col-date) var(--fx-col-type) var(--fx-col-size);
+  grid-template-columns: var(--fx-grid, minmax(10em, 1fr) var(--fx-col-date) var(--fx-col-type) var(--fx-col-size));
   padding: 0 0.75em;
 }
 .fx-head.with-where, .fx-list.with-where .fx-row {
-  grid-template-columns: minmax(10em, 1fr) var(--fx-col-date) var(--fx-col-type) var(--fx-col-size) var(--fx-col-where);
+  grid-template-columns: var(--fx-grid-where, minmax(10em, 1fr) var(--fx-col-date) var(--fx-col-type) var(--fx-col-size) var(--fx-col-where));
 }
 .fx-head { border-bottom: 0.0625em solid var(--fx-line); }
 .fx-col {
@@ -364,3 +364,49 @@ a.btn { text-decoration: none; display: inline-flex; }
   .fx-set-nav { width: auto; flex-direction: row; overflow-x: auto; border-inline-end: 0; border-bottom: 0.0625em solid var(--fx-line); }
   .fx-set-navbtn { flex-shrink: 0; }
 }
+
+/* ---------- כרטיסיות ---------- */
+.fx-tabs { display: flex; align-items: flex-end; gap: 0.25em; padding: 0.375em 0.75em 0; overflow-x: auto; flex: 0 0 auto; }
+.fx-tab {
+  display: flex; align-items: center; gap: 0.5em; max-width: 14em; min-width: 6em; padding: 0.4375em 0.75em;
+  border-radius: 0.625em 0.625em 0 0; color: var(--fx-muted); cursor: default; font-size: 0.8125em; background: transparent;
+}
+.fx-tab:hover { background: var(--fx-hover); }
+.fx-tab.on { background: var(--color-surface-container); color: var(--color-on-surface); }
+.fx-tab svg { width: 1.25em; height: 1.25em; flex: 0 0 auto; }
+.fx-tab-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+.fx-tab-x, .fx-tab-new { border: 0; background: none; color: inherit; cursor: pointer; border-radius: 0.375em; display: grid; place-items: center; padding: 0.1875em; }
+.fx-tab-x:hover, .fx-tab-new:hover { background: var(--fx-hover); }
+.fx-tab-x svg, .fx-tab-new svg { width: 1em; height: 1em; }
+.fx-tab-new { margin-bottom: 0.25em; }
+
+/* ---------- עמודות ---------- */
+.fx-col { position: relative; }
+.fx-col-rs { position: absolute; inset-block: 0.25em; inset-inline-end: -0.25em; width: 0.5em; cursor: col-resize; z-index: 2; }
+.fx-col-rs::after { content: ''; position: absolute; inset-block: 0.1em; inset-inline-start: 0.25em; width: 0.0625em; background: var(--fx-line); }
+.fx-col-rs:hover::after { background: var(--color-primary); }
+.fx-chk { display: inline-block; width: 1.25em; text-align: center; color: var(--color-primary); }
+
+/* ---------- שורות מצוילות וחיפוש עם קטעי תוכן (בסגנון Everything) ---------- */
+.fx-list.striped .fx-row:nth-child(even):not(.sel):not(:hover) { background: color-mix(in srgb, var(--color-on-surface) 4.5%, transparent); }
+.fx-name-wrap { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.fx-snip { color: var(--fx-muted); font-size: 0.8125em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-row.has-snip { height: auto; min-height: var(--fx-row-h); padding-block: 0.3125em; }
+.fx-row.sel .fx-snip { color: inherit; opacity: 0.85; }
+mark.fx-hit { background: color-mix(in srgb, #f6c445 55%, transparent); color: inherit; border-radius: 0.1875em; padding: 0 0.0625em; }
+mark.fx-hit.cur { background: #f6a21b; color: #1c1c1c; outline: 0.125em solid #f6a21b; }
+
+/* ---------- צופים נוספים ---------- */
+.fx-media { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1em; min-height: 100%; padding: 1.5em; }
+.fx-media video { max-width: 100%; max-height: 78vh; border-radius: 0.5em; background: #000; }
+.fx-media audio { width: min(32em, 100%); }
+.fx-media-ic svg { width: 5em; height: 5em; color: var(--color-primary); }
+.fx-sheet-tabs { display: flex; gap: 0.25em; padding: 0.5em; border-bottom: 0.0625em solid var(--fx-line); overflow-x: auto; position: sticky; top: 0; background: var(--color-surface-container); z-index: 1; }
+.fx-sheet-tabs .btn.on { background: var(--fx-sel); color: var(--fx-on-sel); }
+.fx-sheet-body { padding: 0.75em; overflow: auto; }
+.fx-xl { border-collapse: collapse; font-size: 0.875em; }
+.fx-xl td, .fx-xl th { border: 0.0625em solid var(--fx-line); padding: 0.25em 0.625em; white-space: nowrap; text-align: start; }
+.fx-slide { border: 0.0625em solid var(--fx-line); border-radius: 0.75em; padding: 0.75em 1em; margin: 0 0 0.75em; background: var(--color-surface); }
+.fx-slide h4 { margin: 0 0 0.5em; color: var(--color-primary); }
+.fx-unknown { gap: 0.5em; }
+.fx-unknown .fx-ic svg { width: 4em; height: 4em; }

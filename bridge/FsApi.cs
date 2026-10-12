@@ -12,7 +12,13 @@ namespace OtzariaBridge;
 public static class FsApi
 {
     private static readonly HashSet<string> TextExt = new(StringComparer.OrdinalIgnoreCase)
-        { ".txt", ".md", ".json", ".csv", ".xml", ".html", ".htm", ".js", ".css", ".log", ".ini" };
+        { ".txt", ".md", ".json", ".csv", ".xml", ".html", ".htm", ".js", ".css", ".log", ".ini", ".tsv", ".yml", ".yaml", ".cfg", ".conf",
+          ".bat", ".cmd", ".ps1", ".py", ".java", ".cs", ".ts", ".sql", ".srt", ".vtt", ".toml", ".tex", ".properties", ".sh", ".c", ".cpp", ".h",
+          ".hpp", ".php", ".rb", ".go", ".rs", ".kt", ".swift", ".lua", ".jsx", ".tsx", ".scss", ".lrc", ".rst", ".bib" };
+
+    /// <summary>סוגי מסמכים (zip עם XML) שחיפוש התוכן קורא מהם טקסט</summary>
+    private static readonly HashSet<string> OfficeExt = new(StringComparer.OrdinalIgnoreCase)
+        { ".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp" };
 
     private static readonly Dictionary<string, string> Mime = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -597,12 +603,16 @@ public static class FsApi
                     }
 
                     bool ok;
+                    string snippet = null;
                     if (isDir) ok = includeDirs && string.IsNullOrEmpty(contentQuery) && exts.Count == 0 && match(i.Name);
                     else
                     {
                         ok = (exts.Count == 0 || exts.Contains(i.Extension)) && match(i.Name);
                         if (ok && !string.IsNullOrEmpty(contentQuery))
-                            ok = ContentContains((FileInfo)i, contentQuery);
+                        {
+                            snippet = ContentSnippet((FileInfo)i, contentQuery);
+                            ok = snippet != null;
+                        }
                     }
 
                     if (ok)
@@ -616,6 +626,7 @@ public static class FsApi
                             entryType = isDir ? "dir" : "file",
                             size = isDir ? 0L : ((FileInfo)i).Length,
                             modified = Iso(i.LastWriteTime),
+                            snippet,
                         });
                         if (hits >= maxResults) { truncated = true; break; }
                     }
@@ -633,15 +644,57 @@ public static class FsApi
         catch (IOException) when (ct.IsCancellationRequested) { }
     }
 
-    private static bool ContentContains(FileInfo f, string q)
+    /// <summary>
+    /// מחפש את המילה בתוכן הקובץ (טקסט, וגם Word/Excel/PowerPoint/OpenDocument) ומחזיר קטע קצר סביב ההתאמה הראשונה,
+    /// או null אם אין התאמה. הקטע מוצג בשורת התוצאה, והצופה פותח את הקובץ במקום ההתאמה.
+    /// </summary>
+    private static string ContentSnippet(FileInfo f, string q)
     {
-        if (!TextExt.Contains(f.Extension) || f.Length > 2L * 1024 * 1024) return false;
         try
         {
-            string text = DecodeText(File.ReadAllBytes(f.FullName));
-            return text.Contains(q, StringComparison.CurrentCultureIgnoreCase);
+            string text;
+            if (OfficeExt.Contains(f.Extension))
+            {
+                if (f.Length > 40L * 1024 * 1024) return null;
+                text = OfficeText(f.FullName, f.Extension.ToLowerInvariant());
+            }
+            else
+            {
+                if (!TextExt.Contains(f.Extension) || f.Length > 4L * 1024 * 1024) return null;
+                text = DecodeText(File.ReadAllBytes(f.FullName));
+            }
+            int at = text.IndexOf(q, StringComparison.CurrentCultureIgnoreCase);
+            if (at < 0) return null;
+            int from = Math.Max(0, at - 45), to = Math.Min(text.Length, at + q.Length + 70);
+            return Regex.Replace(text.Substring(from, to - from), @"\s+", " ").Trim();
         }
-        catch { return false; }
+        catch { return null; }
+    }
+
+    /// <summary>טקסט גולמי ממסמך zip של Office/OpenDocument (בלי תגיות XML)</summary>
+    private static string OfficeText(string path, string ext)
+    {
+        using var z = System.IO.Compression.ZipFile.OpenRead(path);
+        var parts = new List<string>();
+        switch (ext)
+        {
+            case ".docx": parts.Add("word/document.xml"); break;
+            case ".xlsx": parts.Add("xl/sharedStrings.xml"); break;
+            case ".pptx": parts.AddRange(z.Entries.Where(e => Regex.IsMatch(e.FullName, @"^ppt/slides/slide\d+\.xml$")).Select(e => e.FullName)); break;
+            default: parts.Add("content.xml"); break;
+        }
+        var sb = new StringBuilder();
+        foreach (string name in parts)
+        {
+            var en = z.GetEntry(name);
+            if (en == null) continue;
+            using var rd = new StreamReader(en.Open(), Encoding.UTF8);
+            string xml = rd.ReadToEnd();
+            xml = Regex.Replace(xml, @"</(w:p|a:p|text:p|text:h|si)>", "\n");
+            sb.Append(System.Net.WebUtility.HtmlDecode(Regex.Replace(xml, "<[^>]+>", ""))).Append('\n');
+            if (sb.Length > 8_000_000) break;
+        }
+        return sb.ToString();
     }
 }
 

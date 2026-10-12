@@ -58,6 +58,7 @@ public static class Programs
     {
         Server.Route("/kiosk/programs", _ => ListResult());
         Server.Route("/kiosk/programs/launch", Launch);
+        Server.Route("/kiosk/programs/focus", Launch);   // "העבר לחזית": זהה לפתיחה, ולא פותח עותק נוסף
         Server.Route("/kiosk/programs/add", Add);
         Server.Route("/kiosk/programs/remove", Remove);
         Server.Route("/kiosk/programs/detect", _ => Detect());
@@ -125,6 +126,7 @@ public static class Programs
             path = e.Path,
             procs = e.Procs,
             exists = File.Exists(e.Path),
+            running = ExistingWindow(e) != IntPtr.Zero,
             auto = e.Auto,
         }).ToArray()
     };
@@ -143,9 +145,24 @@ public static class Programs
         string id = b.Req("id");
         var e = Load().FirstOrDefault(x => x.Id == id)
                 ?? throw BridgeException.NotFound("התוכנה אינה ברשימת התוכנות המותרות");
-        if (!File.Exists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);
+        return new { opened = true, alreadyRunning = Activate(e) };
+    }
 
+    /// <summary>
+    /// פותח תוכנה מהרשימה, ואם היא כבר פתוחה (גם מוקטנת) — מחזיר אותה לחזית ולא פותח עותק שני.
+    /// מחזיר true אם הייתה פתוחה.
+    /// </summary>
+    public static bool Activate(Entry e)
+    {
+        if (!File.Exists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);
         _graceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
+        IntPtr h = ExistingWindow(e);
+        if (h != IntPtr.Zero)
+        {
+            Kiosk.BringToFront(h);
+            Task.Run(() => { Thread.Sleep(400); Kiosk.BringToFront(h); }); // ניסיון שני: חלק מהתוכנות גוזלות פוקוס בעת הטעינה
+            return true;
+        }
         _lastLaunchAt = DateTime.UtcNow;
         using (var started = Process.Start(new ProcessStartInfo(e.Path)
         {
@@ -156,7 +173,32 @@ public static class Programs
             if (started != null) RememberLaunched(started.Id);
         }
         Task.Run(() => Focus(e));
-        return new { opened = true };
+        return false;
+    }
+
+    /// <summary>חלון ראשי של התוכנה אם היא כבר רצה (כולל חלון מוקטן), אחרת Zero</summary>
+    public static IntPtr ExistingWindow(Entry e)
+    {
+        int session = Process.GetCurrentProcess().SessionId;
+        IntPtr found = IntPtr.Zero;
+        try
+        {
+            EnumWindows((h, _) =>
+            {
+                if (!IsWindowVisible(h) || GetWindow(h, 4 /* GW_OWNER */) != IntPtr.Zero || GetWindowTextLength(h) == 0) return true;
+                GetWindowThreadProcessId(h, out uint pid);
+                try
+                {
+                    using var p = Process.GetProcessById((int)pid);
+                    if (p.SessionId != session || IsOwnOrBlocked(p)) return true;
+                    if (MatchesList(p, new[] { e })) { found = h; return false; }
+                }
+                catch { }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch { }
+        return found;
     }
 
     private static object Add(JsonElement b)

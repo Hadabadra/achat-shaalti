@@ -5,7 +5,7 @@ namespace OtzariaBridge;
 public static class Tray
 {
     private static NotifyIcon _icon;
-    private static ToolStripMenuItem _status, _exit, _plugins, _install, _lang, _about, _unpair;
+    private static ToolStripMenuItem _status, _exit, _plugins, _install, _lang, _about, _unpair, _changelog, _report;
     private static ContextMenuStrip _menu;
     private static Control _invoker;
 
@@ -23,7 +23,9 @@ public static class Tray
         _exit = new ToolStripMenuItem("", null, (_, _) => Application.ExitThread());
         _about = new ToolStripMenuItem("", null, (_, _) => AboutForm.Open());
         _unpair = new ToolStripMenuItem("", null, (_, _) => PairingForm.Open());
-        menu.Items.AddRange(new ToolStripItem[] { _status, _about, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
+        _changelog = new ToolStripMenuItem("", null, (_, _) => ChangelogForm.Open());
+        _report = new ToolStripMenuItem("", null, (_, _) => Diagnostics_.Report());
+        menu.Items.AddRange(new ToolStripItem[] { _status, _about, _changelog, _report, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
 
         _icon = new NotifyIcon
         {
@@ -58,6 +60,8 @@ public static class Tray
         _menu.RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
         _plugins.Text = Lang.T("פתח את תיקיית התוספים", "Open the plugins folder");
         _about.Text = Lang.T("אודות ועדכונים…", "About and updates…");
+        _changelog.Text = Lang.T("יומן שינויים (מקומי)…", "Changelog (offline)…");
+        _report.Text = Lang.T("דיווח באג ואיסוף יומנים…", "Report a bug / collect logs…");
         _install.Text = Lang.T("התקן/עדכן את התוספים באוצריא", "Install/update the plugins in Otzaria");
         _lang.Text = Lang.T("English", "עברית");
         _unpair.Text = Lang.T("צימוד תוספים…", "Plugin pairing…");

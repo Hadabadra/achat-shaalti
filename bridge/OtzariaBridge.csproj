@@ -10,7 +10,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>OtzariaBridge</AssemblyName>
     <RootNamespace>OtzariaBridge</RootNamespace>
-    <Version>3.1.0</Version>
+    <Version>3.2.0</Version>
     <Product>תורת אסתר</Product>
     <AssemblyTitle>תורת אסתר — גשר אוצריא</AssemblyTitle>
     <Company>תורת אסתר</Company>
@@ -32,6 +32,8 @@
   <!-- התוספים נארזים ב-CI לתיקייה plugins ומוטמעים כמשאב -->
   <ItemGroup>
     <EmbeddedResource Include="plugins\*.otzplugin" LogicalName="plugins.%(Filename)%(Extension)" />
+    <!-- יומן השינויים מוטמע, כדי שיהיה זמין במגש בלי רשת -->
+    <EmbeddedResource Include="..\CHANGELOG.md" LogicalName="CHANGELOG.md" />
   </ItemGroup>
 
 </Project>
