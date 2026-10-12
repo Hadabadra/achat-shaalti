@@ -136,6 +136,18 @@ public static class HardLock
     public static void SetPassword(string oldPassword, string newPassword) =>
         Must(Call(new JsonObject { ["op"] = "set-password", ["old"] = oldPassword ?? "", ["new"] = newPassword ?? "" }));
 
+    /// <summary>העברת חלון התזמון לשירות (הוא המתזמן כשהוא מותקן)</summary>
+    public static void SetSchedule(string password, bool enabled, string start, string end) =>
+        Must(Call(new JsonObject
+        {
+            ["op"] = "settings", ["password"] = password ?? "",
+            ["scheduleEnabled"] = enabled, ["scheduleStart"] = start ?? "", ["scheduleEnd"] = end ?? "",
+        }));
+
+    /// <summary>דילוג על הנעילה המתוזמנת הקרובה עד הזמן הנתון (מ"ביטול הנעילה" באזהרה)</summary>
+    public static void Skip(string password, string untilIso) =>
+        Must(Call(new JsonObject { ["op"] = "skip", ["password"] = password ?? "", ["until"] = untilIso ?? "" }));
+
     /// <summary>קוד שחזור משורת הפקודה: מבטל גם בשירות</summary>
     public static bool EmergencyDisable(string code)
     {
@@ -187,6 +199,9 @@ public static class HardLock
             }));
         }
         if (Kiosk.IsActive) Enable(b.Str("password"), Kiosk.OtzariaPath());
+        if (Kiosk.ScheduleEnabled)
+            try { SetSchedule(b.Str("password"), true, Kiosk.ScheduleStart, Kiosk.ScheduleEnd); }
+            catch (Exception ex) { Config.Log("hardlock schedule: " + ex.Message); }
         Config.Log("hardlock: רכיב ההקשחה הותקן/עודכן");
         return Status(fresh: true);
     }
@@ -463,6 +478,9 @@ public class HardLockService : ServiceBase
                     {
                         ["ok"] = true, ["version"] = Program.Version, ["configured"] = Configured, ["active"] = Active,
                         ["blockUsbStorage"] = _state["blockUsbStorage"]?.GetValue<bool>() == true,
+                        ["scheduleEnabled"] = _state["scheduleEnabled"]?.GetValue<bool>() == true,
+                        ["scheduleStart"] = _state["scheduleStart"]?.ToString() ?? "",
+                        ["scheduleEnd"] = _state["scheduleEnd"]?.ToString() ?? "",
                         ["otzariaPath"] = _state["otzariaPath"]?.ToString() ?? "", ["sessions"] = _sessions,
                     };
 
@@ -484,6 +502,7 @@ public class HardLockService : ServiceBase
                 case "enable":
                     if ((e = Check(pw, false)) != null) return e;
                     _state["active"] = true;
+                    _state["activatedBy"] = "manual"; // נעילה ידנית לא תבוטל בסוף חלון התזמון
                     string otz = q["otzariaPath"]?.ToString();
                     if (!string.IsNullOrEmpty(otz)) _state["otzariaPath"] = otz;
                     Save();
@@ -512,6 +531,16 @@ public class HardLockService : ServiceBase
                 case "settings":
                     if ((e = Check(pw, false)) != null) return e;
                     if (q["blockUsbStorage"] is JsonValue bu) _state["blockUsbStorage"] = bu.GetValue<bool>();
+                    if (q["scheduleEnabled"] is JsonValue se) _state["scheduleEnabled"] = se.GetValue<bool>();
+                    if (q["scheduleStart"]?.ToString() is string ss && Sched.IsValid(ss)) _state["scheduleStart"] = ss;
+                    if (q["scheduleEnd"]?.ToString() is string ee && Sched.IsValid(ee)) _state["scheduleEnd"] = ee;
+                    Save();
+                    Task.Run(Tick);
+                    return Ok();
+
+                case "skip":
+                    if ((e = Check(pw, false)) != null) return e;
+                    _state["skipUntil"] = q["until"]?.ToString() ?? "";
                     Save();
                     Task.Run(Tick);
                     return Ok();
@@ -540,13 +569,48 @@ public class HardLockService : ServiceBase
         try
         {
             bool active, blockUsb;
-            lock (_gate) { active = Active; blockUsb = _state["blockUsbStorage"]?.GetValue<bool>() == true; }
+            lock (_gate)
+            {
+                EvaluateSchedule();   // תזמון לפי שעות — עשוי להפעיל/לבטל את הנעילה
+                active = Active;
+                blockUsb = _state["blockUsbStorage"]?.GetValue<bool>() == true;
+            }
             EnforcePolicies(active);
             EnforceUsb(active && blockUsb);
             if (active) EnsureBridgeInSessions();
         }
         catch (Exception ex) { HardLock.SvcLog("tick: " + ex.Message); }
         finally { Interlocked.Exchange(ref _tickBusy, 0); }
+    }
+
+    /// <summary>
+    /// תזמון נעילה לפי שעות — מקור האמת כשהשירות מותקן. נקרא תחת _gate מתוך Tick.
+    /// בתוך החלון מפעיל נעילה (activatedBy=schedule); בסוף החלון מבטל רק נעילה שהתזמון הפעיל
+    /// (נעילה ידנית נשמרת). נעילה ידנית שבוטלה בתוך החלון תחזור בטיק הבא — זו מהות התזמון.
+    /// </summary>
+    private void EvaluateSchedule()
+    {
+        string start = _state["scheduleStart"]?.ToString();
+        string end = _state["scheduleEnd"]?.ToString();
+        // דילוג ידני (מ"ביטול הנעילה" באזהרה) או תזמון כבוי → כמו "מחוץ לחלון"
+        bool skip = DateTime.TryParse(_state["skipUntil"]?.ToString(), null,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var su) && DateTime.Now < su;
+        bool inWindow = _state["scheduleEnabled"]?.GetValue<bool>() == true && !skip && Sched.InWindow(start, end, DateTime.Now);
+        bool active = Active;
+        string by = _state["activatedBy"]?.ToString() ?? "manual";
+        if (inWindow && !active)
+        {
+            _state["active"] = true;
+            _state["activatedBy"] = "schedule";
+            Save();
+            HardLock.SvcLog($"service: תזמון — בתוך חלון הנעילה ({start}–{end}), נעילה הופעלה");
+        }
+        else if (!inWindow && active && by == "schedule")
+        {
+            _state["active"] = false;
+            Save();
+            HardLock.SvcLog("service: תזמון — מחוץ לחלון, נעילה בוטלה");
+        }
     }
 
     /// <summary>מדיניות בכל חשבון מחובר (HKEY_USERS\SID): מנהל המשימות ועורך הרישום חסומים; מוחזרת אם נמחקה</summary>
