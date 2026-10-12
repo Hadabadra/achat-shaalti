@@ -1073,38 +1073,44 @@
     var r = await window.Otzaria.call('plugin.openOther', { pluginId: pluginId, param: param || null });
     if (r && r.success === false) throw FX.OpError((r.error && r.error.code) || 'internal', (r.error && r.error.message) || '');
   }
-  async function openInPdfPlugin(e) {
+  /* תוכן הקובץ כ-dataUrl לשליחה לתוסף אחר. כתובת resolveFileUrl לא עוברת בין תוספים
+     (נאכפת לפי מזהה התוסף), ולכן בלי גשר קוראים אותה כאן וממירים בעצמנו. */
+  var PLUGIN_MAX = 15 * 1024 * 1024;
+  var MIME = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword' };
+  async function fileDataUrl(e) {
+    if (e.size > PLUGIN_MAX) throw FX.OpError('too_large', 'קובץ גדול מ-15MB — פתחו אותו בצופה הפנימי או ביישום חיצוני');
+    var ext = String(e.name).split('.').pop().toLowerCase();
+    var mime = MIME[ext] || 'application/octet-stream';
+    if (S.prov.kind === 'bridge') {
+      var d = await FX.Bridge.call('/fs/read', { path: e.path, maxBytes: PLUGIN_MAX }, { timeoutMs: 120000 });
+      return 'data:' + mime + ';base64,' + d.content;
+    }
+    var rd = await S.prov.read(e);
+    var blob = await (await fetch(rd.url)).blob();
+    if (blob.size > PLUGIN_MAX) throw FX.OpError('too_large', 'קובץ גדול מ-15MB — פתחו אותו בצופה הפנימי או ביישום חיצוני');
+    var b = blob.type ? blob : new Blob([blob], { type: mime });
+    return await new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onload = function () { res(fr.result); };
+      fr.onerror = function () { rej(FX.OpError('internal', 'קריאת הקובץ נכשלה')); };
+      fr.readAsDataURL(b);
+    });
+  }
+  async function sendToPlugin(e, pluginId, label) {
     busy(true, 'מכין את הקובץ…');
     try {
-      var param = { name: e.name };
-      if (S.prov.kind === 'bridge') {
-        if (e.size > 15 * 1024 * 1024) throw FX.OpError('too_large', 'קובץ גדול מ-15MB — פתחו אותו בצופה הפנימי או ביישום חיצוני');
-        var d = await FX.Bridge.call('/fs/read', { path: e.path, maxBytes: 15 * 1024 * 1024 }, { timeoutMs: 120000 });
-        param.dataUrl = 'data:application/pdf;base64,' + d.content;
-      } else {
-        var rd = await S.prov.read(e);
-        param.url = rd.url;
-      }
-      await openInPlugin(PDF_PLUGIN, param);
+      await openInPlugin(pluginId, { name: e.name, dataUrl: await fileDataUrl(e) });
     } catch (err) {
       busy(false);
-      if (String(err && err.code).indexOf('not_found') >= 0) ui.toast('התוסף צופה PDF+OCR אינו מותקן', 'error');
-      else opError(err, 'הפתיחה בצופה PDF+OCR נכשלה');
+      if (String(err && err.code).indexOf('not_found') >= 0) ui.toast('התוסף ' + label + ' אינו מותקן', 'error');
+      else opError(err, 'הפתיחה ב' + label + ' נכשלה');
       return;
     }
     busy(false);
   }
-  async function openInWordPlugin(e) {
-    /* התוסף "וורד לאוצריא" אינו מקבל עדיין קובץ מתוסף אחר: פותחים אותו ומעתיקים את הנתיב ללוח */
-    try {
-      await openInPlugin(WORD_PLUGIN, { name: e.name, path: S.prov.kind === 'bridge' ? e.path : null });
-      var copied = S.prov.kind === 'bridge' ? await copyText(e.path) : false;
-      ui.toast(copied ? 'וורד לאוצריא נפתח. הנתיב הועתק — פתחו בו את הקובץ והדביקו את הנתיב בחלון הבחירה' : 'וורד לאוצריא נפתח — פתחו בו את הקובץ', 'info');
-    } catch (err) {
-      if (String(err && err.code).indexOf('not_found') >= 0) ui.toast('התוסף וורד לאוצריא אינו מותקן', 'error');
-      else opError(err, 'הפתיחה בוורד לאוצריא נכשלה');
-    }
-  }
+  function openInPdfPlugin(e) { return sendToPlugin(e, PDF_PLUGIN, 'צופה PDF+OCR'); }
+  /* וורד לאוצריא מקבל { name, dataUrl } ופותח בטאב חדש (Y-PLONI/otzaria-word-editor#91) */
+  function openInWordPlugin(e) { return sendToPlugin(e, WORD_PLUGIN, 'וורד לאוצריא'); }
 
   function openExternal(e) {
     S.prov.open(e.path).catch(function (err) { opError(err, 'הפתיחה נכשלה'); });
