@@ -165,7 +165,7 @@
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
       allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, clock: true, clockPosition: 'bottom-left',
       restScreen: true, restIdleMinutes: 0, zmanimLocation: '', fullscreenOtzaria: true,
-      schedule: { enabled: false, start: '20:00', end: '02:00' },
+      schedule: { enabled: false, start: '20:00', end: '02:00', warn: true },
       openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer'],
       allSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth', 'airplane', 'usb']
     },
@@ -302,6 +302,7 @@
       if (Array.isArray(b.openSections)) M.kiosk.openSections = b.openSections.slice();
       if (b.schedule && typeof b.schedule === 'object') {
         if (typeof b.schedule.enabled === 'boolean') M.kiosk.schedule.enabled = b.schedule.enabled;
+        if (typeof b.schedule.warn === 'boolean') M.kiosk.schedule.warn = b.schedule.warn;
         if (/^\d{1,2}:\d{2}$/.test(b.schedule.start || '')) M.kiosk.schedule.start = b.schedule.start;
         if (/^\d{1,2}:\d{2}$/.test(b.schedule.end || '')) M.kiosk.schedule.end = b.schedule.end;
       }
