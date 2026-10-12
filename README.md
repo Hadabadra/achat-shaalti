@@ -26,4 +26,10 @@
 - פרסום לחנות אוצריא: Actions → Run workflow → `store`. דורש את הסודות `OTZARIA_USER` ו-`OTZARIA_PASSWORD`.
 - מסמכים: `docs/WORKPLAN.md`, `docs/STATUS.md`, `docs/BRIDGE_API.md`, `docs/KNOWLEDGE.md`, `docs/SDK-998-OPPORTUNITIES.md`.
 
+## קרדיטים
+חישוב זמני היום כגיבוי בשומר המסך (כשאוצריא סגורה או ישנה מדי, ורק אם נבחר מנוע "חדש" בהגדרות) משתמש
+בחבילת ה-NuGet [`Zmanim`](https://www.nuget.org/packages/Zmanim) גרסה 1.5.0 — הפורט הרשמי ל-.NET/.NET
+Standard של פרויקט **KosherJava** מאת Eliyahu Hershfeld ([kosherjava.com](http://www.kosherjava.com/zmanim-project/)),
+ברישיון LGPL-2.1. הספרייה מקושרת כ-`PackageReference` רגיל (קישור דינמי), ללא קוד מועתק/משוכתב בתוך הגשר.
+
 יומן שינויים: [CHANGELOG.md](CHANGELOG.md) · מפתח: תורת אסתר

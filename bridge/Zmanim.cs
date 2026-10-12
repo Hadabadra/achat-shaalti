@@ -9,8 +9,17 @@ namespace OtzariaBridge;
 /// תוסף "הגדרות מערכת" (js/app.js) שולח POST ‏/kiosk/zmanim-cache מדי דקה עם מה שקיבל מאוצריא;
 /// הגשר רק שומר את זה בזיכרון (לא בקובץ ההגדרות — זה מידע זמני שמתעדכן כל דקה) ומציג אותו.
 /// אם הנתונים חסרים או ישנים מדי (מעל שעתיים — כנראה אוצריא סגורה או התוסף הושעה), מוצג "גיבוי"
-/// בסיסי המבוסס על אלגוריתם NOAA (כפי שהיה כאן לפני שנודע שלאוצריא יש API משלה ללוח השנה),
-/// בלי שבת/חג/עומר/יום-השנה (אלה דורשים לוח עברי אמיתי שאיננו רוצים לשכפל כאן).
+/// המחושב כאן מקומית, בלי שבת/חג/עומר/יום-השנה (אלה דורשים לוח עברי אמיתי שאיננו רוצים לשכפל כאן).
+///
+/// לגיבוי יש שני מנועי חישוב אפשריים, לבחירת המנהל (kiosk.zmanimFallbackEngine, גם ב-js/sections/kiosk.js
+/// בתוסף "הגדרות מערכת"): "noaa" (ברירת מחדל, ללא שינוי התנהגות למתקינים קיימים) — קירוב אסטרונומי
+/// פשוט, הנץ/שקיעה בגובה פני הים בלבד; ו-"kosherjava" (חדש) — זמנים הלכתיים מלאים (גר"א/מג"א) כולל
+/// תיקון גובה (issue #33, "תיקון גובה לזמנים"), אבל קוד צד-שלישי שעלול להיבדל מעט בזמנים גבוליים.
+///
+/// קרדיט: מנוע ה-kosherjava משתמש בחבילת ה-NuGet ‏"Zmanim" גרסה 1.5.0 — הפורט הרשמי ל-.NET/.NET Standard
+/// של פרויקט KosherJava מאת Eliyahu Hershfeld (http://www.kosherjava.com/zmanim-project/),
+/// ברישיון LGPL-2.1. זהו PackageReference רגיל (קישור דינמי), לא קוד מועתק/משוכתב לתוך הגשר —
+/// ולכן אינו הופך את הקוד שלנו ל-LGPL, אך הקרדיט מוצג גם בחלון "אודות" וב-README.md כנדרש ברישיון.
 /// </summary>
 internal static class Zmanim
 {
@@ -270,9 +279,83 @@ internal static class Zmanim
         return Lang.T("יום השנה היום" + who, "Yahrzeit today" + who);
     }
 
-    // ---------- גיבוי בסיסי (NOAA, בלי אוצריא): רק כשאין מטמון טרי, ורק אם הוגדר מיקום ----------
+    // ---------- גיבוי: שני מנועי חישוב אפשריים, נבחר ב-kiosk.zmanimFallbackEngine ----------
+    // ---------- רק כשאין מטמון טרי מאוצריא, ורק אם הוגדר מיקום ----------
 
+    /// <summary>
+    /// בוחר בין שני מנועי החישוב לפי kiosk.zmanimFallbackEngine: "noaa" (ברירת המחדל — ההתנהגות
+    /// שהייתה כאן עד כה, לא משתנה למתקינים קיימים אלא אם יבחרו אחרת) או "kosherjava" (חדש).
+    /// שני המנועים משמשים רק גיבוי כשאין נתונים טריים מאוצריא עצמה.
+    /// </summary>
     private static string FallbackLine(DateTime now)
+    {
+        string engine = Config.Get("kiosk.zmanimFallbackEngine", "noaa");
+        return string.Equals(engine, "kosherjava", StringComparison.OrdinalIgnoreCase)
+            ? FallbackLineKosherJava(now)
+            : FallbackLineNoaa(now);
+    }
+
+    /// <summary>
+    /// מנוע חדש: מחשב זמני יום דרך ‏ComplexZmanimCalendar (חבילת Zmanim/KosherJava, LGPL — ראו קרדיט
+    /// למעלה) ומעביר אותם דרך אותו ZmanimLine/KnownZmanim ששולף מהמטמון של אוצריא — כך הגיבוי יוצא
+    /// באותה צורה ואותה בחירת זמנים (kiosk.zmanimShow) כמו הנתיב הרגיל, רק עם מקור חישוב שונה.
+    /// זמנים הלכתיים מלאים (גר"א/מג"א) ותיקון גובה אמיתי, אבל קוד צד-שלישי — ייתכנו הבדלים קלים
+    /// מהרגיל בזמנים גבוליים מסוימים לעומת מה שהמנהל מכיר.
+    /// </summary>
+    private static string FallbackLineKosherJava(DateTime now)
+    {
+        string loc = Config.Get("kiosk.zmanimLocation", "");
+        if (string.IsNullOrWhiteSpace(loc)) return null;
+        var p = ParseLocation(loc);
+        if (p == null) return null;
+        double lat = p.Value.lat, lon = p.Value.lon;
+        // תיקון גובה (issue #33): מטרים מעל פני הים; 0 כברירת מחדל אם לא הוגדר. הספרייה דורשת ≥ 0
+        double elevation = Math.Max(0, Config.Get("kiosk.zmanimElevation", 0.0));
+
+        global::Zmanim.ComplexZmanimCalendar cal;
+        try
+        {
+            var tz = new global::Zmanim.TimeZone.WindowsTimeZone(TimeZoneInfo.Local);
+            var geo = new global::Zmanim.Utilities.GeoLocation("kiosk", lat, lon, elevation, tz);
+            cal = new global::Zmanim.ComplexZmanimCalendar(now.Date, geo);
+        }
+        catch { return null; } // קואורדינטות לא תקינות לספרייה (לא אמור לקרות אחרי ParseLocation)
+
+        string H(DateTime? d) => d?.ToString("H:mm", System.Globalization.CultureInfo.InvariantCulture);
+        var dict = new Dictionary<string, string>();
+        void Add(string key, DateTime? v) { string s = H(v); if (s != null) dict[key] = s; }
+        try
+        {
+            // מפתחות כמו ב-KnownZmanim למעלה (האליאס הראשון בכל שורה), כדי לעבור דרך אותו ZmanimLine
+            Add("alotHaShachar", cal.GetAlosHashachar());
+            Add("sunrise", cal.GetSunrise());
+            Add("sofZmanShmaMGA", cal.GetSofZmanShmaMGA());
+            Add("sofZmanShmaGRA", cal.GetSofZmanShmaGRA());
+            Add("sofZmanTfilaMGA", cal.GetSofZmanTfilaMGA());
+            Add("sofZmanTfilaGRA", cal.GetSofZmanTfilaGRA());
+            Add("chatzot", cal.GetChatzos());
+            Add("minchaGedola", cal.GetMinchaGedola());
+            Add("minchaKetana", cal.GetMinchaKetana());
+            Add("plagHamincha", cal.GetPlagHamincha());
+            Add("sunset", cal.GetSunset());
+            Add("tzeit", cal.GetTzais());
+        }
+        catch { /* למשל קו רוחב קיצוני עם יום/לילה מתמשכים חלקית — מה שכבר חושב מוצג */ }
+        if (dict.Count == 0) return null;
+
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(dict));
+        string zm = ZmanimLine(doc.RootElement);
+        if (zm == null) return null;
+        return zm + "\n" + Lang.T(
+            "(חישוב גיבוי מקומי — ספריית Zmanim/KosherJava, ללא חיבור ללוח השנה של אוצריא)",
+            "(local fallback calculation — Zmanim/KosherJava library, not from Otzaria's calendar)");
+    }
+
+    /// <summary>
+    /// מנוע ישן (ברירת מחדל, ללא שינוי התנהגות למתקינים קיימים): קירוב אסטרונומי פשוט של NOAA,
+    /// הנץ/שקיעה בגובה פני הים בלבד, בלי תיקון גובה וקבוצת זמנים מצומצמת.
+    /// </summary>
+    private static string FallbackLineNoaa(DateTime now)
     {
         string loc = Config.Get("kiosk.zmanimLocation", "");
         if (string.IsNullOrWhiteSpace(loc)) return null;

@@ -132,6 +132,13 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 שחזור חירום: `OtzariaBridge.exe --unlock <recoveryCode>` מחלון פקודה, או Safe Mode
 (הגשר לא עולה ב-Safe Mode, ולכן הנעילה הרכה לא חלה שם).
 
+### זמני היום לשומר המסך — גיבוי מקומי
+`POST /kiosk/zmanim-cache` — תוסף "הגדרות מערכת" דוחף לכאן מה שקיבל מ-`calendar.getDailyTimes`/`getJewishDate`
+של אוצריא (מקור ראשי). כשאין מטמון טרי (אוצריא סגורה או ישנה מדי), `bridge/Zmanim.cs` מציג גיבוי מקומי לפי
+`kiosk.zmanimFallbackEngine`: `"noaa"` (ברירת מחדל, קירוב אסטרונומי פשוט) או `"kosherjava"` — המשתמש בחבילת
+ה-NuGet `Zmanim` גרסה 1.5.0, הפורט הרשמי ל-.NET של פרויקט **KosherJava** מאת Eliyahu Hershfeld
+(http://www.kosherjava.com/zmanim-project/), ברישיון LGPL-2.1. ראו גם `README.md` וחלון "אודות" בגשר.
+
 ## הפעלה
 
 - `OtzariaBridge.exe` בהפעלה הראשונה: מעתיק את עצמו ל-`%LOCALAPPDATA%\OtzariaBridge\`,

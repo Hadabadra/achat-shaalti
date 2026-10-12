@@ -133,13 +133,20 @@ internal sealed class AboutForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10f);
         BackColor = Color.White;
-        ClientSize = new Size(480, 450);
+        ClientSize = new Size(480, 510);
         Padding = new Padding(20);
 
         var logo = new PictureBox { Image = new Icon(Overlay.AppIcon(), 64, 64).ToBitmap(), SizeMode = PictureBoxSizeMode.CenterImage, Height = 76, Dock = DockStyle.Top };
         var title = new Label { Text = Lang.T("תורת אסתר", "Torat Esther"), Font = new Font("Segoe UI Semibold", 16f), Height = 38, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         var ver = new Label { Text = Lang.T("גרסה ", "Version ") + Program.Version + " · " + Lang.T("תורת אסתר", "Torat Esther"), Height = 26, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.DimGray };
         var ded = new Label { Text = "לעילוי נשמת הנערה הצדקנית\nאסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט\"א\nתהא נשמתה צרורה בצרור החיים. תנצב\"ה", Height = 66, Font = new Font("Segoe UI", 10.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(90, 70, 40) };
+        // קרדיט נפרד מההקדשה: ספריית חישוב הזמנים של הגיבוי (לא קשור להקדשה למעלה)
+        var zmanimCredit = new Label { Text = Lang.T(
+                "חישוב זמני היום (גיבוי): פרויקט Zmanim/KosherJava מאת Eliyahu Hershfeld (kosherjava.com), ברישיון LGPL",
+                "Fallback daily zmanim: the Zmanim/KosherJava project by Eliyahu Hershfeld (kosherjava.com), LGPL license"),
+            Height = 36, Font = new Font("Segoe UI", 8.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.Gray };
+        var zmanimLink = new LinkLabel { Text = "kosherjava.com/zmanim-project", Height = 22, Font = new Font("Segoe UI", 8.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
+        zmanimLink.LinkClicked += (_, _) => OpenUrl("http://www.kosherjava.com/zmanim-project/");
         var link = new LinkLabel { Text = Lang.T("עמוד ההוצאות ויומן השינויים", "Releases page and changelog"), Height = 28, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         link.LinkClicked += (_, _) => OpenUrl(UpdateApi.AllReleasesUrl);
 
@@ -150,7 +157,7 @@ internal sealed class AboutForm : Form
         var row = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft, Padding = new Padding(80, 6, 0, 0) };
         row.Controls.AddRange(new Control[] { _check, _install });
 
-        Controls.AddRange(new Control[] { row, _state, link, ded, ver, title, logo });
+        Controls.AddRange(new Control[] { row, _state, link, zmanimLink, zmanimCredit, ded, ver, title, logo });
         Shown += async (_, _) => await DoCheck(false);
     }
 

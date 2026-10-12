@@ -244,6 +244,8 @@ public static class Kiosk
         restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 0),
         zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
         zmanimCity = Config.Get("kiosk.zmanimCity", ""),
+        zmanimElevation = Config.Get("kiosk.zmanimElevation", 0.0),
+        zmanimFallbackEngine = Config.Get("kiosk.zmanimFallbackEngine", "noaa"),
         zmanimShow = Config.HasList("kiosk.zmanimShow") ? Config.GetList("kiosk.zmanimShow") : null,
         zmanimDiaspora = Config.Get("kiosk.zmanimDiaspora", false),
         candleLightingMinutes = Config.Get("kiosk.candleLightingMinutes", 18),
@@ -363,6 +365,15 @@ public static class Kiosk
         // עיר מרשימה (אם נבחרה) מועברת כפי שהיא ל-calendar.getDailyTimes באוצריא; הקואורדינטות
         // למעלה נשארות כאפשרות מתקדמת, וגם משמשות גיבוי כש-kiosk.zmanimCity ריק
         if (b.Has("zmanimCity")) Config.Set("kiosk.zmanimCity", (b.Str("zmanimCity") ?? "").Trim());
+        // תיקון גובה לגיבוי (issue #33): מטרים מעל פני הים, רק למנוע kosherjava (הספרייה דורשת ≥ 0)
+        if (b.Has("zmanimElevation")) Config.Set("kiosk.zmanimElevation", Math.Clamp(b.Num("zmanimElevation") ?? 0, 0, 5000));
+        // מנוע חישוב הגיבוי: "noaa" (ברירת מחדל, ללא שינוי למתקינים קיימים) או "kosherjava" (חדש)
+        if (b.Has("zmanimFallbackEngine"))
+        {
+            string eng = (b.Str("zmanimFallbackEngine") ?? "noaa").Trim().ToLowerInvariant();
+            if (eng != "kosherjava") eng = "noaa";
+            Config.Set("kiosk.zmanimFallbackEngine", eng);
+        }
         if (b.Has("zmanimDiaspora")) Config.Set("kiosk.zmanimDiaspora", b.Bool("zmanimDiaspora"));
         if (b.Has("zmanimShow"))
         {
