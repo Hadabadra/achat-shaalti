@@ -133,3 +133,7 @@
 - סטטוס: מתוכנן לגרסת הגשר הבאה אחרי הסעיפים 1-4. אחרי שנכנס לגשר, לעדכן את צופה PDF+OCR (ריפו pdf-viewer, `docs/PLAN-998.md`, סעיף "OCR של Windows דרך הגשר").
 
 - צופה PDF (repo pdf-viewer, ענף bridge-pairing-search, 4.1.0): צימוד לגשר וחיפוש קבצים. ממתין למיזוג ל-main (פרסום בחנות) באישור.
+
+## הרשאות/דגלים מה-SDK (בדיקה 12.10.2026)
+- ✅ `contributes.toolTab.allowOrderBeforeBuiltIns: true` בשני התוספים — מאפשר להופיע לפני הכלים המובנים במסך "כלים" (דגל תצוגה, לא הרשאה; המשתמש יכול לכבות).
+- מומלץ להוסיף יחד עם הקוד שמשתמש בהן: `ui.create_shortcut` (קיצור דרך לתוסף בשולחן העבודה), `app.shortcuts` (Ctrl+Shift+E לסייר), `events.subscribe:settings.changed` (החלפת שפה חיה), `fonts.local.read` (גופן תואם בצופה Word), `library.books.provide` (קבצים מתיקיות שנבחרו כספרים בחיפוש הספרייה). בלי קוד אין טעם להצהיר — המשתמש יראה בקשת הרשאה מיותרת.
