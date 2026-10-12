@@ -539,10 +539,10 @@ public class HardLockService : ServiceBase
         if (Interlocked.Exchange(ref _tickBusy, 1) == 1) return;
         try
         {
-            bool active;
-            lock (_gate) active = Active;
+            bool active, blockUsb;
+            lock (_gate) { active = Active; blockUsb = _state["blockUsbStorage"]?.GetValue<bool>() == true; }
             EnforcePolicies(active);
-            EnforceUsb(active && _state["blockUsbStorage"]?.GetValue<bool>() == true);
+            EnforceUsb(active && blockUsb);
             if (active) EnsureBridgeInSessions();
         }
         catch (Exception ex) { HardLock.SvcLog("tick: " + ex.Message); }
@@ -552,7 +552,9 @@ public class HardLockService : ServiceBase
     /// <summary>מדיניות בכל חשבון מחובר (HKEY_USERS\SID): מנהל המשימות ועורך הרישום חסומים; מוחזרת אם נמחקה</summary>
     private void EnforcePolicies(bool active)
     {
-        var touched = (_state["touched"] as JsonArray)?.Select(x => x?.ToString()).Where(x => x != null).ToHashSet()
+        HashSet<string> touched;
+        lock (_gate)
+            touched = (_state["touched"] as JsonArray)?.Select(x => x?.ToString()).Where(x => x != null).ToHashSet()
                       ?? new HashSet<string>();
         bool changed = false;
         foreach (string sid in Registry.Users.GetSubKeyNames().Where(n => UserSid.IsMatch(n)))
@@ -593,6 +595,13 @@ public class HardLockService : ServiceBase
         {
             using var k = Registry.LocalMachine.OpenSubKey(UsbStorKey, true);
             if (k == null) return;
+            bool hasOriginal;
+            int orig;
+            lock (_gate)
+            {
+                hasOriginal = _state["usbOriginal"] != null;
+                orig = hasOriginal ? _state["usbOriginal"].GetValue<int>() : 3;
+            }
             int cur = k.GetValue("Start") is int v ? v : 3;
             if (block && cur != 4)
             {
@@ -600,9 +609,8 @@ public class HardLockService : ServiceBase
                 k.SetValue("Start", 4, RegistryValueKind.DWord);
                 HardLock.SvcLog("service: אחסון USB נחסם");
             }
-            else if (!block && _state["usbOriginal"] != null)
+            else if (!block && hasOriginal)
             {
-                int orig = _state["usbOriginal"].GetValue<int>();
                 k.SetValue("Start", orig == 4 ? 3 : orig, RegistryValueKind.DWord);
                 lock (_gate) { _state.Remove("usbOriginal"); Save(); }
                 HardLock.SvcLog("service: אחסון USB שוחרר");
