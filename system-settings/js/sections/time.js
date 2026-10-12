@@ -35,7 +35,10 @@
     load: async function (body) {
       var d;
       try { d = await SS.bridge.call('/sys/time/get'); }
-      catch (e) { body.querySelector('[data-slot=tz]').innerHTML = ui.errorBox(e); return; }
+      catch (e) {
+        body.querySelector('[data-slot=tz]').innerHTML = ui.errorBox(e, function () { SS.sections.find(function (s) { return s.id === 'time'; }).load(body); });
+        return;
+      }
       render(body, d);
     }
   });

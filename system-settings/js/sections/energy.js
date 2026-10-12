@@ -21,7 +21,8 @@
       var d;
       try { d = await SS.bridge.call('/sys/energy/get', {}, { timeoutMs: 30000 }); }
       catch (e) {
-        ['bat', 'plan', 'time'].forEach(function (k) { body.querySelector('[data-slot=' + k + ']').innerHTML = ui.errorBox(e); });
+        var retry = function () { SS.sections.find(function (s) { return s.id === 'energy'; }).load(body); };
+        ['bat', 'plan', 'time'].forEach(function (k) { body.querySelector('[data-slot=' + k + ']').innerHTML = ui.errorBox(e, retry); });
         return;
       }
       render(body, d);

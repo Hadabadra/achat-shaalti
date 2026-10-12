@@ -25,7 +25,7 @@
     if (!slot) return;
     var d;
     try { d = await SS.bridge.call('/sys/wifi/networks', {}, { timeoutMs: 20000 }); }
-    catch (e) { slot.innerHTML = ui.errorBox(e); return; }
+    catch (e) { slot.innerHTML = ui.errorBox(e, function () { loadNets(body); }); return; }
     var sw = body.querySelector('#sw-wifi');
     if (sw && !sw.classList.contains('on')) {
       slot.innerHTML = '<p class="muted">ה-Wi-Fi כבוי. הפעילו אותו כדי לראות רשתות.</p>';
@@ -55,7 +55,7 @@
         var password;
         if (n.secured && !n.known) {
           var v = await ui.dialog({
-            title: 'התחברות ל-' + n.ssid, icon: 'wifi',
+            title: 'התחברות ל-' + ui.isolateLtr(n.ssid), icon: 'wifi',
             body: '<p>הרשת מאובטחת. הקלידו את סיסמת הרשת.</p>',
             fields: [{ name: 'pw', label: 'סיסמת הרשת', type: 'password', dir: 'ltr' }],
             actions: [{ label: 'ביטול', value: false }, { label: 'התחבר', value: true, kind: 'primary' }],
@@ -66,14 +66,14 @@
             }
           });
           if (!v) return;
-          ui.toast('מחובר ל-' + n.ssid, 'success');
+          ui.toast('מחובר ל-' + ui.isolateLtr(n.ssid), 'success');
           loadNets(body);
           return;
         }
         b.disabled = true; b.innerHTML = '<span class="spinner sm"></span>מתחבר…';
         try {
           await SS.bridge.call('/sys/wifi/connect', password ? { ssid: n.ssid, password: password } : { ssid: n.ssid }, { timeoutMs: 40000 });
-          ui.toast('מחובר ל-' + n.ssid, 'success');
+          ui.toast('מחובר ל-' + ui.isolateLtr(n.ssid), 'success');
           loadNets(body);
         } catch (e) { ui.error(e, 'התחברות'); b.disabled = false; b.textContent = 'התחבר'; }
       });

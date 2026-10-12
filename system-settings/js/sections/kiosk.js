@@ -16,7 +16,7 @@
   async function load(body) {
     var st;
     try { st = await SS.bridge.call('/kiosk/status'); }
-    catch (e) { body.innerHTML = ui.errorBox(e); return; }
+    catch (e) { body.innerHTML = ui.errorBox(e, function () { load(body); }); return; }
     if (SS.bridge.health) { SS.bridge.health.kioskActive = !!st.active; SS.setStatus(true); if (SS.syncLock) SS.syncLock(SS.bridge.health); }
     var progs = [], found = [];
     try {

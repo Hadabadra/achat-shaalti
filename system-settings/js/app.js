@@ -14,7 +14,7 @@
       /* אם הפתיחה נכשלת — מעתיקים את הקישור ללוח, כדי שאפשר להדביק אותו בדפדפן */
       var failed = async function () {
         var ok = await SS.copyText(url);
-        ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + url, 'error');
+        ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + ui.isolateLtr(url), 'error');
       };
       /* שם הקריאה המתועד הוא app.openUrl; app.open_url הוא גיבוי למקרה שהגרסה של אוצריא מכירה רק אותו */
       var names = ['app.openUrl', 'app.open_url'], lastErr = '';
@@ -195,7 +195,7 @@
       off.querySelector('#off-dl').addEventListener('click', function () { SS.openUrl(SS.BRIDGE_URL); });
       off.querySelector('#off-copy').addEventListener('click', function () {
         SS.copyText(SS.BRIDGE_URL).then(function (ok) {
-          ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + SS.BRIDGE_URL, ok ? 'success' : 'error');
+          ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + ui.isolateLtr(SS.BRIDGE_URL), ok ? 'success' : 'error');
         });
       });
       off.querySelector('#off-retry').addEventListener('click', function () {
