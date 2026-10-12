@@ -22,13 +22,7 @@ public static class Tray
         _lang = new ToolStripMenuItem("", null, (_, _) => { Lang.Set(Lang.En ? "he" : "en"); ApplyTexts(); });
         _exit = new ToolStripMenuItem("", null, (_, _) => Application.ExitThread());
         _about = new ToolStripMenuItem("", null, (_, _) => AboutForm.Open());
-        _unpair = new ToolStripMenuItem("", null, (_, _) =>
-        {
-            if (Kiosk.IsActive) return;
-            if (MessageBox.Show(Lang.T("לנתק את כל התוספים מהגשר? בפתיחה הבאה כל תוסף יבקש אישור מחדש.", "Disconnect all plugins from the bridge? Each plugin will ask for approval again."),
-                    Lang.T("תורת אסתר", "Torat Esther"), MessageBoxButtons.YesNo) == DialogResult.Yes)
-                Pairing.RevokeAll();
-        });
+        _unpair = new ToolStripMenuItem("", null, (_, _) => PairingForm.Open());
         menu.Items.AddRange(new ToolStripItem[] { _status, _about, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
 
         _icon = new NotifyIcon
@@ -66,7 +60,7 @@ public static class Tray
         _about.Text = Lang.T("אודות ועדכונים…", "About and updates…");
         _install.Text = Lang.T("התקן/עדכן את התוספים באוצריא", "Install/update the plugins in Otzaria");
         _lang.Text = Lang.T("English", "עברית");
-        _unpair.Text = Lang.T("ניתוק כל התוספים המחוברים", "Disconnect all connected plugins");
+        _unpair.Text = Lang.T("צימוד תוספים…", "Plugin pairing…");
         _exit.Text = Lang.T("יציאה", "Exit");
         UpdateStatus();
     }

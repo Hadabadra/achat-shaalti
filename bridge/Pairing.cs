@@ -98,6 +98,21 @@ public static class Pairing
         return new { clients = List() };
     }
 
+    /// <summary>צימוד קל: עד הזמן הזה בקשות צימוד מאושרות בלי חלון (רק כשהנעילה כבויה). נפתח מחלון "צימוד תוספים" בגשר</summary>
+    public static DateTime AutoApproveUntil = DateTime.MinValue;
+    public static bool AutoApproveOpen => !Kiosk.IsActive && DateTime.UtcNow < AutoApproveUntil;
+
+    /// <summary>ניתוק תוסף אחד (מחלון "צימוד תוספים" בגשר)</summary>
+    public static void RevokeId(string id)
+    {
+        lock (Gate)
+        {
+            var keep = new JsonArray(Clients().OfType<JsonObject>().Where(c => c["id"]?.ToString() != id)
+                .Select(c => (JsonNode)c.DeepClone()).ToArray());
+            SaveClients(keep);
+        }
+    }
+
     /// <summary>ביטול כל הצימודים (מתפריט המגש)</summary>
     public static void RevokeAll()
     {
@@ -121,7 +136,7 @@ public static class Pairing
             throw new BridgeException("busy", "חלון אישור אחר כבר פתוח במחשב", 409);
         try
         {
-            bool approved = await PairDialog.AskAsync(name, Kiosk.IsActive);
+            bool approved = AutoApproveOpen || await PairDialog.AskAsync(name, Kiosk.IsActive);
             if (!approved)
             {
                 if (++_denials >= 3) { _denials = 0; _cooldownUntil = DateTime.UtcNow.AddMinutes(1); }
