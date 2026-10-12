@@ -67,7 +67,7 @@ public static class HardLock
         if (res == null) throw new BridgeException("unsupported", "רכיב ההקשחה אינו זמין", 503);
         if (res["ok"]?.GetValue<bool>() == true) return res;
         string code = res["code"]?.ToString() ?? "internal";
-        int status = code switch { "wrong_password" => 401, "too_many" => 429, "bad_request" => 400, _ => 500 };
+        int status = code switch { "wrong_password" => 401, "two_factor" => 401, "forbidden" => 403, "too_many" => 429, "bad_request" => 400, _ => 500 };
         throw new BridgeException(code == "too_many" ? "wrong_password" : code, res["message"]?.ToString() ?? "שגיאה ברכיב ההקשחה", status);
     }
 
@@ -110,10 +110,52 @@ public static class HardLock
             configured = s?["configured"]?.GetValue<bool>() == true,
             active = s?["active"]?.GetValue<bool>() == true,
             blockUsbStorage = s?["blockUsbStorage"]?.GetValue<bool>() == true,
+            twoFactor = s?["twoFactor"]?.GetValue<bool>() == true,
             version = sv,
             needsUpdate = sv != null && sv != Program.Version,
             sessions = s?["sessions"]?.GetValue<int>() ?? 0,
         };
+    }
+
+    /// <summary>
+    /// פקודה רגישה (ביטול נעילה/סיסמה/הסרה/הגדרות): אם השירות דורש אימות דו-שלבי הוא עונה "two_factor";
+    /// אז מפעילים Windows Hello דרך השירות (תהליך עזר בסשן המשתמש, כי סשן 0 אינו יכול להציג UI) ושולחים שוב
+    /// עם אישור חד-פעמי. כך אי אפשר לדלג על Hello מול הצינור, גם אם יודעים את הסיסמה.
+    /// </summary>
+    private static JsonObject CallSensitive(JsonObject req, string password, int timeoutMs = 2500)
+    {
+        var res = Call(req, timeoutMs);
+        if (res?["code"]?.ToString() == "two_factor")
+        {
+            req["hello"] = RunHello(password);
+            res = Call(req, timeoutMs);
+        }
+        return res;
+    }
+
+    private static string RunHello(string password)
+    {
+        var st = Must(Call(new JsonObject { ["op"] = "hello-start", ["password"] = password ?? "" }));
+        string nonce = st["nonce"]?.ToString();
+        var deadline = DateTime.UtcNow.AddSeconds(75);
+        while (DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(700);
+            string s = Call(new JsonObject { ["op"] = "hello-status", ["nonce"] = nonce }, 2500)?["state"]?.ToString();
+            if (s == "approved") return nonce;
+            if (s is "failed" or "expired") break;
+        }
+        throw new BridgeException("two_factor", "נדרש אימות Windows Hello (זיהוי פנים/טביעת אצבע/PIN) והוא נכשל או בוטל", 401);
+    }
+
+    /// <summary>
+    /// מסנכרן את דגל האימות הדו-שלבי אל השירות, כשהוא מותקן — כך ש-Hello נאכף גם מול הצינור עצמו,
+    /// לא רק בשכבת ה-HTTP של הגשר (ביקורת #30 ממצא 1). עשוי להציג חלון Hello נוסף בהפעלה ראשונה.
+    /// </summary>
+    public static void SetTwoFactor(string password, bool on)
+    {
+        Must(CallSensitive(new JsonObject { ["op"] = "settings", ["password"] = password ?? "", ["twoFactor"] = on }, password));
+        _cacheAt = DateTime.MinValue;
     }
 
     public static void Verify(string password, bool allowRecovery) =>
@@ -128,15 +170,15 @@ public static class HardLock
 
     public static void Disable(string password)
     {
-        Must(Call(new JsonObject { ["op"] = "disable", ["password"] = password ?? "" }));
+        Must(CallSensitive(new JsonObject { ["op"] = "disable", ["password"] = password ?? "" }, password));
         _cacheAt = DateTime.MinValue;
         _sawActive = false;
     }
 
     public static void SetPassword(string oldPassword, string newPassword) =>
-        Must(Call(new JsonObject { ["op"] = "set-password", ["old"] = oldPassword ?? "", ["new"] = newPassword ?? "" }));
+        Must(CallSensitive(new JsonObject { ["op"] = "set-password", ["old"] = oldPassword ?? "", ["new"] = newPassword ?? "" }, oldPassword));
 
-    /// <summary>קוד שחזור משורת הפקודה: מבטל גם בשירות</summary>
+    /// <summary>קוד שחזור משורת הפקודה: מבטל גם בשירות (פטור מ-2FA — ביטול חירום)</summary>
     public static bool EmergencyDisable(string code)
     {
         var r = Call(new JsonObject { ["op"] = "disable", ["password"] = code ?? "" });
@@ -145,7 +187,9 @@ public static class HardLock
 
     public static string UninstallWithPassword(string password)
     {
-        var r = Call(new JsonObject { ["op"] = "uninstall", ["password"] = password ?? "" }, 5000);
+        JsonObject r;
+        try { r = CallSensitive(new JsonObject { ["op"] = "uninstall", ["password"] = password ?? "" }, password, 5000); }
+        catch (BridgeException ex) { return ex.Message; }
         if (r == null) return null; // אין שירות
         return r["ok"]?.GetValue<bool>() == true ? null : r["message"]?.ToString() ?? "סיסמה שגויה";
     }
@@ -184,6 +228,9 @@ public static class HardLock
                 ["salt"] = Config.Get<string>("kiosk.salt", ""),
                 ["recoveryHash"] = Config.Get<string>("kiosk.recoveryHash", ""),
                 ["recoverySalt"] = Config.Get<string>("kiosk.recoverySalt", ""),
+                // אם האימות הדו-שלבי כבר דלוק בגשר, יורש אותו מיד — אחרת ההתקנה הראשונה הייתה משאירה
+                // את הצינור בלי Hello עד שהמנהל היה נוגע שוב בהגדרות (ביקורת #30 ממצא 1)
+                ["twoFactor"] = Config.Get("kiosk.twoFactor", false),
             }));
         }
         if (Kiosk.IsActive) Enable(b.Str("password"), Kiosk.OtzariaPath());
@@ -193,7 +240,7 @@ public static class HardLock
 
     private static object Uninstall(JsonElement b)
     {
-        Must(Call(new JsonObject { ["op"] = "uninstall", ["password"] = b.Str("password") ?? "" }, 5000));
+        Must(CallSensitive(new JsonObject { ["op"] = "uninstall", ["password"] = b.Str("password") ?? "" }, b.Str("password"), 5000));
         _sawActive = false;
         Thread.Sleep(1500);
         return Status(fresh: true);
@@ -203,7 +250,8 @@ public static class HardLock
     {
         var req = new JsonObject { ["op"] = "settings", ["password"] = b.Str("password") ?? "" };
         if (b.Has("blockUsbStorage")) req["blockUsbStorage"] = b.Bool("blockUsbStorage");
-        Must(Call(req));
+        if (b.Has("twoFactor")) req["twoFactor"] = b.Bool("twoFactor");
+        Must(CallSensitive(req, b.Str("password")));
         return Status(fresh: true);
     }
 
@@ -458,6 +506,50 @@ public class HardLockService : ServiceBase
 
     private const int PipeMaxLine = 64 * 1024;
     [ThreadStatic] private static bool _clientAdmin;
+    [ThreadStatic] private static int _clientPid;
+    [ThreadStatic] private static int _clientSession;
+
+    [DllImport("kernel32.dll")] private static extern bool GetNamedPipeClientProcessId(IntPtr pipe, out uint pid);
+    [DllImport("kernel32.dll")] private static extern bool ProcessIdToSessionId(uint pid, out uint session);
+
+    // ---------- אימות דו-שלבי (Windows Hello) שנאכף בשירות ----------
+    // השירות (SYSTEM) לא יכול להציג Hello בעצמו (סשן 0), ולכן הוא מפעיל בסשן של המשתמש תהליך עזר
+    // (--hello-helper, מתוך הקובץ המותקן ב-Program Files). התהליך מדווח "hello-done" בצינור, והשירות
+    // מקבל דיווח רק מה-PID שהוא עצמו הפעיל — כך לקוח צינור גולמי (סקריפט שיודע את הסיסמה) לא יכול
+    // לדווח "אושר" בעצמו ולדלג על Hello.
+    // מגבלה: תהליך העזר רץ בטוקן של המשתמש; תוקף שמזריק קוד לתוכו בחלון הזמן הקצר שהוא חי עדיין יכול
+    // לזייף אישור. זו הגנה משמעותית מעבר לעקיפה טריוויאלית מול הצינור, לא הגנה מוחלטת.
+    private sealed class HelloReq { public int Pid; public DateTime Expires; public DateTime ApprovedUntil; public string State = "pending"; }
+    private readonly Dictionary<string, HelloReq> _hello = new();
+    private readonly object _helloGate = new();
+    private bool TwoFactorOn => _state["twoFactor"]?.GetValue<bool>() == true;
+
+    private void PruneHello()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var k in _hello.Where(kv => now > kv.Value.Expires && now > kv.Value.ApprovedUntil).Select(kv => kv.Key).ToList())
+            _hello.Remove(k);
+    }
+
+    /// <summary>null = מותר להמשיך. כש-2FA פעיל (או force) נדרש אישור Hello חד-פעמי; קוד שחזור פטור (ביטול חירום)</summary>
+    private JsonObject Need2fa(JsonObject q, string supplied, bool force = false)
+    {
+        if (!TwoFactorOn && !force) return null;
+        if (!force && !string.IsNullOrEmpty(supplied) && !Matches(supplied, "passwordHash", "salt")
+            && Matches(NormalizeRecovery(supplied), "recoveryHash", "recoverySalt"))
+            return null;
+        string nonce = q["hello"]?.ToString();
+        lock (_helloGate)
+        {
+            PruneHello();
+            if (nonce != null && _hello.TryGetValue(nonce, out var h) && h.State == "approved" && DateTime.UtcNow < h.ApprovedUntil)
+            {
+                _hello.Remove(nonce); // חד-פעמי
+                return null;
+            }
+        }
+        return Err("two_factor", "נדרש אימות Windows Hello (זיהוי פנים/טביעת אצבע/PIN)");
+    }
 
     private async Task ServeOne(NamedPipeServerStream pipe, CancellationToken ct)
     {
@@ -492,6 +584,16 @@ public class HardLockService : ServiceBase
                 }
                 catch { admin = false; }
                 _clientAdmin = admin;
+                _clientPid = 0; _clientSession = 0;
+                try
+                {
+                    if (GetNamedPipeClientProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out uint cpid))
+                    {
+                        _clientPid = (int)cpid;
+                        if (ProcessIdToSessionId(cpid, out uint csid)) _clientSession = (int)csid;
+                    }
+                }
+                catch { }
                 JsonObject res;
                 try { res = Handle(JsonNode.Parse(text.Length == 0 ? "{}" : text) as JsonObject ?? new JsonObject()); }
                 catch (Exception ex) { res = Err("internal", ex.Message); HardLock.SvcLog("pipe: " + ex); }
@@ -518,6 +620,7 @@ public class HardLockService : ServiceBase
                     {
                         ["ok"] = true, ["version"] = Program.Version, ["configured"] = Configured, ["active"] = Active,
                         ["blockUsbStorage"] = _state["blockUsbStorage"]?.GetValue<bool>() == true,
+                        ["twoFactor"] = TwoFactorOn,
                         ["otzariaPath"] = _state["otzariaPath"]?.ToString() ?? "", ["sessions"] = _sessions,
                     };
 
@@ -531,6 +634,7 @@ public class HardLockService : ServiceBase
                         if (string.IsNullOrEmpty(v)) return Err("bad_request", "חסר " + k);
                         _state[k] = v;
                     }
+                    if (q["twoFactor"] is JsonValue tfSetup) _state["twoFactor"] = tfSetup.GetValue<bool>();
                     Save();
                     HardLock.SvcLog("service: הוגדרו סיסמה וקוד שחזור");
                     return Ok();
@@ -550,6 +654,7 @@ public class HardLockService : ServiceBase
 
                 case "disable":
                     if ((e = Check(pw, true)) != null) return e;
+                    if ((e = Need2fa(q, pw)) != null) return e;
                     _state["active"] = false;
                     Save();
                     HardLock.SvcLog("service: נעילה בוטלה");
@@ -558,6 +663,7 @@ public class HardLockService : ServiceBase
 
                 case "set-password":
                     if ((e = Check(q["old"]?.ToString(), true)) != null) return e;
+                    if ((e = Need2fa(q, q["old"]?.ToString())) != null) return e;
                     string np = q["new"]?.ToString() ?? "";
                     if (np.Length < 6) return Err("bad_request", "הסיסמה חייבת להכיל לפחות 6 תווים");
                     byte[] salt = RandomNumberGenerator.GetBytes(16);
@@ -567,14 +673,66 @@ public class HardLockService : ServiceBase
                     return Ok();
 
                 case "settings":
+                {
                     if ((e = Check(pw, false)) != null) return e;
+                    bool? wantTf = q["twoFactor"] is JsonValue tfv ? tfv.GetValue<bool>() : null;
+                    // הפעלה ראשונה דורשת Hello מוצלח בפועל (force), כדי לוודא שהמנגנון עובד לפני שנועלים את המנהל בעזרתו
+                    if ((e = Need2fa(q, pw, force: wantTf == true && !TwoFactorOn)) != null) return e;
+                    if (wantTf != null) _state["twoFactor"] = wantTf.Value;
                     if (q["blockUsbStorage"] is JsonValue bu) _state["blockUsbStorage"] = bu.GetValue<bool>();
                     Save();
                     Task.Run(Tick);
                     return Ok();
+                }
+
+                case "hello-start":
+                {
+                    if ((e = Check(pw, false)) != null) return e;
+                    if (_clientSession <= 0) return Err("bad_request", "לא זוהה סשן משתמש לחלון האימות");
+                    lock (_helloGate) { PruneHello(); if (_hello.Count >= 4) return Err("too_many", "יותר מדי בקשות אימות פתוחות"); }
+                    string hn = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+                    if (!Native.LaunchInSession(_clientSession, "\"" + HardLock.ServiceExe + "\" --hello-helper " + hn, out int hpid))
+                        return Err("internal", "לא ניתן להפעיל את חלון האימות בסשן של המשתמש");
+                    lock (_helloGate) _hello[hn] = new HelloReq { Pid = hpid, Expires = DateTime.UtcNow.AddSeconds(80) };
+                    return new JsonObject { ["ok"] = true, ["nonce"] = hn };
+                }
+
+                case "hello-status":
+                {
+                    string sn = q["nonce"]?.ToString() ?? "";
+                    lock (_helloGate)
+                    {
+                        PruneHello();
+                        return new JsonObject { ["ok"] = true, ["state"] = _hello.TryGetValue(sn, out var sh) ? sh.State : "expired" };
+                    }
+                }
+
+                case "hello-done":
+                {
+                    string dn = q["nonce"]?.ToString() ?? "";
+                    lock (_helloGate)
+                    {
+                        if (!_hello.TryGetValue(dn, out var dh) || dh.State != "pending" || DateTime.UtcNow > dh.Expires)
+                            return Err("bad_request", "בקשת אימות לא קיימת או שפג תוקפה");
+                        bool fromHelper = false;
+                        try
+                        {
+                            using var hp = Process.GetProcessById(_clientPid);
+                            fromHelper = _clientPid == dh.Pid &&
+                                string.Equals(Path.GetFullPath(hp.MainModule?.FileName ?? ""), Path.GetFullPath(HardLock.ServiceExe), StringComparison.OrdinalIgnoreCase);
+                        }
+                        catch { }
+                        if (!fromHelper) return Err("forbidden", "הדיווח אינו מתהליך העזר שהשירות הפעיל");
+                        bool okv = q["ok"]?.GetValue<bool>() == true;
+                        dh.State = okv ? "approved" : "failed";
+                        dh.ApprovedUntil = DateTime.UtcNow.AddMinutes(2);
+                        return Ok();
+                    }
+                }
 
                 case "uninstall":
                     if (Configured && (e = Check(pw, true)) != null) return e;
+                    if (Configured && (e = Need2fa(q, pw)) != null) return e;
                     _state["active"] = false;
                     _state["uninstalling"] = true;
                     Save();
@@ -762,8 +920,11 @@ internal static class Native
         return list;
     }
 
-    public static bool LaunchInSession(int sessionId, string commandLine)
+    public static bool LaunchInSession(int sessionId, string commandLine) => LaunchInSession(sessionId, commandLine, out _);
+
+    public static bool LaunchInSession(int sessionId, string commandLine, out int pid)
     {
+        pid = 0;
         if (!WTSQueryUserToken(sessionId, out IntPtr token)) return false;
         IntPtr env = IntPtr.Zero;
         try
@@ -773,7 +934,7 @@ internal static class Native
             const uint CREATE_UNICODE_ENVIRONMENT = 0x400, CREATE_NO_WINDOW = 0x08000000;
             bool ok = CreateProcessAsUser(token, null, new StringBuilder(commandLine), IntPtr.Zero, IntPtr.Zero, false,
                 CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW, env, HardLock.ProgDir, ref si, out var pi);
-            if (ok) { CloseHandle(pi.hThread); CloseHandle(pi.hProcess); }
+            if (ok) { pid = pi.dwProcessId; CloseHandle(pi.hThread); CloseHandle(pi.hProcess); }
             return ok;
         }
         finally

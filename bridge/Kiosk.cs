@@ -366,6 +366,9 @@ public static class Kiosk
                 if (!TwoFactor.Verify("אישור הפעלת אימות דו-שלבי"))
                     throw new BridgeException("two_factor", "האימות נכשל — האימות הדו-שלבי לא הופעל", 401);
             }
+            // כשרכיב ההקשחה מותקן, חובה לסנכרן אליו גם: אחרת Hello נאכף רק ב-HTTP של הגשר, ולא מול
+            // הצינור של השירות עצמו (ביקורת #30 ממצא 1) — עדכון שלא עובר לשירות משאיר את הפרצה פתוחה.
+            if (HardLock.Available) HardLock.SetTwoFactor(b.Str("password"), want);
             Config.Set("kiosk.twoFactor", want);
         }
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
