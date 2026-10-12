@@ -242,6 +242,7 @@ public static class Kiosk
         fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
         sideBar = Config.Get("kiosk.sideBar", true),
         sideBarIconsOnly = Config.Get("kiosk.sideBarIconsOnly", false),
+        sideBarPosition = Config.Get("kiosk.sideBarPosition", "right"),
         resetOnShutdown = Config.Get("kiosk.resetOnShutdown", false),
         openSections = OpenSections,
         allSections = AllSections,
@@ -504,6 +505,8 @@ public static class Kiosk
         }
         string cp = b.Str("clockPosition");
         if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right") Config.Set("kiosk.clockPosition", cp);
+        string sbp = b.Str("sideBarPosition");
+        if (sbp is "left" or "right" or "top" or "bottom") Config.Set("kiosk.sideBarPosition", sbp);
         if (b.Has("openSections"))
             Config.Set("kiosk.openSections", new JsonArray(b.StrArray("openSections")
                 .Where(x => AllSections.Contains(x, StringComparer.OrdinalIgnoreCase))
