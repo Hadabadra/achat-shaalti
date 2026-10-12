@@ -182,6 +182,7 @@ internal sealed class RestScreen : Form
 {
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
     private readonly Icon _icon = Overlay.AppIcon();
+    private Bitmap _iconBmp;
     private Rectangle _btn;
     public IntPtr Target;
 
@@ -219,8 +220,14 @@ internal sealed class RestScreen : Form
         float s = DeviceDpi / 96f;
         int iconSize = (int)(128 * s);
         int cx = r.Width / 2, top = (int)(r.Height * 0.22);
-        using (var bmp = new Icon(_icon, 256, 256).ToBitmap())
-            g.DrawImage(bmp, cx - iconSize / 2, top, iconSize, iconSize);
+        // נבנה פעם אחת ונשמר. קודם נוצר new Icon(...) בכל ציור (כל שנייה דרך הטיימר), וה-Icon
+        // הביניימי לא שוחרר — דליפת GDI handle לשנייה, שאחרי כמה שעות חוצה את תקרת 10,000 וקורסת.
+        if (_iconBmp == null)
+        {
+            using var big = new Icon(_icon, 256, 256);
+            _iconBmp = big.ToBitmap();
+        }
+        g.DrawImage(_iconBmp, cx - iconSize / 2, top, iconSize, iconSize);
 
         var now = DateTime.Now;
         using var timeF = new Font("Segoe UI Light", 72f, GraphicsUnit.Point);
@@ -252,7 +259,7 @@ internal sealed class RestScreen : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _tick.Dispose(); _icon.Dispose(); }
+        if (disposing) { _tick.Dispose(); _icon.Dispose(); _iconBmp?.Dispose(); }
         base.Dispose(disposing);
     }
 }
