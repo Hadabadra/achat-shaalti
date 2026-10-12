@@ -2,3 +2,5 @@ bridge/bin/
 bridge/obj/
 bridge/plugins/
 out/
+
+installer/Output/
