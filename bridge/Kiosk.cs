@@ -322,7 +322,7 @@ public static class Kiosk
     private static object SetPassword(JsonElement b)
     {
         string newPassword = b.Str("newPassword") ?? "";
-        if (newPassword.Length < 4) throw BridgeException.BadRequest("הסיסמה חייבת להכיל לפחות 4 תווים");
+        if (newPassword.Length < 6) throw BridgeException.BadRequest("הסיסמה חייבת להכיל לפחות 6 תווים");
         string recovery = null;
         if (HasPassword)
         {

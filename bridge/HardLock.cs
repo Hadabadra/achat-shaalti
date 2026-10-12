@@ -314,12 +314,23 @@ public static class HardLock
     /// <summary>התיקייה: SYSTEM ומנהלים — שליטה מלאה; משתמשים — קריאה בלבד</summary>
     private static void SecureDir(string dir)
     {
+        // תיקייה שנוצרה מראש בידי משתמש רגיל (הוא נשאר הבעלים ויכול לשנות הרשאות) — מוחקים ויוצרים מחדש
+        try
+        {
+            var owner = new DirectoryInfo(dir).GetAccessControl().GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
+            if (owner != null && !owner.IsWellKnown(WellKnownSidType.LocalSystemSid) && !owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid))
+            {
+                Directory.Delete(dir, true);
+                Directory.CreateDirectory(dir);
+            }
+        }
+        catch (Exception ex) { SvcLog("secure-dir owner: " + ex.Message); }
         var ds = new DirectorySecurity();
+        ds.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
         ds.SetAccessRuleProtection(true, false);
         var inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
         ds.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
         ds.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
-        ds.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null), FileSystemRights.ReadAndExecute, inherit, PropagationFlags.None, AccessControlType.Allow));
         new DirectoryInfo(dir).SetAccessControl(ds);
     }
 
@@ -507,7 +518,7 @@ public class HardLockService : ServiceBase
                 case "set-password":
                     if ((e = Check(q["old"]?.ToString(), true)) != null) return e;
                     string np = q["new"]?.ToString() ?? "";
-                    if (np.Length < 4) return Err("bad_request", "הסיסמה חייבת להכיל לפחות 4 תווים");
+                    if (np.Length < 6) return Err("bad_request", "הסיסמה חייבת להכיל לפחות 6 תווים");
                     byte[] salt = RandomNumberGenerator.GetBytes(16);
                     _state["salt"] = Convert.ToBase64String(salt);
                     _state["passwordHash"] = Secret.Hash(np, salt);
