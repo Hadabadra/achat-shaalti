@@ -113,6 +113,7 @@ public static class Pairing
         string client = (b.Str("client") ?? "").Trim();
         string name = (b.Str("name") ?? client).Trim();
         if (client.Length == 0 || client.Length > 60) throw BridgeException.BadRequest("שדה client חסר או ארוך מדי");
+        name = new string(name.Where(ch => !char.IsControl(ch)).ToArray()); // בלי שורות חדשות/תווי בקרה בחלון האישור
         if (name.Length > 60) name = name[..60];
 
         if (DateTime.UtcNow < _cooldownUntil)

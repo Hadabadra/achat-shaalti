@@ -319,7 +319,9 @@ public static class Wifi
 
     public static object Connect(string ssid, string password)
     {
-        if (ssid.Contains('"')) throw BridgeException.BadRequest("שם רשת לא חוקי");
+        // השם עובר דרך cmd.exe: תווים שמפעילים אותו (או משתנה סביבה) נדחים
+        if (ssid.IndexOfAny(new[] { '"', '%', '^', '&', '|', '<', '>', '\r', '\n' }) >= 0 || ssid.EndsWith("\\"))
+            throw BridgeException.BadRequest("שם רשת לא חוקי");
         if (!Profiles().Contains(ssid) || !string.IsNullOrEmpty(password))
         {
             string xml = ProfileXml(ssid, password);

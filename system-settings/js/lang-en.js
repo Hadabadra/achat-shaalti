@@ -61,7 +61,7 @@
     'המכשיר לא נמצא': 'Device not found',
     'הרשת לא נמצאה': 'Network not found',
     'סיסמת הרשת שגויה': 'Wrong network password',
-    'הסיסמה חייבת להכיל לפחות 4 תווים': 'The password must be at least 4 characters',
+    'הסיסמה חייבת להכיל לפחות 6 תווים': 'The password must be at least 6 characters',
     'יש להגדיר סיסמה תחילה': 'Set a password first',
     'נתיב לא קיים': 'Path does not exist',
     'לא נתמך במחשב זה': 'Not supported on this computer',
