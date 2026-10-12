@@ -159,32 +159,51 @@ internal sealed class AboutForm : Form
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
     }
 
+    private const int StateBaseHeight = 44, StateMaxHeight = 140;
+
+    /// <summary>
+    /// הטקסט כאן הוא לפעמים הודעת שגיאה ארוכה (כולל ex.Message פנימי), וב-Height קבוע הוא נחתך
+    /// בלי שלוש נקודות ובלי אזהרה — נראה כמו תקלה. מודדים את הגובה הדרוש בפועל ומגדילים את התווית
+    /// ואת החלון בהתאם (ה-Dock=Top של שאר הפקדים משאיר אותם במקומם).
+    /// </summary>
+    private void SetState(string text, Color color)
+    {
+        if (text.Length > 300) text = text[..300] + "…";
+        _state.ForeColor = color;
+        _state.Text = text;
+        int width = Math.Max(1, _state.Width);
+        var size = TextRenderer.MeasureText(text, _state.Font, new Size(width, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+        int needed = Math.Clamp(size.Height + 12, StateBaseHeight, StateMaxHeight);
+        if (needed != _state.Height)
+        {
+            ClientSize = new Size(ClientSize.Width, ClientSize.Height - _state.Height + needed);
+            _state.Height = needed;
+        }
+    }
+
     private async Task DoCheck(bool force)
     {
-        _state.ForeColor = Color.DimGray;
-        _state.Text = Lang.T("בודק עדכונים…", "Checking for updates…");
+        SetState(Lang.T("בודק עדכונים…", "Checking for updates…"), Color.DimGray);
         _check.Enabled = false;
         try
         {
             var i = await UpdateApi.Check(force);
             if (i.Newer)
             {
-                _state.ForeColor = Color.FromArgb(0, 100, 180);
-                _state.Text = Lang.T("גרסה " + i.Latest + " זמינה (מותקנת " + i.Current + ")", "Version " + i.Latest + " is available (installed " + i.Current + ")");
+                string msg = Lang.T("גרסה " + i.Latest + " זמינה (מותקנת " + i.Current + ")", "Version " + i.Latest + " is available (installed " + i.Current + ")");
                 _install.Enabled = i.ExeUrl != null && !Kiosk.IsActive;
-                if (Kiosk.IsActive) _state.Text += Lang.T(" — לעדכון יש לבטל את הנעילה", " — turn off lock mode to update");
+                if (Kiosk.IsActive) msg += Lang.T(" — לעדכון יש לבטל את הנעילה", " — turn off lock mode to update");
+                SetState(msg, Color.FromArgb(0, 100, 180));
             }
             else
             {
-                _state.ForeColor = Color.FromArgb(20, 120, 60);
-                _state.Text = Lang.T("הגשר מעודכן ✓ (גרסה " + i.Current + ", האחרונה: " + (i.Latest ?? "?") + ")", "Up to date ✓ (" + i.Current + ", latest: " + (i.Latest ?? "?") + ")");
+                SetState(Lang.T("הגשר מעודכן ✓ (גרסה " + i.Current + ", האחרונה: " + (i.Latest ?? "?") + ")", "Up to date ✓ (" + i.Current + ", latest: " + (i.Latest ?? "?") + ")"), Color.FromArgb(20, 120, 60));
                 _install.Enabled = false;
             }
         }
         catch (Exception ex)
         {
-            _state.ForeColor = Color.Firebrick;
-            _state.Text = ex.Message;
+            SetState(ex.Message, Color.Firebrick);
         }
         finally { _check.Enabled = true; }
     }
@@ -192,17 +211,15 @@ internal sealed class AboutForm : Form
     private async Task DoInstall()
     {
         _install.Enabled = _check.Enabled = false;
-        _state.ForeColor = Color.DimGray;
-        _state.Text = Lang.T("מוריד ומאמת…", "Downloading and verifying…");
+        SetState(Lang.T("מוריד ומאמת…", "Downloading and verifying…"), Color.DimGray);
         try
         {
             await UpdateApi.Install();
-            _state.Text = Lang.T("מתקין… הגשר יופעל מחדש בעוד רגע.", "Installing… the bridge will restart in a moment.");
+            SetState(Lang.T("מתקין… הגשר יופעל מחדש בעוד רגע.", "Installing… the bridge will restart in a moment."), Color.DimGray);
         }
         catch (Exception ex)
         {
-            _state.ForeColor = Color.Firebrick;
-            _state.Text = ex.Message;
+            SetState(ex.Message, Color.Firebrick);
             _check.Enabled = true;
         }
     }
