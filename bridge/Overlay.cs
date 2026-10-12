@@ -84,6 +84,18 @@ public static class Overlay
 
     public static void HideAll() { HideRest(); HideClock(); HideSideBar(); }
 
+    private static LockCountdown _countdown;
+
+    /// <summary>אזהרת ספירה-לאחור לפני נעילה מתוזמנת (5 דקות ודקה לפני)</summary>
+    public static void ShowCountdown(DateTime target) => Tray.Invoke(() =>
+    {
+        _countdown ??= new LockCountdown();
+        _countdown.SetTarget(target);
+        if (!_countdown.Visible) { _countdown.Show(); _countdown.Activate(); }
+    });
+
+    public static void HideCountdown() => Tray.Invoke(() => { if (_countdown is { Visible: true }) _countdown.Hide(); });
+
     [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr h);
 
@@ -414,6 +426,154 @@ internal sealed class RestScreen : Form
     protected override void Dispose(bool disposing)
     {
         if (disposing) { _tick.Dispose(); _icon.Dispose(); _logo.Dispose(); }
+        base.Dispose(disposing);
+    }
+}
+
+/// <summary>
+/// אזהרת ספירה-לאחור לפני נעילה מתוזמנת: פס לרוחב המסך בשליש התחתון (לא חלון-דיאלוג מרובע),
+/// כדי שיהיה בולט בלי לחסום את כל המסך. מוצגת 5 דקות ודקה לפני תחילת החלון.
+/// "אישור" מאשר וסוגר; "ביטול הנעילה" מחליף את תוכן הפס לשדה סיסמה, ובסיסמה נכונה מדלג
+/// על הנעילה הקרובה (לא פותחים חלון נפרד — נשאר אותו פס).
+/// </summary>
+internal sealed class LockCountdown : Form
+{
+    private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
+    private readonly Label _msg = new() { Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.White };
+    private readonly Label _err = new() { AutoSize = true, ForeColor = Color.FromArgb(255, 138, 128) };
+    private readonly TextBox _pw = new() { UseSystemPasswordChar = true, Width = 220 };
+    private readonly Button _ok, _cancel, _confirm, _back;
+    private readonly FlowLayoutPanel _normalRow, _pwRow;
+    private DateTime _target;
+    private bool _pwMode;
+
+    public LockCountdown()
+    {
+        FormBorderStyle = FormBorderStyle.None;
+        StartPosition = FormStartPosition.Manual;
+        ShowInTaskbar = false; TopMost = true;
+        BackColor = Color.FromArgb(24, 28, 34);
+        RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
+        Font = new Font("Segoe UI", 11f);
+
+        _msg.Font = new Font("Segoe UI Semibold", 15f);
+        _pw.Font = new Font("Segoe UI", 11f);
+
+        _ok = Btn(Lang.T("אישור", "OK"), primary: true);
+        _cancel = Btn(Lang.T("ביטול הנעילה", "Cancel lock"), primary: false);
+        _confirm = Btn(Lang.T("בטל נעילה", "Unlock"), primary: true);
+        _back = Btn(Lang.T("חזרה", "Back"), primary: false);
+
+        _normalRow = Row(_ok, _cancel);
+        _pwRow = Row(_pw, _confirm, _back);
+        _pwRow.Controls.Add(_err);
+
+        Controls.Add(_msg);
+        Controls.Add(_normalRow);
+        Controls.Add(_pwRow);
+
+        _ok.Click += (_, _) => Hide();
+        _cancel.Click += (_, _) => PwMode(true);
+        _back.Click += (_, _) => PwMode(false);
+        _confirm.Click += (_, _) => DoCancel();
+        _pw.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; DoCancel(); } };
+        _tick.Tick += (_, _) => Upd();
+    }
+
+    protected override bool ShowWithoutActivation => true; // לא גונב פוקוס עם ההופעה (כמו שאר ה-overlays)
+
+    protected override CreateParams CreateParams
+    {
+        get { var cp = base.CreateParams; cp.ExStyle |= 0x08000000 /* WS_EX_NOACTIVATE */; return cp; }
+    }
+
+    private int ScaleX(int v) => (int)Math.Round(v * DeviceDpi / 96.0);
+
+    private Button Btn(string text, bool primary) => new()
+    {
+        Text = text, AutoSize = true, FlatStyle = FlatStyle.Flat,
+        BackColor = primary ? Color.FromArgb(74, 128, 196) : Color.FromArgb(48, 53, 61),
+        ForeColor = Color.White, Font = new Font("Segoe UI Semibold", 10.5f),
+        Padding = new Padding(ScaleX(10), ScaleX(6), ScaleX(10), ScaleX(6)),
+        FlatAppearance = { BorderSize = 0 },
+    };
+
+    /// <summary>שורת כפתורים/שדות ממורכזת אופקית (לא Dock — ממוקמת ידנית ב-CenterRows כדי לא להימתח לרוחב מלא)</summary>
+    private FlowLayoutPanel Row(params Control[] controls)
+    {
+        var p = new FlowLayoutPanel
+        {
+            AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
+            FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft,
+        };
+        p.Controls.AddRange(controls);
+        return p;
+    }
+
+    public void SetTarget(DateTime target)
+    {
+        _target = target;
+        Place();
+        PwMode(false);
+        if (!_tick.Enabled) _tick.Start();
+    }
+
+    /// <summary>פס לרוחב מלא של המסך, ממורכז אנכית בתוך השליש התחתון</summary>
+    private void Place()
+    {
+        var b = Screen.PrimaryScreen!.Bounds;
+        Width = b.Width;
+        Height = ScaleX(150);
+        _msg.Height = ScaleX(46);
+        int thirdTop = b.Top + b.Height * 2 / 3;
+        int thirdHeight = b.Bottom - thirdTop;
+        Location = new Point(b.Left, thirdTop + Math.Max(0, (thirdHeight - Height) / 2));
+        CenterRows();
+    }
+
+    private void CenterRows()
+    {
+        int y = _msg.Bottom + ScaleX(14);
+        _normalRow.Location = new Point((Width - _normalRow.Width) / 2, y);
+        _pwRow.Location = new Point((Width - _pwRow.Width) / 2, y);
+    }
+
+    private void PwMode(bool on)
+    {
+        _pwMode = on;
+        _normalRow.Visible = !on;
+        _pwRow.Visible = on;
+        _err.Text = "";
+        if (on)
+        {
+            _msg.Text = Lang.T("הקלידו את סיסמת הנעילה לביטול", "Enter the lock password to cancel");
+            _pw.Text = ""; _pw.Focus();
+        }
+        else Upd(); // מחזיר את טקסט הספירה הרגיל
+        CenterRows();
+    }
+
+    private void Upd()
+    {
+        var left = _target - DateTime.Now;
+        if (left <= TimeSpan.Zero) { _tick.Stop(); Hide(); return; }
+        if (_pwMode) return; // לא דורסים את הנחיית הסיסמה בכל שנייה
+        int m = (int)left.TotalMinutes, s = left.Seconds;
+        _msg.Text = Lang.T($"המחשב ננעל בעוד {m}:{s:00} לאוצריא בלבד", $"The computer locks to Otzaria only in {m}:{s:00}");
+    }
+
+    private void DoCancel()
+    {
+        try { Kiosk.ScheduleSkipCurrent(_pw.Text); }
+        catch (BridgeException ex) { _err.Text = ex.Message; _pw.SelectAll(); _pw.Focus(); CenterRows(); return; }
+        catch (Exception ex) { _err.Text = ex.Message; CenterRows(); return; }
+        _tick.Stop();
+        Hide();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _tick.Dispose();
         base.Dispose(disposing);
     }
 }
