@@ -49,6 +49,18 @@ public static class Overlay
 
     public static void HideAll() { HideRest(); HideClock(); }
 
+    private static LockCountdown _countdown;
+
+    /// <summary>אזהרת ספירה-לאחור לפני נעילה מתוזמנת (5 דקות ודקה לפני)</summary>
+    public static void ShowCountdown(DateTime target) => Tray.Invoke(() =>
+    {
+        _countdown ??= new LockCountdown();
+        _countdown.SetTarget(target);
+        if (!_countdown.Visible) { _countdown.Show(); _countdown.Activate(); }
+    });
+
+    public static void HideCountdown() => Tray.Invoke(() => { if (_countdown is { Visible: true }) _countdown.Hide(); });
+
     [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr h);
 
@@ -253,6 +265,95 @@ internal sealed class RestScreen : Form
     protected override void Dispose(bool disposing)
     {
         if (disposing) { _tick.Dispose(); _icon.Dispose(); }
+        base.Dispose(disposing);
+    }
+}
+
+/// <summary>
+/// אזהרת ספירה-לאחור לפני נעילה מתוזמנת. מוצגת 5 דקות ודקה לפני תחילת החלון.
+/// "אישור" מאשר וסוגר; "ביטול הנעילה" פותח שדה סיסמה, ובסיסמה נכונה מדלג על הנעילה הקרובה.
+/// </summary>
+internal sealed class LockCountdown : Form
+{
+    private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
+    private readonly Label _msg = new() { AutoSize = true, MaximumSize = new Size(460, 0) };
+    private readonly Label _err = new() { AutoSize = true, ForeColor = Color.Firebrick };
+    private readonly TextBox _pw = new() { UseSystemPasswordChar = true, Width = 240, Visible = false };
+    private readonly Button _ok, _cancel, _confirm, _back;
+    private DateTime _target;
+
+    public LockCountdown()
+    {
+        Text = Lang.T("נעילת לימוד מתקרבת", "Study lock approaching");
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        StartPosition = FormStartPosition.CenterScreen;
+        ShowInTaskbar = true; TopMost = true; MinimizeBox = false; MaximizeBox = false;
+        RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes; RightToLeftLayout = !Lang.En;
+        BackColor = Color.White; Padding = new Padding(18); AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        Font = new Font("Segoe UI", 11f);
+
+        var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
+        panel.Controls.Add(new Label { AutoSize = true, Font = new Font("Segoe UI Semibold", 15f),
+            Text = Lang.T("המחשב עומד להינעל לאוצריא", "The computer is about to lock to Otzaria") });
+        panel.Controls.Add(_msg);
+        panel.Controls.Add(_pw);
+        panel.Controls.Add(_err);
+
+        _ok = new Button { Text = Lang.T("אישור", "OK"), AutoSize = true };
+        _cancel = new Button { Text = Lang.T("ביטול הנעילה", "Cancel lock"), AutoSize = true };
+        _confirm = new Button { Text = Lang.T("בטל נעילה", "Unlock"), AutoSize = true, Visible = false };
+        _back = new Button { Text = Lang.T("חזרה", "Back"), AutoSize = true, Visible = false };
+        var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft };
+        buttons.Controls.AddRange(new Control[] { _ok, _cancel, _confirm, _back });
+        panel.Controls.Add(buttons);
+        Controls.Add(panel);
+
+        _ok.Click += (_, _) => Hide();
+        _cancel.Click += (_, _) => PwMode(true);
+        _back.Click += (_, _) => PwMode(false);
+        _confirm.Click += (_, _) => DoCancel();
+        _pw.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; DoCancel(); } };
+        _tick.Tick += (_, _) => Upd();
+    }
+
+    public void SetTarget(DateTime target)
+    {
+        _target = target;
+        PwMode(false);
+        Upd();
+        if (!_tick.Enabled) _tick.Start();
+    }
+
+    private void PwMode(bool on)
+    {
+        _pw.Visible = on; _confirm.Visible = on; _back.Visible = on;
+        _ok.Visible = !on; _cancel.Visible = !on;
+        _err.Text = "";
+        if (on) { _pw.Text = ""; _pw.Focus(); }
+    }
+
+    private void Upd()
+    {
+        var left = _target - DateTime.Now;
+        if (left <= TimeSpan.Zero) { _tick.Stop(); Hide(); return; }
+        int m = (int)left.TotalMinutes, s = left.Seconds;
+        _msg.Text = Lang.T(
+            $"המחשב יינעל לאוצריא בלבד בעוד {m}:{s:00} דקות.\nלחצו “אישור” כדי להמשיך, או “ביטול הנעילה” (נדרשת סיסמה).",
+            $"The computer will lock to Otzaria only in {m}:{s:00}.\nClick “OK” to continue, or “Cancel lock” (password required).");
+    }
+
+    private void DoCancel()
+    {
+        try { Kiosk.ScheduleSkipCurrent(_pw.Text); }
+        catch (BridgeException ex) { _err.Text = ex.Message; _pw.SelectAll(); _pw.Focus(); return; }
+        catch (Exception ex) { _err.Text = ex.Message; return; }
+        _tick.Stop();
+        Hide();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _tick.Dispose();
         base.Dispose(disposing);
     }
 }

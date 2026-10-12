@@ -144,6 +144,10 @@ public static class HardLock
             ["scheduleEnabled"] = enabled, ["scheduleStart"] = start ?? "", ["scheduleEnd"] = end ?? "",
         }));
 
+    /// <summary>דילוג על הנעילה המתוזמנת הקרובה עד הזמן הנתון (מ"ביטול הנעילה" באזהרה)</summary>
+    public static void Skip(string password, string untilIso) =>
+        Must(Call(new JsonObject { ["op"] = "skip", ["password"] = password ?? "", ["until"] = untilIso ?? "" }));
+
     /// <summary>קוד שחזור משורת הפקודה: מבטל גם בשירות</summary>
     public static bool EmergencyDisable(string code)
     {
@@ -534,6 +538,13 @@ public class HardLockService : ServiceBase
                     Task.Run(Tick);
                     return Ok();
 
+                case "skip":
+                    if ((e = Check(pw, false)) != null) return e;
+                    _state["skipUntil"] = q["until"]?.ToString() ?? "";
+                    Save();
+                    Task.Run(Tick);
+                    return Ok();
+
                 case "uninstall":
                     if (Configured && (e = Check(pw, true)) != null) return e;
                     _state["active"] = false;
@@ -581,8 +592,10 @@ public class HardLockService : ServiceBase
     {
         string start = _state["scheduleStart"]?.ToString();
         string end = _state["scheduleEnd"]?.ToString();
-        // תזמון כבוי נחשב כמו "מחוץ לחלון": נעילה שהתזמון הפעיל תבוטל כשמכבים את התזמון
-        bool inWindow = _state["scheduleEnabled"]?.GetValue<bool>() == true && Sched.InWindow(start, end, DateTime.Now);
+        // דילוג ידני (מ"ביטול הנעילה" באזהרה) או תזמון כבוי → כמו "מחוץ לחלון"
+        bool skip = DateTime.TryParse(_state["skipUntil"]?.ToString(), null,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var su) && DateTime.Now < su;
+        bool inWindow = _state["scheduleEnabled"]?.GetValue<bool>() == true && !skip && Sched.InWindow(start, end, DateTime.Now);
         bool active = Active;
         string by = _state["activatedBy"]?.ToString() ?? "manual";
         if (inWindow && !active)
