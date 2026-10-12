@@ -1,10 +1,12 @@
 # בקשת חתימת קוד — SignPath Foundation
 
-מגישים בטופס: https://signpath.org/apply (המתחזקת, מחשבון GitHub שלה).
+מגישים בטופס: https://signpath.org/apply.html (המתחזקת, מחשבון GitHub שלה; קודם לוודא שיש ב-GitHub אימות דו-שלבי).
 
 | שדה | תשובה |
 |---|---|
-| Project name | Otzaria System Tools (Torat Esther bridge) |
+| Project name | Otzaria System Tools |
+| Homepage | https://github.com/e0548433917-gif/otzaria-system-tools |
+| Third-party components | pdf.js (Apache-2.0), JSZip (MIT) |
 | Repository | https://github.com/e0548433917-gif/otzaria-system-tools |
 | License | MIT (קובץ LICENSE בריפו) |
 | Description | A local Windows bridge and two plugins for Otzaria, a free open-source Jewish texts library: file explorer, system settings and an optional study-only lock mode. |
