@@ -333,6 +333,27 @@
   };
 
 
+  /* ---------- mock: מדיניות סייר הקבצים (browser preview) ---------- */
+  M.fx = { mode: 'off', roots: [], minutes: 15, until: 0 };
+  function fxState() {
+    var left = Math.max(0, Math.ceil((M.fx.until - Date.now()) / 1000));
+    var eff = M.fx.mode === 'off' ? 'open' : M.fx.mode === 'locked' ? (left > 0 ? 'open' : 'locked') : (M.fx.roots.length ? 'restricted' : (left > 0 ? 'open' : 'locked'));
+    return { mode: M.fx.mode, effective: eff, locked: eff === 'locked', fallback: M.fx.mode === 'restricted' && !M.fx.roots.length,
+      roots: M.fx.roots.slice(), activeRoots: M.fx.roots.slice(), invalidRoots: [], unlockMinutes: M.fx.minutes, unlockedSeconds: left,
+      passwordConfigured: !!M.password, defaults: [{ id: 'desktop', name: 'שולחן העבודה', path: 'C:\\Users\\talmid\\Desktop' }] };
+  }
+  mockRoutes['/fs/policy/get'] = function () { return fxState(); };
+  mockRoutes['/fs/policy/set'] = function (b) {
+    if (!M.password) throw mockErr('no_password', 'יש להגדיר סיסמת נעילה לפני שינוי מדיניות סייר הקבצים');
+    checkPw(b.password, true);
+    if (['off', 'restricted', 'locked'].indexOf(b.mode) < 0) throw mockErr('bad_request', 'mode חייב להיות off, restricted או locked');
+    if (b.mode === 'restricted' && !(b.roots || []).length) throw mockErr('bad_request', 'במצב מוגבל יש לבחור לפחות תיקייה אחת');
+    M.fx = { mode: b.mode, roots: (b.roots || []).slice(), minutes: Math.min(Math.max(parseInt(b.unlockMinutes, 10) || 15, 1), 1440), until: 0 };
+    return fxState();
+  };
+  mockRoutes['/fs/policy/unlock'] = function (b) { checkPw(b.password, false); M.fx.until = Date.now() + M.fx.minutes * 60000; return fxState(); };
+  mockRoutes['/fs/policy/lock'] = function () { M.fx.until = 0; return fxState(); };
+
   /* ---------- mock: USB, keyboard, energy (browser preview) ---------- */
   M.usb = [
     { letter: 'E:', label: 'ספריית תורה', model: 'SanDisk Ultra USB 3.0', fs: 'NTFS', sizeBytes: 64e9, freeBytes: 21e9, ready: true },

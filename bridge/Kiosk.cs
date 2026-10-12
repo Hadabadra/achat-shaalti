@@ -170,6 +170,12 @@ public static class Kiosk
     /// <summary>אימות סיסמה לשימוש מודולים אחרים (בלי קוד שחזור)</summary>
     internal static void RequirePassword(string password) => Verify(password, allowRecovery: false);
 
+    /// <summary>כמו RequirePassword, אבל מקבל גם את קוד השחזור (כדי שלא ננעל מחוץ למדיניות סייר הקבצים)</summary>
+    internal static void RequirePasswordOrRecovery(string password) => Verify(password, allowRecovery: true);
+
+    /// <summary>האם הוגדרה סיסמת נעילה (בקובץ ההגדרות או ברכיב ההקשחה)</summary>
+    internal static bool PasswordConfigured => HasPassword || HardLock.Available;
+
     [StructLayout(LayoutKind.Sequential)] private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
     [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO lii);
     private static long IdleMs()
