@@ -59,14 +59,14 @@ public class RecoveryNormalizationTests
     [InlineData(null, "")]
     public void NormalizeRecovery_strips_separators_and_uppercases(string input, string expected)
     {
-        Assert.Equal(expected, Kiosk.NormalizeRecovery(input));
+        Assert.Equal(expected, Secret.NormalizeRecovery(input));
     }
 
     [Fact]
     public void NormalizeRecovery_is_idempotent()
     {
-        string once = Kiosk.NormalizeRecovery("abcd-efgh-2345");
-        string twice = Kiosk.NormalizeRecovery(once);
+        string once = Secret.NormalizeRecovery("abcd-efgh-2345");
+        string twice = Secret.NormalizeRecovery(once);
         Assert.Equal(once, twice);
     }
 }

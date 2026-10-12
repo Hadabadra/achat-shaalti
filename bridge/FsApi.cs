@@ -388,36 +388,72 @@ public static class FsApi
         }
     }
 
-    // מחיקה לסל המיחזור דרך SHFileOperation
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct SHFILEOPSTRUCT
+    // מחיקה לסל המיחזור דרך IFileOperation (ולא SHFileOperation הישן: הוא לא תומך בנתיבים
+    // ארוכים מ-MAX_PATH ונכשל עם קוד 124/DE_INVALIDFILES על תיקיות עמוקות בשמות עבריים/ארוכים)
+    [ComImport, Guid("3AD05575-8857-4850-9277-11B85BDB8E09")] private class FileOperationCoClass { }
+
+    [ComImport, Guid("947aab5f-0a5c-4c13-b4d6-4bf7836fc9f8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IFileOperation
     {
-        public IntPtr hwnd;
-        public uint wFunc;
-        public string pFrom;
-        public string pTo;
-        public ushort fFlags;
-        public bool fAnyOperationsAborted;
-        public IntPtr hNameMappings;
-        public string lpszProgressTitle;
+        void Advise(IntPtr pfops, out uint pdwCookie);
+        void Unadvise(uint dwCookie);
+        void SetOperationFlags(uint dwOperationFlags);
+        void SetProgressMessage([MarshalAs(UnmanagedType.LPWStr)] string pszMessage);
+        void SetProgressDialog(IntPtr popd);
+        void SetProperties(IntPtr pproparray);
+        void SetOwnerWindow(IntPtr hwndOwner);
+        void ApplyPropertiesToItem(IShellItem psiItem);
+        void ApplyPropertiesToItems(IntPtr punkItems);
+        void RenameItem(IShellItem psiItem, [MarshalAs(UnmanagedType.LPWStr)] string pszNewName, IntPtr pfopsItem);
+        void RenameItems(IntPtr pUnkItems, [MarshalAs(UnmanagedType.LPWStr)] string pszNewName);
+        void MoveItem(IShellItem psiItem, IShellItem psiDestinationFolder, [MarshalAs(UnmanagedType.LPWStr)] string pszNewName, IntPtr pfopsItem);
+        void MoveItems(IntPtr punkItems, IShellItem psiDestinationFolder);
+        void CopyItem(IShellItem psiItem, IShellItem psiDestinationFolder, [MarshalAs(UnmanagedType.LPWStr)] string pszCopyName, IntPtr pfopsItem);
+        void CopyItems(IntPtr punkItems, IShellItem psiDestinationFolder);
+        void DeleteItem(IShellItem psiItem, IntPtr pfopsItem);
+        void DeleteItems(IntPtr punkItems);
+        void NewItem(IShellItem psiDestinationFolder, uint dwFileAttributes, [MarshalAs(UnmanagedType.LPWStr)] string pszName, [MarshalAs(UnmanagedType.LPWStr)] string pszTemplateName, IntPtr pfopsItem);
+        void PerformOperations();
+        [return: MarshalAs(UnmanagedType.Bool)] bool GetAnyOperationsAborted();
     }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern int SHFileOperation(ref SHFILEOPSTRUCT op);
+    [ComImport, Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItem
+    {
+        void BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid, out IntPtr ppv);
+        void GetParent(out IShellItem ppsi);
+        void GetDisplayName(uint sigdnName, out IntPtr ppszName);
+        void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+        void Compare(IShellItem psi, uint hint, out int piOrder);
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+    private static extern void SHCreateItemFromParsingName([MarshalAs(UnmanagedType.LPWStr)] string path, IntPtr pbc, ref Guid riid, out IShellItem item);
 
     private static void Recycle(string path)
     {
-        const uint FO_DELETE = 3;
-        const ushort FOF_SILENT = 0x4, FOF_NOCONFIRMATION = 0x10, FOF_ALLOWUNDO = 0x40, FOF_NOERRORUI = 0x400;
-        var op = new SHFILEOPSTRUCT
+        const uint FOF_SILENT = 0x4, FOF_NOCONFIRMATION = 0x10, FOF_ALLOWUNDO = 0x40, FOF_NOERRORUI = 0x400;
+        var fo = (IFileOperation)new FileOperationCoClass();
+        IShellItem item = null;
+        try
         {
-            wFunc = FO_DELETE,
-            pFrom = path + "\0\0",
-            fFlags = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI,
-        };
-        int r = SHFileOperation(ref op);
-        if (r != 0 || op.fAnyOperationsAborted)
-            throw new IOException("המחיקה לסל המיחזור נכשלה (קוד " + r + ")");
+            fo.SetOperationFlags(FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI);
+            Guid iid = typeof(IShellItem).GUID;
+            SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out item);
+            fo.DeleteItem(item, IntPtr.Zero);
+            fo.PerformOperations();
+            if (fo.GetAnyOperationsAborted())
+                throw new IOException("המחיקה לסל המיחזור בוטלה");
+        }
+        catch (COMException ex)
+        {
+            throw new IOException("המחיקה לסל המיחזור נכשלה (קוד 0x" + ex.HResult.ToString("X8") + ")", ex);
+        }
+        finally
+        {
+            if (item != null) Marshal.ReleaseComObject(item);
+            Marshal.ReleaseComObject(fo);
+        }
     }
 
     private static object Delete(JsonElement b)

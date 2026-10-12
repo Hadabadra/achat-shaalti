@@ -15,7 +15,6 @@ namespace OtzariaBridge;
 /// </summary>
 public static class Kiosk
 {
-    private const int Iterations = 200_000;
     private const string PoliciesKey = @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
     private const string WinlogonKey = @"Software\Microsoft\Windows NT\CurrentVersion\Winlogon";
 
@@ -115,29 +114,18 @@ public static class Kiosk
     }
 
     // ---------- סיסמה ----------
+    // החישוב הקריפטוגרפי הטהור (Hash/Matches/נורמליזציה/קוד שחזור) משותף ל-Kiosk ול-HardLockService
+    // דרך Secret.cs, כדי ששני המקומות לא יתפצלו בלי ששמים לב. כאן רק קריאה/כתיבה מ-Config.
 
-    private static string Hash(string secret, byte[] salt) =>
-        Convert.ToBase64String(Rfc2898DeriveBytes.Pbkdf2(secret, salt, Iterations, HashAlgorithmName.SHA256, 32));
-
-    private static bool Matches(string secret, string hashKey, string saltKey)
-    {
-        string hash = Config.Get<string>(hashKey, null);
-        string salt = Config.Get<string>(saltKey, null);
-        if (string.IsNullOrEmpty(hash) || string.IsNullOrEmpty(salt) || string.IsNullOrEmpty(secret)) return false;
-        byte[] expected = Convert.FromBase64String(hash);
-        byte[] actual = Convert.FromBase64String(Hash(secret, Convert.FromBase64String(salt)));
-        return CryptographicOperations.FixedTimeEquals(expected, actual);
-    }
+    private static bool Matches(string secret, string hashKey, string saltKey) =>
+        Secret.Matches(secret, Config.Get<string>(hashKey, null), Config.Get<string>(saltKey, null));
 
     private static void StoreSecret(string secret, string hashKey, string saltKey)
     {
         byte[] salt = RandomNumberGenerator.GetBytes(16);
         Config.Set(saltKey, Convert.ToBase64String(salt));
-        Config.Set(hashKey, Hash(secret, salt));
+        Config.Set(hashKey, Secret.Hash(secret, salt));
     }
-
-    // internal (ולא private) כדי שפרויקט הבדיקות יוכל לבדוק נורמליזציה (מקפים/רווחים/אותיות) ישירות
-    internal static string NormalizeRecovery(string s) => (s ?? "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
 
     /// <summary>בודק סיסמה או קוד שחזור, עם השהיה אחרי 5 ניסיונות שגויים</summary>
     private static void Verify(string password, bool allowRecovery)
@@ -152,7 +140,7 @@ public static class Kiosk
             // כשרכיב ההקשחה מותקן — הוא מקור האמת לסיסמה (עריכת config.json לא עוזרת)
             if (HardLock.Available) { HardLock.Verify(password, allowRecovery); return; }
             bool ok = Matches(password, "kiosk.passwordHash", "kiosk.salt") ||
-                      (allowRecovery && Matches(NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt"));
+                      (allowRecovery && Matches(Secret.NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt"));
             if (ok)
             {
                 _failures = 0;
@@ -225,12 +213,6 @@ public static class Kiosk
             if (a1) AttachThreadInput(cur, fgThread, false);
             if (a2) AttachThreadInput(cur, target, false);
         }
-    }
-
-    private static string NewRecoveryCode()
-    {
-        const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        return new string(Enumerable.Range(0, 12).Select(_ => alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)]).ToArray());
     }
 
     // ---------- נקודות קצה ----------
@@ -364,7 +346,7 @@ public static class Kiosk
 
     /// <summary>האם הטקסט שהוקלד הוא קוד השחזור (פטור מאימות דו-שלבי בביטול חירום)</summary>
     private static bool IsRecoveryCode(string s) =>
-        Matches(NormalizeRecovery(s), "kiosk.recoveryHash", "kiosk.recoverySalt");
+        Matches(Secret.NormalizeRecovery(s), "kiosk.recoveryHash", "kiosk.recoverySalt");
 
     /// <summary>רכיב ההקשחה אומר "נעול" (למשל אחרי עריכת config.json או בחשבון Windows אחר) — נועלים גם כאן</summary>
     public static void ForceActivate(string servicePath)
@@ -406,7 +388,7 @@ public static class Kiosk
         else
         {
             // הגדרה ראשונה: יוצרים קוד שחזור חד-פעמי
-            recovery = NewRecoveryCode();
+            recovery = Secret.NewRecoveryCode();
             StoreSecret(recovery, "kiosk.recoveryHash", "kiosk.recoverySalt");
         }
         StoreSecret(newPassword, "kiosk.passwordHash", "kiosk.salt");
@@ -742,7 +724,7 @@ public static class Kiosk
     /// <summary>קוד שחזור משורת הפקודה: OtzariaBridge.exe --unlock CODE</summary>
     public static bool EmergencyUnlock(string code)
     {
-        if (!Matches(NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
+        if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
         int self = Environment.ProcessId;
         foreach (var p in Process.GetProcessesByName("OtzariaBridge"))
         {
@@ -764,7 +746,7 @@ public static class Kiosk
     /// </summary>
     public static bool EmergencyRelease(string code)
     {
-        if (!Matches(NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
+        if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
         try { HardLock.EmergencyDisable(code); } catch (Exception ex) { Config.Log("emergency: " + ex.Message); }
         Release();
         Config.Log("kiosk: הנעילה בוטלה בקיצור חירום עם קוד שחזור");
@@ -775,7 +757,7 @@ public static class Kiosk
     public static string ReleaseForUninstall(string password)
     {
         if (HasPassword && !(Matches(password, "kiosk.passwordHash", "kiosk.salt") ||
-                             Matches(NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt")))
+                             Matches(Secret.NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt")))
             return "נדרשת סיסמת הנעילה: --password <סיסמה>";
         Config.Set("kiosk.active", false);
         Config.Set("kiosk.strict", false);
