@@ -32,6 +32,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: שער אריזה — כל סעיפי 'חובה לפני אריזה' בוצעו
+        shell: pwsh
+        run: python tools/check-prerelease.py
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
