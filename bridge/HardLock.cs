@@ -339,7 +339,6 @@ public static class HardLock
 /// <summary>השירות עצמו (LocalSystem). מופעל עם OtzariaBridge.exe --service</summary>
 public class HardLockService : ServiceBase
 {
-    private const int Iterations = 200_000;
     private const string PoliciesSub = @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
     private const string UsbStorKey = @"SYSTEM\CurrentControlSet\Services\USBSTOR";
     private static readonly Regex UserSid = new(@"^S-1-5-21-[\d-]+$", RegexOptions.Compiled);
@@ -401,23 +400,10 @@ public class HardLockService : ServiceBase
         File.Move(tmp, StateFile, true);
     }
 
-    private static string Hash(string secret, byte[] salt) =>
-        Convert.ToBase64String(Rfc2898DeriveBytes.Pbkdf2(secret, salt, Iterations, HashAlgorithmName.SHA256, 32));
+    // החישוב הקריפטוגרפי הטהור (Hash/Matches/נורמליזציה) משותף עם Kiosk דרך Secret.cs
 
-    private bool Matches(string secret, string hashKey, string saltKey)
-    {
-        string hash = _state[hashKey]?.ToString();
-        string salt = _state[saltKey]?.ToString();
-        if (string.IsNullOrEmpty(hash) || string.IsNullOrEmpty(salt) || string.IsNullOrEmpty(secret)) return false;
-        try
-        {
-            return CryptographicOperations.FixedTimeEquals(Convert.FromBase64String(hash),
-                Convert.FromBase64String(Hash(secret, Convert.FromBase64String(salt))));
-        }
-        catch { return false; }
-    }
-
-    private static string NormalizeRecovery(string s) => (s ?? "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
+    private bool Matches(string secret, string hashKey, string saltKey) =>
+        Secret.Matches(secret, _state[hashKey]?.ToString(), _state[saltKey]?.ToString());
 
     /// <summary>null = תקין; אחרת תשובת שגיאה</summary>
     private JsonObject Check(string password, bool allowRecovery)
@@ -426,7 +412,7 @@ public class HardLockService : ServiceBase
         if (DateTime.UtcNow < _lockoutUntil)
             return Err("too_many", $"יותר מדי ניסיונות שגויים. נסו שוב בעוד {(int)Math.Ceiling((_lockoutUntil - DateTime.UtcNow).TotalSeconds)} שניות");
         bool ok = Matches(password, "passwordHash", "salt") ||
-                  (allowRecovery && Matches(NormalizeRecovery(password), "recoveryHash", "recoverySalt"));
+                  (allowRecovery && Matches(Secret.NormalizeRecovery(password), "recoveryHash", "recoverySalt"));
         if (ok) { _failures = 0; return null; }
         if (++_failures >= 5) { _failures = 0; _lockoutUntil = DateTime.UtcNow.AddSeconds(60); }
         return Err("wrong_password", "סיסמה שגויה");
@@ -524,7 +510,7 @@ public class HardLockService : ServiceBase
                     if (np.Length < 4) return Err("bad_request", "הסיסמה חייבת להכיל לפחות 4 תווים");
                     byte[] salt = RandomNumberGenerator.GetBytes(16);
                     _state["salt"] = Convert.ToBase64String(salt);
-                    _state["passwordHash"] = Hash(np, salt);
+                    _state["passwordHash"] = Secret.Hash(np, salt);
                     Save();
                     return Ok();
 
