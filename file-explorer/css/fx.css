@@ -364,3 +364,13 @@ a.btn { text-decoration: none; display: inline-flex; }
   .fx-set-nav { width: auto; flex-direction: row; overflow-x: auto; border-inline-end: 0; border-bottom: 0.0625em solid var(--fx-line); }
   .fx-set-navbtn { flex-shrink: 0; }
 }
+
+/* נגישות: טבעת פוקוס אחידה למקלדת (Tab) — אותה טבעת-בתוך-טבעת כמו app.css */
+.fx-cmd:focus-visible,
+.fx-crumb:focus-visible,
+.fx-seg-btn:focus-visible,
+.fx-tab:focus-visible,
+.fx-set-navbtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0.1875em var(--color-surface), 0 0 0 0.3125em var(--color-primary);
+}
