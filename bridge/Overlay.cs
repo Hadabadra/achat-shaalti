@@ -16,6 +16,8 @@ public static class Overlay
     private static RestScreen _rest;
 
     public static bool RestVisible => _rest is { Visible: true };
+    /// <summary>מסך המנוחה מוצג בגלל חוסר פעילות (ולא בגלל מזעור) — לא להסתיר אותו כשאוצריא לא ממוזערת</summary>
+    public static bool RestIdle => _rest is { Visible: true, Idle: true };
 
     public static string HebrewDate(DateTime d)
     {
@@ -38,10 +40,11 @@ public static class Overlay
 
     public static void HideClock() => Tray.Invoke(() => { _clock?.Hide(); });
 
-    public static void ShowRest(IntPtr otzaria) => Tray.Invoke(() =>
+    public static void ShowRest(IntPtr otzaria, bool idle = false) => Tray.Invoke(() =>
     {
         _rest ??= new RestScreen();
         _rest.Target = otzaria;
+        if (!_rest.Visible) _rest.Idle = idle;
         if (!_rest.Visible) { _rest.Bounds = Screen.PrimaryScreen!.Bounds; _rest.Show(); _rest.Activate(); }
     });
 
@@ -202,6 +205,7 @@ internal sealed class RestScreen : Form
     private const string Letters = "אבגדהוזחטיכלמנסעפצקרשת";
     private Rectangle _btn;
     public IntPtr Target;
+    public bool Idle;
 
     private struct Particle { public float X, Y, Size, Speed, Phase; public char Ch; }
 
@@ -312,6 +316,12 @@ internal sealed class RestScreen : Form
         g.DrawString(Overlay.HebrewDate(now), dateF, Brushes.White, Line(y, 40 * s), rtl);
         y += 36 * s;
         g.DrawString(now.ToString("d/M/yyyy"), hintF, dim, Line(y, 30 * s), center);
+        string zm = Zmanim.Line(now);
+        if (zm != null)
+        {
+            y += 34 * s;
+            g.DrawString(zm, dateF, goldB, Line(y, 40 * s), rtl);
+        }
 
         // נר הנצחה בתחתית, עם להבה מרצדת והילה חמה
         float baseY = r.Height * 0.86f + dy;
