@@ -447,14 +447,18 @@ public static class Audio
     private static IMMDeviceEnumerator Enumerator() =>
         (IMMDeviceEnumerator)Activator.CreateInstance(Type.GetTypeFromCLSID(EnumeratorClsid)!)!;
 
+    // בעיה #14 סעיף 4: כל ממשק COM של Core Audio משוחרר ב-finally (Marshal.FinalReleaseComObject)
     private static IMMDevice DefaultDevice()
     {
+        IMMDeviceEnumerator e = null;
         try
         {
-            Enumerator().GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia, out var d);
+            e = Enumerator();
+            e.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia, out var d);
             return d;
         }
         catch (COMException) { throw BridgeException.Unsupported("לא נמצא התקן שמע"); }
+        finally { if (e != null) Marshal.FinalReleaseComObject(e); }
     }
 
     private static IAudioEndpointVolume Volume(IMMDevice d)
@@ -466,9 +470,10 @@ public static class Audio
 
     private static string Name(IMMDevice d)
     {
+        IPropertyStore store = null;
         try
         {
-            d.OpenPropertyStore(0, out var store);
+            d.OpenPropertyStore(0, out store);
             var key = new PROPERTYKEY { fmtid = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), pid = 14 };
             store.GetValue(ref key, out var pv);
             string s = pv.vt == 31 ? Marshal.PtrToStringUni(pv.ptr) : null;
@@ -476,17 +481,28 @@ public static class Audio
             return s ?? "";
         }
         catch { return ""; }
+        finally { if (store != null) Marshal.FinalReleaseComObject(store); }
     }
 
     public static object Get()
     {
         lock (Gate)
         {
-            var d = DefaultDevice();
-            var v = Volume(d);
-            v.GetMasterVolumeLevelScalar(out float level);
-            v.GetMute(out bool muted);
-            return new { volume = (int)Math.Round(level * 100), muted, deviceName = Name(d) };
+            IMMDevice d = null;
+            IAudioEndpointVolume v = null;
+            try
+            {
+                d = DefaultDevice();
+                v = Volume(d);
+                v.GetMasterVolumeLevelScalar(out float level);
+                v.GetMute(out bool muted);
+                return new { volume = (int)Math.Round(level * 100), muted, deviceName = Name(d) };
+            }
+            finally
+            {
+                if (v != null) Marshal.FinalReleaseComObject(v);
+                if (d != null) Marshal.FinalReleaseComObject(d);
+            }
         }
     }
 
@@ -494,10 +510,21 @@ public static class Audio
     {
         lock (Gate)
         {
-            var v = Volume(DefaultDevice());
-            var ctx = Guid.Empty;
-            if (volume.HasValue) v.SetMasterVolumeLevelScalar(volume.Value / 100f, ref ctx);
-            if (muted.HasValue) v.SetMute(muted.Value, ref ctx);
+            IMMDevice d = null;
+            IAudioEndpointVolume v = null;
+            try
+            {
+                d = DefaultDevice();
+                v = Volume(d);
+                var ctx = Guid.Empty;
+                if (volume.HasValue) v.SetMasterVolumeLevelScalar(volume.Value / 100f, ref ctx);
+                if (muted.HasValue) v.SetMute(muted.Value, ref ctx);
+            }
+            finally
+            {
+                if (v != null) Marshal.FinalReleaseComObject(v);
+                if (d != null) Marshal.FinalReleaseComObject(d);
+            }
         }
     }
 
@@ -505,32 +532,50 @@ public static class Audio
     {
         lock (Gate)
         {
-            var e = Enumerator();
-            string defId = "";
+            IMMDeviceEnumerator e = null;
+            IMMDevice def = null;
+            IMMDeviceCollection col = null;
             try
             {
-                e.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia, out var def);
-                def.GetId(out defId);
+                e = Enumerator();
+                string defId = "";
+                try
+                {
+                    e.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia, out def);
+                    def.GetId(out defId);
+                }
+                catch { }
+                e.EnumAudioEndpoints(EDataFlow.eRender, 1 /* ACTIVE */, out col);
+                col.GetCount(out uint n);
+                var list = new List<object>();
+                for (uint i = 0; i < n; i++)
+                {
+                    IMMDevice d = null;
+                    try
+                    {
+                        col.Item(i, out d);
+                        d.GetId(out string id);
+                        list.Add(new { id, name = Name(d), isDefault = id == defId });
+                    }
+                    finally { if (d != null) Marshal.FinalReleaseComObject(d); }
+                }
+                return list;
             }
-            catch { }
-            e.EnumAudioEndpoints(EDataFlow.eRender, 1 /* ACTIVE */, out var col);
-            col.GetCount(out uint n);
-            var list = new List<object>();
-            for (uint i = 0; i < n; i++)
+            finally
             {
-                col.Item(i, out var d);
-                d.GetId(out string id);
-                list.Add(new { id, name = Name(d), isDefault = id == defId });
+                if (col != null) Marshal.FinalReleaseComObject(col);
+                if (def != null) Marshal.FinalReleaseComObject(def);
+                if (e != null) Marshal.FinalReleaseComObject(e);
             }
-            return list;
         }
     }
 
     public static void SetDefault(string id)
     {
+        IPolicyConfig p = null;
         try
         {
-            var p = (IPolicyConfig)Activator.CreateInstance(Type.GetTypeFromCLSID(PolicyClsid)!)!;
+            p = (IPolicyConfig)Activator.CreateInstance(Type.GetTypeFromCLSID(PolicyClsid)!)!;
             p.SetDefaultEndpoint(id, ERole.eConsole);
             p.SetDefaultEndpoint(id, ERole.eMultimedia);
             p.SetDefaultEndpoint(id, ERole.eCommunications);
@@ -539,5 +584,6 @@ public static class Audio
         {
             throw BridgeException.Unsupported("החלפת התקן שמע אינה נתמכת: " + ex.Message);
         }
+        finally { if (p != null) Marshal.FinalReleaseComObject(p); }
     }
 }

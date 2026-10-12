@@ -29,8 +29,13 @@ public static class Programs
         "taskmgr", "mmc", "control", "conhost", "wt", "rundll32", "msiexec"
     };
 
+    // בעיה #14 סעיף 6: נכתבים בחוט בקשה (Activate) ונקראים בחוט השומר (ShouldYieldTo וכו') —
+    // DateTime אינו Interlocked-ידידותי, ולכן ננעלים עם אובייקט נעילה קטן ייעודי
+    private static readonly object GraceGate = new();
     private static DateTime _graceUntil = DateTime.MinValue;
     private static DateTime _lastLaunchAt = DateTime.MinValue;
+    private static DateTime GraceUntil { get { lock (GraceGate) return _graceUntil; } set { lock (GraceGate) _graceUntil = value; } }
+    private static DateTime LastLaunchAt { get { lock (GraceGate) return _lastLaunchAt; } set { lock (GraceGate) _lastLaunchAt = value; } }
 
     public sealed class Entry
     {
@@ -155,7 +160,7 @@ public static class Programs
     public static bool Activate(Entry e)
     {
         if (!File.Exists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);
-        _graceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
+        GraceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
         IntPtr h = ExistingWindow(e);
         if (h != IntPtr.Zero)
         {
@@ -163,7 +168,7 @@ public static class Programs
             Task.Run(() => { Thread.Sleep(400); Kiosk.BringToFront(h); }); // ניסיון שני: חלק מהתוכנות גוזלות פוקוס בעת הטעינה
             return true;
         }
-        _lastLaunchAt = DateTime.UtcNow;
+        LastLaunchAt = DateTime.UtcNow;
         using (var started = Process.Start(new ProcessStartInfo(e.Path)
         {
             UseShellExecute = true,
@@ -534,7 +539,7 @@ public static class Programs
     /// </summary>
     public static bool ShouldYieldTo(uint foregroundPid)
     {
-        if (DateTime.UtcNow < _graceUntil) return true;
+        if (DateTime.UtcNow < GraceUntil) return true;
         try
         {
             using var p = Process.GetProcessById((int)foregroundPid);
@@ -576,8 +581,9 @@ public static class Programs
 
     private static bool StartedAfterLaunch(Process p)
     {
-        if (_lastLaunchAt == DateTime.MinValue) return false;
-        try { return p.StartTime.ToUniversalTime() >= _lastLaunchAt.AddSeconds(-3); }
+        var last = LastLaunchAt;
+        if (last == DateTime.MinValue) return false;
+        try { return p.StartTime.ToUniversalTime() >= last.AddSeconds(-3); }
         catch { return false; } // תהליך מוגבה: אין גישה לזמן ההתחלה
     }
 
@@ -585,7 +591,7 @@ public static class Programs
     private static bool IsNewAfterLaunch(Process p)
     {
         if (!StartedAfterLaunch(p)) return false;
-        try { return p.StartTime.ToUniversalTime() <= _lastLaunchAt.AddSeconds(90); }
+        try { return p.StartTime.ToUniversalTime() <= LastLaunchAt.AddSeconds(90); }
         catch { return false; }
     }
 

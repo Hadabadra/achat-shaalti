@@ -55,7 +55,8 @@ public static class HardLock
             var r = new StreamReader(pipe, Encoding.UTF8);
             w.WriteLine(req.ToJsonString());
             var readTask = r.ReadLineAsync();
-            if (!readTask.Wait(Math.Max(timeoutMs, 15000))) return null;
+            // בעיה #14 סעיף 2: רצפת המתנה קשיחה, לא 15ש' שחוסמות חוט HTTP גם כשנדרש timeout קצר בהרבה
+            if (!readTask.Wait(Math.Max(timeoutMs, 3000))) return null;
             return JsonNode.Parse(readTask.Result ?? "") as JsonObject;
         }
         catch { return null; }
@@ -220,7 +221,7 @@ public static class HardLock
             try
             {
                 var s = ServiceStatus(fresh: true);
-                if (s == null) return;
+                if (s == null) { RestoreOrphanedPolicies(); return; }
                 bool active = s["active"]?.GetValue<bool>() == true;
                 if (active)
                 {
@@ -235,6 +236,30 @@ public static class HardLock
             }
             catch (Exception ex) { Config.Log("hardlock sync: " + ex.Message); }
         }, null, 3000, 5000);
+    }
+
+    /// <summary>
+    /// בעיה #14 סעיף 1: אם השירות הוסר ישירות (למשל "sc delete" בלי לעבור דרך SelfUninstall), אף אחד לא
+    /// מריץ יותר את EnforcePolicies(false) על ה-SIDים שסומנו ב-touched, ומדיניות DisableTaskMgr/
+    /// DisableRegistryTools נשארת תקועה אצל המשתמש בלי שום נעילה פעילה בפועל.
+    /// הגשר (בהרשאות המשתמש הרגילות) לא יכול לגעת ב-HKEY_USERS של חשבונות אחרים, אבל HKEY_CURRENT_USER
+    /// של אותו משתמש הוא בדיוק אותה היברידה — ולכן מנקים כאן. חשבונות אחרים ינוקו ממילא אוטומטית אם
+    /// השירות יותקן מחדש: Tick הראשון קורא ל-EnforcePolicies(false) לפי touched ששמור ב-hardlock.json.
+    /// </summary>
+    private static void RestoreOrphanedPolicies()
+    {
+        try
+        {
+            if (ServiceInstalled()) return; // השירות קיים — הוא אחראי על הניקוי של עצמו
+            if (Kiosk.IsActive) return; // נעילה רכה פעילה מגדירה DisableTaskMgr בעצמה — לא נוגעים
+            using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System", true);
+            if (k == null) return;
+            bool cleared = false;
+            foreach (string name in new[] { "DisableTaskMgr", "DisableRegistryTools" })
+                if (k.GetValue(name) is int v && v == 1) { k.DeleteValue(name, false); cleared = true; }
+            if (cleared) Config.Log("hardlock: מדיניות נעילה יתומה (השירות הוסר בלי SelfUninstall) נוקתה בחשבון הנוכחי");
+        }
+        catch (Exception ex) { Config.Log("hardlock restore: " + ex.Message); }
     }
 
     // ================= התקנת השירות (רץ בהרשאות מנהל) =================
