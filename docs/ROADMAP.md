@@ -136,4 +136,15 @@
 
 ## הרשאות/דגלים מה-SDK (בדיקה 12.10.2026)
 - ✅ `contributes.toolTab.allowOrderBeforeBuiltIns: true` בשני התוספים — מאפשר להופיע לפני הכלים המובנים במסך "כלים" (דגל תצוגה, לא הרשאה; המשתמש יכול לכבות).
-- מומלץ להוסיף יחד עם הקוד שמשתמש בהן: `ui.create_shortcut` (קיצור דרך לתוסף בשולחן העבודה), `app.shortcuts` (Ctrl+Shift+E לסייר), `events.subscribe:settings.changed` (החלפת שפה חיה), `fonts.local.read` (גופן תואם בצופה Word), `library.books.provide` (קבצים מתיקיות שנבחרו כספרים בחיפוש הספרייה). בלי קוד אין טעם להצהיר — המשתמש יראה בקשת הרשאה מיותרת.
+- ❌ `ui.create_shortcut` — הוחלט שמיותר (לגשר כבר יש קיצור דרך).
+
+### ⛔ חובה לפני אריזה של כל גרסה הבאה
+לפני bump גרסה/אריזה/Release — לממש את כל הסעיפים כאן **וגם את כל רעיונות השיפור הפתוחים בקובץ הזה**, כל הרשאה יחד עם הקוד שמשתמש בה (לא להצהיר הרשאה בלי שימוש):
+- [ ] `events.subscribe:settings.changed` — החלפת שפה (וערכת נושא/גופן) חיה בשני התוספים.
+- [ ] `library.books.provide` — קבצי PDF/Word מתיקיות שנבחרו מופיעים כ"ספרים" בחיפוש הספרייה; לחיצה פותחת בסייר/בצופה (`contributes.startup.libraryBooks`, `library.providerBook.openRequested`).
+- [ ] `app.shortcuts` — Ctrl+Shift+E פותח את הסייר (`app.registerShortcut` + `app.command`), ניתן לשינוי בהגדרות.
+- [ ] `fonts.local.read` — גופן תואם למסמך בצופה ה-Word.
+- [ ] `calendar.read` + `events.subscribe:calendar.city_changed` — מסך הנעילה/שומר המסך לוקחים תאריך עברי, זמנים ועיר מאוצריא עצמה (במקום הגדרה כפולה).
+- [ ] `notifications.system` — התראת מערכת כשהגשר נופל/מתעדכן או כשמצב נעילה מופעל.
+- [ ] `events.subscribe:plugin.permissions_changed` + `app.getGrantedPermissions` — הודעה ברורה כשהמשתמש כיבה הרשאה.
+- [ ] `clipboard.read` — הדבקת נתיב שהועתק מחוץ לאוצריא לשורת הכתובת בסייר.
