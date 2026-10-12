@@ -457,6 +457,7 @@ public class HardLockService : ServiceBase
     }
 
     private const int PipeMaxLine = 64 * 1024;
+    [ThreadStatic] private static bool _clientAdmin;
 
     private async Task ServeOne(NamedPipeServerStream pipe, CancellationToken ct)
     {
@@ -480,6 +481,17 @@ public class HardLockService : ServiceBase
                 }
                 if (!done && line.Length == 0) return;
                 string text = Encoding.UTF8.GetString(line.ToArray()).TrimEnd('\r');
+                bool admin = false;
+                try
+                {
+                    pipe.RunAsClient(() =>
+                    {
+                        using var id = WindowsIdentity.GetCurrent();
+                        admin = new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);
+                    });
+                }
+                catch { admin = false; }
+                _clientAdmin = admin;
                 JsonObject res;
                 try { res = Handle(JsonNode.Parse(text.Length == 0 ? "{}" : text) as JsonObject ?? new JsonObject()); }
                 catch (Exception ex) { res = Err("internal", ex.Message); HardLock.SvcLog("pipe: " + ex); }
@@ -511,6 +523,8 @@ public class HardLockService : ServiceBase
 
                 case "setup":
                     if (Configured) return Err("bad_request", "כבר הוגדר");
+                    // ביקורת #30 ממצא 2: רק מנהל (תהליך מורם) רשאי להגדיר לראשונה
+                    if (!_clientAdmin) return Err("forbidden", "הגדרה ראשונה דורשת הרשאות מנהל");
                     foreach (var k in new[] { "passwordHash", "salt", "recoveryHash", "recoverySalt" })
                     {
                         string v = q[k]?.ToString();

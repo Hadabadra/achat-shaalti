@@ -260,9 +260,9 @@ public static class Kiosk
         string otz = OtzariaPath();
         if (string.IsNullOrEmpty(otz) || !File.Exists(otz))
         {
-            // בלי אוצריא בחשבון הזה לא נועלים (אחרת לא היה נשאר שום ממשק) — רק מתעדים
-            LogThrottled("noOtz", "hardlock: נעילה מוקשחת פעילה, אבל אוצריא לא נמצאה בחשבון הזה — הנעילה לא הוחלה", 300);
-            return;
+            // ביקורת #30 ממצא 4: לא נכשלים פתוח. הנעילה מוחלת גם בלי אוצריא; מסך המנוחה מוצג
+            // עם הודעה, והיציאה היא בסיסמה או בקוד השחזור (Ctrl+Alt+Shift+F12) כרגיל.
+            LogThrottled("noOtz", "hardlock: אוצריא לא נמצאה בחשבון הזה — הנעילה מוחלת בכל זאת", 300);
         }
         Config.Log("hardlock: הנעילה הוחלה לפי רכיב ההקשחה");
         Config.Set("kiosk.active", true);
@@ -760,6 +760,7 @@ public static class Kiosk
             {
                 if (!string.IsNullOrEmpty(path) && File.Exists(path))
                     Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) });
+                else if (!Overlay.RestVisible) Overlay.ShowRest(IntPtr.Zero, idle: true); // אין אוצריא: מסך סגור עם הודעה
                 return;
             }
 

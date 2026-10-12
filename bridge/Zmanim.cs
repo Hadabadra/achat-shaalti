@@ -2,7 +2,7 @@ namespace OtzariaBridge;
 
 /// <summary>
 /// זמני היום לשומר המסך: הנץ ושקיעה גאומטריים (אלגוריתם NOAA, בלי תיקון גובה),
-/// וסוף זמן קריאת שמע לפי הגר"א (שלוש שעות זמניות מהנץ). המיקום מוגדר ב-kiosk.zmanimLocation
+/// עלות השחר (16.1°), צאת הכוכבים (8.5°), חצות, וסוף זמן ק"ש לפי המג"א (עלות–צאת 16.1°) והגר"א. המיקום מוגדר ב-kiosk.zmanimLocation
 /// בצורה "קו רוחב, קו אורך". הזמנים להצגה בלבד, ומסומנים כך על המסך.
 /// </summary>
 internal static class Zmanim
@@ -22,7 +22,7 @@ internal static class Zmanim
         return (lat, lon);
     }
 
-    /// <summary>שורה לשומר המסך, או null אם לא הוגדר מיקום</summary>
+    /// <summary>שתי שורות לשומר המסך, או null אם לא הוגדר מיקום</summary>
     public static string Line(DateTime now)
     {
         string loc = Config.Get("kiosk.zmanimLocation", "");
@@ -31,17 +31,26 @@ internal static class Zmanim
         _day = now.Date; _loc = loc; _line = null;
         var p = ParseLocation(loc);
         if (p == null) return null;
-        var rise = SunTime(now.Date, p.Value.lat, p.Value.lon, true);
-        var set = SunTime(now.Date, p.Value.lat, p.Value.lon, false);
+        double lat = p.Value.lat, lon = p.Value.lon;
+        DateTime? T(bool rise, double zenith) => SunTime(now.Date, lat, lon, rise, zenith);
+        var rise = T(true, 90.833); var set = T(false, 90.833);
         if (rise == null || set == null) return null;
-        var shma = rise.Value + TimeSpan.FromTicks((set.Value - rise.Value).Ticks / 4);
-        _line = Lang.T("סוף זמן ק\"ש (גר\"א) ", "Latest Shema (GRA) ") + shma.ToString("H:mm") +
-                "   ·   " + Lang.T("שקיעה ", "Sunset ") + set.Value.ToString("H:mm");
+        var alot = T(true, 90 + 16.1); var tzeit = T(false, 90 + 8.5); var tzeitMga = T(false, 90 + 16.1);
+        string H(DateTime? d) => d?.ToString("H:mm") ?? "—";
+        var gra = rise.Value + TimeSpan.FromTicks((set.Value - rise.Value).Ticks / 4);
+        DateTime? mga = alot != null && tzeitMga != null ? alot.Value + TimeSpan.FromTicks((tzeitMga.Value - alot.Value).Ticks / 4) : null;
+        var chatzot = rise.Value + TimeSpan.FromTicks((set.Value - rise.Value).Ticks / 2);
+        string sep = "   ·   ";
+        _line =
+            Lang.T("עלות השחר ", "Dawn ") + H(alot) + sep + Lang.T("הנץ ", "Sunrise ") + H(rise) + sep +
+            Lang.T("סוף ק\"ש מג\"א ", "Shema (MA) ") + H(mga) + sep + Lang.T("גר\"א ", "GRA ") + H(gra) + "\n" +
+            Lang.T("חצות ", "Midday ") + H(chatzot) + sep + Lang.T("שקיעה ", "Sunset ") + H(set) + sep +
+            Lang.T("צאת הכוכבים ", "Nightfall ") + H(tzeit);
         return _line;
     }
 
     /// <summary>זמן הנץ/השקיעה בשעון המקומי של המחשב (זנית 90.833°)</summary>
-    private static DateTime? SunTime(DateTime date, double lat, double lon, bool rise)
+    private static DateTime? SunTime(DateTime date, double lat, double lon, bool rise, double zenith)
     {
         static double Rad(double d) => d * Math.PI / 180;
         static double Deg(double r) => r * 180 / Math.PI;
@@ -57,7 +66,7 @@ internal static class Zmanim
         RA /= 15;
         double sinDec = 0.39782 * Math.Sin(Rad(L));
         double cosDec = Math.Cos(Math.Asin(sinDec));
-        double cosH = (Math.Cos(Rad(90.833)) - sinDec * Math.Sin(Rad(lat))) / (cosDec * Math.Cos(Rad(lat)));
+        double cosH = (Math.Cos(Rad(zenith)) - sinDec * Math.Sin(Rad(lat))) / (cosDec * Math.Cos(Rad(lat)));
         if (cosH > 1 || cosH < -1) return null;
         double H = rise ? 360 - Deg(Math.Acos(cosH)) : Deg(Math.Acos(cosH));
         H /= 15;

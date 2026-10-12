@@ -206,6 +206,7 @@ internal sealed class RestScreen : Form
     private Rectangle _btn;
     public IntPtr Target;
     public bool Idle;
+    private Point? _firstMove;
 
     private struct Particle { public float X, Y, Size, Speed, Phase; public char Ch; }
 
@@ -223,6 +224,13 @@ internal sealed class RestScreen : Form
         for (int i = 0; i < _parts.Length; i++) _parts[i] = NewParticle(true);
         _tick.Tick += (_, _) => Invalidate();
         MouseClick += (_, _) => Back();
+        // שומר מסך מחוסר פעילות נסגר גם בהזזת עכבר (מעבר לסף קטן, כדי שרעד לא יסגור)
+        MouseMove += (_, e) =>
+        {
+            if (!Idle || Target == IntPtr.Zero) return;
+            if (_firstMove == null) { _firstMove = e.Location; return; }
+            if (Math.Abs(e.X - _firstMove.Value.X) + Math.Abs(e.Y - _firstMove.Value.Y) > 24) Back();
+        };
         KeyDown += (_, _) => Back();
     }
 
@@ -239,6 +247,7 @@ internal sealed class RestScreen : Form
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
+        _firstMove = null;
         if (Visible) _tick.Start(); else _tick.Stop();
     }
 
@@ -316,11 +325,17 @@ internal sealed class RestScreen : Form
         g.DrawString(Overlay.HebrewDate(now), dateF, Brushes.White, Line(y, 40 * s), rtl);
         y += 36 * s;
         g.DrawString(now.ToString("d/M/yyyy"), hintF, dim, Line(y, 30 * s), center);
+        if (Target == IntPtr.Zero && Idle)
+        {
+            y += 34 * s;
+            g.DrawString(Lang.T("אוצריא לא נמצאה במחשב. לביטול הנעילה: Ctrl+Alt+Shift+F12", "Otzaria was not found. To unlock: Ctrl+Alt+Shift+F12"), hintF, dim, Line(y, 30 * s), rtl);
+        }
         string zm = Zmanim.Line(now);
         if (zm != null)
         {
             y += 34 * s;
-            g.DrawString(zm, dateF, goldB, Line(y, 40 * s), rtl);
+            using var zmF = new Font("David", 16f, GraphicsUnit.Point);
+            g.DrawString(zm, zmF, goldB, Line(y, 64 * s), rtl);
         }
 
         // נר הנצחה בתחתית, עם להבה מרצדת והילה חמה
