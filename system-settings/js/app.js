@@ -45,6 +45,46 @@
     return ok;
   };
 
+  /* ---------- ממסר זמני היום לשומר המסך (#33): רק כאן (בתוך אוצריא) אפשר לקרוא ל-calendar.*;
+     הגשר (תהליך Windows נפרד) לא יכול. שולחים לו מדי דקה POST ‏/kiosk/zmanim-cache עם מה שהתקבל,
+     והוא רק שומר ומציג. בלי window.Otzaria (תצוגה מקדימה בדפדפן) זה פשוט לא רץ. */
+  var zmanimTimer = null;
+  function unwrapOtzaria(r) { return r && r.data !== undefined ? r.data : r; }
+  async function pushZmanimCache() {
+    if (!window.Otzaria || !state.connected) return;
+    var st;
+    try { st = await SS.bridge.call('/kiosk/status'); } catch (e) { return; }
+    var city = (st.zmanimCity || '').trim();
+    var loc = (st.zmanimLocation || '').trim();
+    var args = { inIsrael: !st.zmanimDiaspora };
+    if (city) args.city = city;
+    else {
+      var m = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/.exec(loc);
+      if (m) { args.lat = +m[1]; args.lng = +m[2]; }
+      else return; /* אין עיר ואין קואורדינטות — אין מה לשלוח */
+    }
+    var dailyTimes = null, jewishDate = null, jewishDateTomorrow = null;
+    try { dailyTimes = unwrapOtzaria(await window.Otzaria.call('calendar.getDailyTimes', args)); } catch (e) { dailyTimes = null; }
+    try { jewishDate = unwrapOtzaria(await window.Otzaria.call('calendar.getJewishDate', {})); } catch (e) { jewishDate = null; }
+    try {
+      var t = new Date(); t.setDate(t.getDate() + 1);
+      jewishDateTomorrow = unwrapOtzaria(await window.Otzaria.call('calendar.getJewishDate', { date: t.toISOString().slice(0, 10) }));
+    } catch (e) { jewishDateTomorrow = null; }
+    if (!dailyTimes && !jewishDate) return;
+    try {
+      await SS.bridge.call('/kiosk/zmanim-cache', {
+        dailyTimes: dailyTimes || {}, jewishDate: jewishDate || {}, jewishDateTomorrow: jewishDateTomorrow || {}
+      });
+    } catch (e) { /* המטמון אינו קריטי; ננסה שוב בפעם הבאה */ }
+  }
+  function scheduleZmanim() {
+    clearTimeout(zmanimTimer);
+    if (state.suspended || !state.connected) return;
+    zmanimTimer = setTimeout(function () { pushZmanimCache().finally(scheduleZmanim); }, 60000);
+  }
+  /* נקרא גם מיד אחרי חיבור/שחזור, וגם אחרי שמירת הגדרות הנעילה, כדי שהתצוגה תתעדכן בלי לחכות דקה */
+  SS.pushZmanimNow = function () { clearTimeout(zmanimTimer); pushZmanimCache().finally(scheduleZmanim); };
+
   function sectionById(id) {
     return SS.sections.find(function (s) { return s.id === id; });
   }
@@ -236,6 +276,7 @@
       var hash = (location.hash || '').replace('#', '');
       show(hash || start || (h.kioskActive ? 'kiosk' : 'audio'));
     }
+    SS.pushZmanimNow();
     return true;
   }
   SS.reprobe = connect;
@@ -300,10 +341,11 @@
     if (window.Otzaria) {
       window.Otzaria.on('plugin.boot', boot);
       window.Otzaria.on('theme.changed', ui.applyTheme);
-      window.Otzaria.on('plugin.suspended', function () { state.suspended = true; clearTimeout(state.probeTimer); });
+      window.Otzaria.on('plugin.suspended', function () { state.suspended = true; clearTimeout(state.probeTimer); clearTimeout(zmanimTimer); });
       window.Otzaria.on('plugin.resumed', function () {
         state.suspended = false;
-        if (!state.connected) connect(); else SS.bridge.probe().then(function (h) { if (!h) showOffline(); else setStatus(true); });
+        if (!state.connected) connect();
+        else SS.bridge.probe().then(function (h) { if (!h) showOffline(); else { setStatus(true); SS.pushZmanimNow(); } });
       });
     } else {
       document.body.classList.add('preview');

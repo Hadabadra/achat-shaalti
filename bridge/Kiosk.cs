@@ -232,6 +232,13 @@ public static class Kiosk
         restScreen = Config.Get("kiosk.restScreen", true),
         restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 0),
         zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
+        zmanimCity = Config.Get("kiosk.zmanimCity", ""),
+        zmanimShow = Config.HasList("kiosk.zmanimShow") ? Config.GetList("kiosk.zmanimShow") : null,
+        zmanimDiaspora = Config.Get("kiosk.zmanimDiaspora", false),
+        candleLightingMinutes = Config.Get("kiosk.candleLightingMinutes", 18),
+        yahrzeitMonth = Config.Get("kiosk.yahrzeitMonth", ""),
+        yahrzeitDay = Config.Get("kiosk.yahrzeitDay", 0),
+        yahrzeitLabel = Config.Get("kiosk.yahrzeitLabel", ""),
         fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
         sideBar = Config.Get("kiosk.sideBar", true),
         sideBarIconsOnly = Config.Get("kiosk.sideBarIconsOnly", false),
@@ -471,6 +478,29 @@ public static class Kiosk
             string loc = (b.Str("zmanimLocation") ?? "").Trim();
             if (loc.Length > 0 && Zmanim.ParseLocation(loc) == null) throw BridgeException.BadRequest("מיקום לא תקין: יש להקליד קו רוחב, קו אורך (למשל 31.78, 35.22)");
             Config.Set("kiosk.zmanimLocation", loc);
+        }
+        // עיר מרשימה (אם נבחרה) מועברת כפי שהיא ל-calendar.getDailyTimes באוצריא; הקואורדינטות
+        // למעלה נשארות כאפשרות מתקדמת, וגם משמשות גיבוי כש-kiosk.zmanimCity ריק
+        if (b.Has("zmanimCity")) Config.Set("kiosk.zmanimCity", (b.Str("zmanimCity") ?? "").Trim());
+        if (b.Has("zmanimDiaspora")) Config.Set("kiosk.zmanimDiaspora", b.Bool("zmanimDiaspora"));
+        if (b.Has("zmanimShow"))
+        {
+            var ids = b.StrArray("zmanimShow").Select(x => x.Trim().ToLowerInvariant()).Where(x => x.Length > 0).Distinct().Take(20).ToArray();
+            Config.Set("kiosk.zmanimShow", new JsonArray(ids.Select(x => (JsonNode)x).ToArray()));
+        }
+        if (b.Has("candleLightingMinutes")) Config.Set("kiosk.candleLightingMinutes", (int)Math.Clamp(b.Long("candleLightingMinutes", 18), 0, 90));
+        if (b.Has("yahrzeitMonth"))
+        {
+            string mon = (b.Str("yahrzeitMonth") ?? "").Trim();
+            if (mon.Length > 0 && !Zmanim.YahrzeitMonths.Contains(mon)) throw BridgeException.BadRequest("חודש עברי לא תקין ליום השנה");
+            Config.Set("kiosk.yahrzeitMonth", mon);
+        }
+        if (b.Has("yahrzeitDay")) Config.Set("kiosk.yahrzeitDay", (int)Math.Clamp(b.Long("yahrzeitDay", 0), 0, 30));
+        if (b.Has("yahrzeitLabel"))
+        {
+            string lbl = (b.Str("yahrzeitLabel") ?? "").Trim();
+            if (lbl.Length > 200) lbl = lbl.Substring(0, 200);
+            Config.Set("kiosk.yahrzeitLabel", lbl);
         }
         string cp = b.Str("clockPosition");
         if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right") Config.Set("kiosk.clockPosition", cp);
