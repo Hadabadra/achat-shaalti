@@ -84,7 +84,9 @@ public static class Tray
     public static void Invoke(Action a)
     {
         if (_invoker == null || !_invoker.IsHandleCreated) { a(); return; }
-        if (_invoker.InvokeRequired) _invoker.Invoke(a);
+        // לא חוסמים את החוט הקורא: קוראים שמחזיקים נעילה (Kiosk.Gate) היו נתקעים בדדלוק מול חוט הממשק
+        if (_invoker.InvokeRequired)
+            _invoker.BeginInvoke(new Action(() => { try { a(); } catch (Exception ex) { Config.Log("ui: " + ex.Message); } }));
         else a();
     }
 

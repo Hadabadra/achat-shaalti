@@ -262,7 +262,7 @@
     },
     '/kiosk/status': function () { return Object.assign(clone(M.kiosk), { hard: clone(M.hard) }); },
     '/kiosk/set-password': function (b) {
-      if (!b.newPassword || b.newPassword.length < 4) throw mockErr('bad_request', 'הסיסמה חייבת להכיל לפחות 4 תווים');
+      if (!b.newPassword || b.newPassword.length < 6) throw mockErr('bad_request', 'הסיסמה חייבת להכיל לפחות 6 תווים');
       if (M.kiosk.hasPassword) {
         checkPw(b.oldPassword, false);
         M.password = b.newPassword;

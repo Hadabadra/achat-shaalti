@@ -106,6 +106,10 @@ public static class Server
             string origin = req.Headers.Origin.ToString();
             if (origin.Length > 0 && origin != "null")
                 throw BridgeException.Forbidden("מקור הבקשה אינו מורשה");
+            // הגנה מ-DNS rebinding: רק פנייה לכתובת הלוקאלית עצמה
+            string host = req.Host.Host;
+            if (!(host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1"))
+                throw BridgeException.Forbidden("כתובת היעד אינה מורשית");
             if (req.Headers["X-Otzaria-Bridge"].ToString() != "1")
                 throw BridgeException.Forbidden("חסרה הכותרת X-Otzaria-Bridge");
 
