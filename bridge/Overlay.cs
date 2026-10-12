@@ -188,7 +188,7 @@ internal sealed class ClockBar : Form
 }
 
 /// <summary>
-/// מסך מנוחה כשאוצריא ממוזערת: סמל אוצריא גדול וברור בתוך עיגול זוהר פועם, שעה ותאריך, אותיות וכוכבים צפים.
+/// מסך מנוחה כשאוצריא ממוזערת: "לימוד ללא הפרעות", פסוק, שעה ותאריך עברי, ונר הנצחה מרצד עם נוסח ההנצחה.
 /// הכול נע לאט (גם הבלוק המרכזי) כדי לא לצרוב את המסך. לחיצה או מקש מחזירים לאוצריא.
 /// </summary>
 internal sealed class RestScreen : Form
@@ -254,90 +254,111 @@ internal sealed class RestScreen : Form
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
-        // רקע: מעבר צבע איטי בין כחול עמוק לסגול-כחול
-        float k = (float)(Math.Sin(t / 18.0) * 0.5 + 0.5);
-        Color c1 = Mix(Color.FromArgb(18, 34, 58), Color.FromArgb(34, 24, 62), k);
-        Color c2 = Mix(Color.FromArgb(8, 12, 20), Color.FromArgb(10, 18, 30), k);
+        // רקע: לילה עמוק וחם, משתנה לאט מאוד
+        float k = (float)(Math.Sin(t / 22.0) * 0.5 + 0.5);
+        Color c1 = Mix(Color.FromArgb(22, 26, 44), Color.FromArgb(30, 24, 40), k);
+        Color c2 = Mix(Color.FromArgb(8, 9, 16), Color.FromArgb(12, 10, 14), k);
         using (var bg = new LinearGradientBrush(r, c1, c2, 90f)) g.FillRectangle(bg, r);
 
-        // כוכבים ואותיות צפים כלפי מעלה
-        using (var letterFont = new Font("Segoe UI", 18f * s, GraphicsUnit.Pixel))
+        // כוכבים עדינים בלבד (בלי אותיות), מנצנצים ועולים לאט מאוד
+        for (int i = 0; i < _parts.Length; i++)
         {
-            for (int i = 0; i < _parts.Length; i++)
-            {
-                ref var p = ref _parts[i];
-                p.Y -= p.Speed * 0.04f;
-                if (p.Y < -0.05f) p = NewParticle(false);
-                float px = (p.X + (float)Math.Sin(t * 0.3f + p.Phase) * 0.012f) * r.Width;
-                float py = p.Y * r.Height;
-                int a = (int)(40 + 70 * (Math.Sin(t * 0.8f + p.Phase) * 0.5 + 0.5));
-                if (p.Ch != '\0')
-                {
-                    using var lb = new SolidBrush(Color.FromArgb(a / 2, 200, 215, 255));
-                    g.DrawString(p.Ch.ToString(), letterFont, lb, px, py);
-                }
-                else
-                {
-                    float d = p.Size * 3.2f * s;
-                    using var sb = new SolidBrush(Color.FromArgb(a, 190, 210, 255));
-                    g.FillEllipse(sb, px, py, d, d);
-                }
-            }
+            ref var p = ref _parts[i];
+            p.Y -= p.Speed * 0.012f;
+            if (p.Y < -0.05f) { p = NewParticle(false); p.Ch = '\0'; }
+            float px = p.X * r.Width, py = p.Y * r.Height;
+            int a = (int)(25 + 55 * (Math.Sin(t * 0.6f + p.Phase) * 0.5 + 0.5));
+            float d = p.Size * 2.2f * s;
+            using var sb = new SolidBrush(Color.FromArgb(a, 225, 215, 190));
+            g.FillEllipse(sb, px, py, d, d);
         }
 
-        // הבלוק המרכזי נע לאט בצורת 8 (מניעת צריבה)
-        float dx = (float)Math.Sin(t * 0.05) * r.Width * 0.06f;
-        float dy = (float)Math.Sin(t * 0.09) * r.Height * 0.035f;
+        // כל התוכן נע לאט מאוד (מניעת צריבה)
+        float dx = (float)Math.Sin(t * 0.04) * r.Width * 0.04f;
+        float dy = (float)Math.Sin(t * 0.07) * r.Height * 0.025f;
         float cx = r.Width / 2f + dx;
-        float iconSize = 168 * s;
-        float top = r.Height * 0.2f + dy;
-        float icy = top + iconSize / 2f;
-
-        // זוהר פועם: שלוש טבעות
-        for (int i = 0; i < 3; i++)
-        {
-            float ph = (t * 0.45f + i / 3f) % 1f;
-            float rad = iconSize * (0.75f + ph * 0.9f);
-            int a = (int)(70 * (1 - ph));
-            using var pen = new Pen(Color.FromArgb(a, 130, 175, 255), 2f * s);
-            g.DrawEllipse(pen, cx - rad, icy - rad, rad * 2, rad * 2);
-        }
-        // לוח עגול בהיר מאחורי הסמל, כדי שיהיה ברור גם כשהסמל כהה
-        float tile = iconSize * 1.28f;
-        using (var halo = new SolidBrush(Color.FromArgb(40, 160, 200, 255)))
-            g.FillEllipse(halo, cx - tile * 0.62f, icy - tile * 0.62f, tile * 1.24f, tile * 1.24f);
-        using (var disc = new SolidBrush(Color.FromArgb(245, 247, 252)))
-            g.FillEllipse(disc, cx - tile / 2, icy - tile / 2, tile, tile);
-        g.DrawImage(_logo, cx - iconSize / 2, icy - iconSize / 2, iconSize, iconSize);
-
-        using var nameF = new Font("Segoe UI Semibold", 26f, GraphicsUnit.Point);
-        using var timeF = new Font("Segoe UI Light", 76f, GraphicsUnit.Point);
-        using var dateF = new Font("Segoe UI", 20f, GraphicsUnit.Point);
-        using var hintF = new Font("Segoe UI", 13f, GraphicsUnit.Point);
-        using var dim = new SolidBrush(Color.FromArgb(190, 210, 218, 228));
-        var center = new StringFormat { Alignment = StringAlignment.Center };
         var rtl = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Center };
+        var center = new StringFormat { Alignment = StringAlignment.Center };
+        Color gold = Color.FromArgb(232, 200, 140);
+        using var goldB = new SolidBrush(gold);
+        using var dim = new SolidBrush(Color.FromArgb(170, 220, 214, 200));
+        using var headF = new Font("David", 40f, FontStyle.Bold, GraphicsUnit.Point);
+        using var verseF = new Font("David", 22f, GraphicsUnit.Point);
+        using var timeF = new Font("Segoe UI Light", 64f, GraphicsUnit.Point);
+        using var dateF = new Font("David", 20f, GraphicsUnit.Point);
+        using var dedF = new Font("David", 17f, GraphicsUnit.Point);
+        using var dedNameF = new Font("David", 21f, FontStyle.Bold, GraphicsUnit.Point);
+        using var hintF = new Font("Segoe UI", 11f, GraphicsUnit.Point);
+        float W = r.Width;
+        RectangleF Line(float y, float h) => new(cx - W / 2f, y, W, h);
 
-        float y = icy + tile / 2 + 14 * s;
-        g.DrawString(Lang.T("אוצריא", "Otzaria"), nameF, Brushes.White, new RectangleF(cx - r.Width / 2f, y, r.Width, 50 * s), rtl);
+        float y = r.Height * 0.09f + dy;
+        g.DrawString(Lang.T("לימוד ללא הפרעות", "Learning without distractions"), headF, goldB, Line(y, 70 * s), rtl);
+        y += 70 * s;
+        // קו מעוטר דק
+        using (var pen = new Pen(Color.FromArgb(120, gold), 1.2f * s))
+        {
+            g.DrawLine(pen, cx - 150 * s, y, cx - 12 * s, y);
+            g.DrawLine(pen, cx + 12 * s, y, cx + 150 * s, y);
+            g.FillEllipse(goldB, cx - 4 * s, y - 4 * s, 8 * s, 8 * s);
+        }
+        y += 14 * s;
+        g.DrawString("וְהָגִיתָ בּוֹ יוֹמָם וָלַיְלָה", verseF, dim, Line(y, 40 * s), rtl);
         y += 58 * s;
-        var now = DateTime.Now;
-        g.DrawString(now.ToString("HH:mm"), timeF, Brushes.White, new RectangleF(cx - r.Width / 2f, y, r.Width, 140 * s), center);
-        y += 138 * s;
-        g.DrawString(Overlay.HebrewDate(now), dateF, Brushes.White, new RectangleF(cx - r.Width / 2f, y, r.Width, 44 * s), rtl);
-        y += 42 * s;
-        g.DrawString(now.ToString("d/M/yyyy"), dateF, dim, new RectangleF(cx - r.Width / 2f, y, r.Width, 44 * s), center);
-        y += 72 * s;
 
-        string label = Lang.T("חזרה לאוצריא", "Back to Otzaria");
-        var sz = g.MeasureString(label, dateF);
-        _btn = new Rectangle((int)(cx - sz.Width / 2 - 34 * s), (int)y, (int)(sz.Width + 68 * s), (int)(sz.Height + 22 * s));
-        using (var path = Overlay.Round(_btn, (int)(_btn.Height / 2f)))
-        using (var fill = new LinearGradientBrush(_btn, Color.FromArgb(255, 92, 150, 220), Color.FromArgb(255, 62, 108, 186), 90f))
-            g.FillPath(fill, path);
-        g.DrawString(label, dateF, Brushes.White, new RectangleF(_btn.X, _btn.Y + 11 * s, _btn.Width, _btn.Height), rtl);
-        g.DrawString(Lang.T("לחצו בכל מקום או על מקש כלשהו", "Click anywhere or press any key"), hintF, dim,
-            new RectangleF(cx - r.Width / 2f, _btn.Bottom + 16 * s, r.Width, 30 * s), rtl);
+        var now = DateTime.Now;
+        g.DrawString(now.ToString("HH:mm"), timeF, Brushes.White, Line(y, 110 * s), center);
+        y += 108 * s;
+        g.DrawString(Overlay.HebrewDate(now), dateF, Brushes.White, Line(y, 40 * s), rtl);
+        y += 36 * s;
+        g.DrawString(now.ToString("d/M/yyyy"), hintF, dim, Line(y, 30 * s), center);
+
+        // נר הנצחה בתחתית, עם להבה מרצדת והילה חמה
+        float baseY = r.Height * 0.86f + dy;
+        float candleW = 26 * s, candleH = 92 * s;
+        float candleX = cx - candleW / 2f, candleTop = baseY - candleH;
+        float flick = (float)(Math.Sin(t * 7.3) * 0.5 + Math.Sin(t * 11.1 + 1) * 0.3 + Math.Sin(t * 3.1) * 0.2);
+        float fh = (34 + flick * 4) * s, fw = (15 + flick * 1.2f) * s;
+        float fx = cx + flick * 1.5f * s, fy = candleTop - 6 * s;
+        // הילה
+        for (int i = 6; i >= 1; i--)
+        {
+            float rad = (40 + i * 26) * s * (1 + flick * 0.03f);
+            using var glow = new SolidBrush(Color.FromArgb((int)(10 + 4 * (6 - i)), 255, 190, 110));
+            g.FillEllipse(glow, fx - rad, fy - fh * 0.5f - rad, rad * 2, rad * 2);
+        }
+        // גוף הנר
+        var body = new RectangleF(candleX, candleTop, candleW, candleH);
+        using (var cb = new LinearGradientBrush(body, Color.FromArgb(250, 244, 230), Color.FromArgb(200, 186, 160), 0f))
+            g.FillRectangle(cb, body);
+        using (var top = new SolidBrush(Color.FromArgb(255, 252, 240)))
+            g.FillEllipse(top, candleX, candleTop - 4 * s, candleW, 8 * s);
+        // פתיל
+        using (var wick = new Pen(Color.FromArgb(60, 45, 35), 2f * s)) g.DrawLine(wick, cx, candleTop, cx, candleTop - 7 * s);
+        // להבה: חיצונית כתומה ופנימית בהירה
+        using (var flame = new GraphicsPath())
+        {
+            flame.AddBezier(fx, fy - fh, fx + fw * 0.9f, fy - fh * 0.45f, fx + fw * 0.55f, fy, fx, fy);
+            flame.AddBezier(fx, fy, fx - fw * 0.55f, fy, fx - fw * 0.9f, fy - fh * 0.45f, fx, fy - fh);
+            using var fb = new PathGradientBrush(flame) { CenterColor = Color.FromArgb(255, 255, 245, 200), SurroundColors = new[] { Color.FromArgb(230, 255, 150, 40) } };
+            fb.CenterPoint = new PointF(fx, fy - fh * 0.3f);
+            g.FillPath(fb, flame);
+        }
+        // מעמד
+        using (var stand = new SolidBrush(Color.FromArgb(150, 120, 80)))
+        using (var sp = Overlay.Round(new Rectangle((int)(cx - 46 * s), (int)baseY, (int)(92 * s), (int)(10 * s)), (int)(5 * s)))
+            g.FillPath(stand, sp);
+
+        // נוסח ההנצחה מעל הנר
+        float ty = candleTop - fh - 150 * s;
+        g.DrawString("לעילוי נשמת הנערה הצדקנית", dedF, dim, Line(ty, 32 * s), rtl);
+        g.DrawString("אסתר גיטה דינר ע\"ה", dedNameF, goldB, Line(ty + 32 * s, 40 * s), rtl);
+        g.DrawString("בת רבי מיכאל שלום הלוי שיבדלט\"א · תנצב\"ה", dedF, dim, Line(ty + 72 * s, 32 * s), rtl);
+
+        // רמז קטן בתחתית; אין צורך בכפתור — כל לחיצה חוזרת
+        _btn = Rectangle.Empty;
+        g.DrawString(Lang.T("לחיצה או מקש כלשהו — חזרה לאוצריא", "Click or press any key to return to Otzaria"), hintF, dim,
+            Line(r.Height - 40 * s, 30 * s), rtl);
     }
 
     private static Color Mix(Color a, Color b, float k) =>

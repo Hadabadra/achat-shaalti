@@ -162,7 +162,7 @@ public static class Server
         {
             if (ctx.Response.HasStarted) return;
             var (code, status, message) = Map(ex);
-            if (code == "internal") Config.Log(req.Path + ": " + ex);
+            if (code == "internal") { Config.Log(req.Path + ": " + ex); Outbox.Add("api-error", req.Path + "\n" + ex); }
             ctx.Response.StatusCode = status;
             ctx.Response.ContentType = "application/json; charset=utf-8";
             await ctx.Response.WriteAsync(JsonSerializer.Serialize(

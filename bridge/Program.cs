@@ -65,6 +65,7 @@ public static class Program
             Application.SetCompatibleTextRenderingDefault(false);
 
             Tray.Init();
+            Outbox.Init();
             Port = Server.Start();
             Kiosk.RestoreOnStartup();
             HardLock.StartSync();
@@ -75,6 +76,7 @@ public static class Program
         catch (Exception ex)
         {
             Config.Log("fatal: " + ex);
+            Outbox.Add("fatal", ex.ToString());
             // קריסה בעלייה לא משאירה מסך שחור: אם אין נעילה פעילה, מחזירים את שולחן העבודה
             try { if (!Kiosk.IsActive) Kiosk.BootGuard(); } catch { }
             return 1;

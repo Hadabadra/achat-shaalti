@@ -229,6 +229,7 @@
     document.getElementById('offline').hidden = true;
     document.getElementById('shell-body').hidden = false;
     await syncLock(h);
+    if (!wasConnected) setTimeout(sendPendingReports, 4000);
     if (!wasConnected) {
       var start = null;
       try { start = localStorage.getItem('ss.section'); } catch (e) { start = null; }
@@ -238,6 +239,26 @@
     return true;
   }
   SS.reprobe = connect;
+
+  /* תקלות שהגשר אסף אוטומטית (קריסות ושגיאות פנימיות) נשלחות בדיווח אחד דרך feedback.report.
+     אוצריא מבקשת אישור לפני שליחה, ואם אין חיבור היא שומרת ושולחת כשיחזור. */
+  var reportsSent = false;
+  async function sendPendingReports() {
+    if (reportsSent || !window.Otzaria || SS.bridge.isMock) return;
+    var r = null;
+    try { r = await SS.bridge.call('/diag/pending', {}, { timeoutMs: 15000 }); } catch (e) { return; }
+    if (!r || r.enabled === false || !r.items || !r.items.length) return;
+    reportsSent = true;
+    var details = ('דיווח תקלות אוטומטי מהגשר (' + r.items.length + ')\nתוסף: הגדרות מערכת ' + SS.VERSION + '\n\n' +
+      r.items.map(function (x) { return x.text; }).join('\n\n=====\n\n')).slice(0, 5000);
+    var res = null;
+    try { res = await window.Otzaria.call('feedback.report', { details: details, reportType: 'bug' }); } catch (e) { res = null; }
+    var val = res && (res.data !== undefined ? res.data : res);
+    if (val === 'sent' || val === 'queued') {
+      try { await SS.bridge.call('/diag/ack', { ids: r.items.map(function (x) { return x.id; }) }, { timeoutMs: 15000 }); } catch (e) { /* ננסה בפעם הבאה */ }
+    }
+  }
+  SS.sendPendingReports = sendPendingReports;
 
   SS.bridge.onPairing = function (on) {
     if (on) SS.ui.toast(window.I18N && window.I18N.isEn() ? 'Approve the connection in the window that opened on the computer' : 'יש לאשר את החיבור בחלון שנפתח במחשב', 'info');
