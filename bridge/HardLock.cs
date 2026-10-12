@@ -730,6 +730,7 @@ public class HardLockService : ServiceBase
                     Save();
                     Task.Run(Tick);
                     return Ok();
+                }
 
                 case "skip":
                     if ((e = Check(pw, false)) != null) return e;
@@ -748,7 +749,6 @@ public class HardLockService : ServiceBase
                     Save();
                     Task.Run(Tick);
                     return Ok();
-                }
 
                 case "hello-start":
                 {
