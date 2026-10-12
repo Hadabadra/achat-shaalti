@@ -165,6 +165,7 @@
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
       allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, clock: true, clockPosition: 'bottom-left',
       restScreen: true, restIdleMinutes: 0, zmanimLocation: '', fullscreenOtzaria: true,
+      activatedBy: 'manual',
       schedule: { enabled: false, start: '20:00', end: '02:00', warn: true },
       openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer'],
       allSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth', 'airplane', 'usb']

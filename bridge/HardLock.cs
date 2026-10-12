@@ -597,7 +597,18 @@ public class HardLockService : ServiceBase
 
                 case "skip":
                     if ((e = Check(pw, false)) != null) return e;
-                    _state["skipUntil"] = q["until"]?.ToString() ?? "";
+                    {
+                        // ריק = ניקוי הדילוג; אחרת חייב להיות תאריך תקין, לכל היותר 36 שעות קדימה
+                        string until = q["until"]?.ToString() ?? "";
+                        if (until.Length > 0)
+                        {
+                            if (!DateTimeOffset.TryParse(until, null, System.Globalization.DateTimeStyles.RoundtripKind, out var ud))
+                                return Err("bad_request", "זמן הדילוג אינו תקין");
+                            if (ud > DateTimeOffset.Now.AddHours(36)) ud = DateTimeOffset.Now.AddHours(36);
+                            until = ud.ToString("o");
+                        }
+                        _state["skipUntil"] = until;
+                    }
                     Save();
                     Task.Run(Tick);
                     return Ok();
@@ -650,8 +661,9 @@ public class HardLockService : ServiceBase
         string start = _state["scheduleStart"]?.ToString();
         string end = _state["scheduleEnd"]?.ToString();
         // דילוג ידני (מ"ביטול הנעילה" באזהרה) או תזמון כבוי → כמו "מחוץ לחלון"
-        bool skip = DateTime.TryParse(_state["skipUntil"]?.ToString(), null,
-            System.Globalization.DateTimeStyles.RoundtripKind, out var su) && DateTime.Now < su;
+        // מושווה כרגע מוחלט (DateTimeOffset) — חסין למעבר שעון קיץ/חורף ולסוג ה-Kind
+        bool skip = DateTimeOffset.TryParse(_state["skipUntil"]?.ToString(), null,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var su) && DateTimeOffset.Now < su;
         bool inWindow = _state["scheduleEnabled"]?.GetValue<bool>() == true && !skip && Sched.InWindow(start, end, DateTime.Now);
         bool active = Active;
         string by = _state["activatedBy"]?.ToString() ?? "manual";

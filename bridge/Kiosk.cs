@@ -288,13 +288,14 @@ public static class Kiosk
     }
 
     /// <summary>עד מתי לדלג על נעילה מתוזמנת (אחרי "ביטול הנעילה" באזהרה)</summary>
-    private static DateTime SkipUntil()
+    // מושווה כ-DateTimeOffset (רגע מוחלט) ולא כשעון קיר, כדי שמעבר שעון קיץ/חורף לא יקצר או יאריך את הדילוג
+    private static DateTimeOffset SkipUntil()
     {
         var s = Config.Get<string>("kiosk.schedule.skipUntil", null);
-        return DateTime.TryParse(s, null, System.Globalization.DateTimeStyles.RoundtripKind, out var d) ? d : DateTime.MinValue;
+        return DateTimeOffset.TryParse(s, null, System.Globalization.DateTimeStyles.RoundtripKind, out var d) ? d : DateTimeOffset.MinValue;
     }
 
-    private static bool Skipping => DateTime.Now < SkipUntil();
+    private static bool Skipping => DateTimeOffset.Now < SkipUntil();
 
     /// <summary>
     /// "ביטול הנעילה" מתוך אזהרת הספירה-לאחור (אחרי אימות סיסמה): מדלג על חלון הנעילה הקרוב
