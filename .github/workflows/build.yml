@@ -82,16 +82,20 @@ jobs:
             BRIDGE_VERSION.txt
           if-no-files-found: error
 
-      # מספור ה-Release בפורק הזה עצמאי מגרסת הגשר הפנימית (OtzariaBridge.csproj) - נשלט
-      # ע"י RELEASE_VERSION.txt בשורש הריפו. לעדכן: לערוך את הקובץ הזה ולדחוף.
+      # מספור ה-Release בפורק הזה עצמאי מגרסת הגשר הפנימית (OtzariaBridge.csproj). שני המקטעים
+      # הראשונים (major.minor) נשלטים ע"י RELEASE_VERSION.txt (לעדכן: לערוך ולדחוף); המקטע השלישי
+      # (patch) הוא github.run_number - מתקדם אוטומטית בכל push, בלי צורך לגעת בקובץ בעצמכם.
       - name: גרסה לתגית ה-Release
         id: ver
         shell: pwsh
         run: |
-          $ver = (Get-Content RELEASE_VERSION.txt -Raw).Trim()
-          "tag=v$ver" >> $env:GITHUB_OUTPUT
+          $base = (Get-Content RELEASE_VERSION.txt -Raw).Trim()
+          $parts = $base -split '\.'
+          $majorMinor = "$($parts[0]).$($parts[1])"
+          "tag=v$majorMinor.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
 
-      # Release מתעדכן בכל push (אותה תגית, "rolling release") - קישור קבוע אחד תמיד עם הבנייה האחרונה.
+      # Release חדש בכל push (תגית ייחודית, מספר הגרסה עולה כל פעם - make_latest מסמן תמיד את האחרון
+      # כ"Latest" כך שקישור ה-/releases/latest עדיין מצביע על הבנייה העדכנית ביותר).
       # לא תלוי במיזוג ל-main/next ולא בשער "חובה לפני אריזה" - פורק אישי, בלי ההגבלות של הריפו המשותף.
       - name: Release
         uses: softprops/action-gh-release@v2
