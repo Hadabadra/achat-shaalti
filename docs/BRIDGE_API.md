@@ -223,3 +223,17 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 | `/kiosk/hard/uninstall` | `{ password }` | סטטוס. מתקבל גם קוד שחזור |
 
 `/kiosk/status` כולל גם את השדה `hard`, באותו מבנה כמו `/kiosk/hard/status`.
+
+### הקשחת BIOS/UEFI מתוך תוכנה — /bios/*
+
+ניסיון להגדיר סיסמת BIOS ולחסום אתחול מהתקן USB/חיצוני דרך ממשקי WMI ספציפיים ליצרן (ר' `bridge/BiosHardening.cs`
+ו-`docs/SECURITY_NOTES.md` לפירוט מלא, כולל מגבלות אמיתיות וסיכון סיסמה שנשכחה). נתמך בפועל: Lenovo, HP (דגמים
+עסקיים). Dell/Asus: זיהוי והסבר בלבד, בלי ניסיון הגדרה.
+
+| נתיב | גוף | data |
+|---|---|---|
+| `/bios/status` | `{}` | `{ vendor: "lenovo"\|"hp"\|"dell"\|"asus"\|"other", manufacturer, model, supported: bool, wmiReachable?, wmiError?, usbBootSetting?: {name, currentValue, possibleValues} \| null, note?, reason? }` — לא דורש סיסמה, לא משנה כלום |
+| `/bios/harden` | `{ password, setPassword: bool, biosPassword?, blockUsbBoot: bool }` | `{ vendor, manufacturer, model, steps: [{ id: "password"\|"usbBoot", attempted, success, settingName?, message }] }` — דורש סיסמת מנהל (או קוד שחזור) ו-Windows Hello כשהאימות הדו-שלבי פעיל; `unsupported` ביצרן שאינו Lenovo/HP |
+
+כל שלב מדווח בכנות `success`/`message` גם כשהפעולה נכשלת (למשל הגדרה לא נמצאה בדגם הזה, או שכבר מוגדרת סיסמה אחרת) —
+אין החזרת "הצלחה" ללא אישור בפועל מה-WMI.

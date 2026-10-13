@@ -524,6 +524,35 @@
   };
   mockRoutes['/kiosk/hard/settings'] = function (b) { checkPw(b.password, false); M.hard.blockUsbStorage = !!b.blockUsbStorage; return clone(M.hard); };
   mockRoutes['/kiosk/hard/uninstall'] = function (b) { checkPw(b.password, true); M.hard = { installed: false, running: false, configured: false, active: false, blockUsbStorage: false, version: null, needsUpdate: false, sessions: 1 }; return clone(M.hard); };
+
+  /* ---------- mock: הקשחת BIOS/UEFI (browser preview) ---------- */
+  M.bios = {
+    vendor: 'lenovo', manufacturer: 'LENOVO', model: '20XW0013IL', supported: true,
+    wmiReachable: true, wmiError: null,
+    usbBootSetting: { name: 'USB Boot', currentValue: 'Enable', possibleValues: ['Enable', 'Disable'] },
+    note: 'ב-Lenovo מרבית הדגמים דורשים שתהיה כבר מוגדרת סיסמת Supervisor לפני ששינוי הגדרות אחרות (כמו חסימת USB) יתקבל ב-firmware. ' +
+      'לכן מוצע קודם להגדיר סיסמת BIOS, ורק אחר כך לחסום אתחול USB.'
+  };
+  mockRoutes['/bios/status'] = function () { return clone(M.bios); };
+  mockRoutes['/bios/harden'] = function (b) {
+    checkPw(b.password, true);
+    if (!b.setPassword && !b.blockUsbBoot) throw mockErr('bad_request', 'יש לבחור לפחות פעולה אחת: הגדרת סיסמת BIOS או חסימת אתחול USB');
+    var steps = [];
+    if (b.setPassword) {
+      if (!b.biosPassword || b.biosPassword.length < 4) throw mockErr('bad_request', 'סיסמת ה-BIOS חייבת להכיל לפחות 4 תווים');
+      steps.push({ id: 'password', attempted: true, success: true, message: 'סיסמת ה-BIOS הוגדרה בהצלחה (דמה בלבד — אין כאן מחשב אמיתי)' });
+    }
+    if (b.blockUsbBoot) {
+      if (M.bios.usbBootSetting) {
+        M.bios.usbBootSetting.currentValue = 'Disable';
+        steps.push({ id: 'usbBoot', attempted: true, success: true, settingName: M.bios.usbBootSetting.name,
+          message: 'ההגדרה „' + M.bios.usbBootSetting.name + '” הוגדרה ל-„Disable” ונשמרה (דמה בלבד)' });
+      } else {
+        steps.push({ id: 'usbBoot', attempted: false, success: false, settingName: null, message: 'לא נמצאה הגדרה מתאימה במחשב זה' });
+      }
+    }
+    return { vendor: M.bios.vendor, manufacturer: M.bios.manufacturer, model: M.bios.model, steps: steps };
+  };
   mockRoutes['/sys/update-check'] = function () {
     return { current: '3.0.0', latest: '3.0.0', newer: false, canInstall: false, url: 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest' };
   };

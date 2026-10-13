@@ -55,6 +55,7 @@ public static class Server
         SysApi.Register();
         DeviceApi.Register();
         MoreApi.Register();
+        BiosHardening.Register();
         Kiosk.Register();
         Pairing.Register();
         HardLock.Register();

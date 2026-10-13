@@ -30,13 +30,15 @@
     });
     var pairs = [];
     try { pairs = (await SS.bridge.call('/pair/list', {})).clients || []; } catch (e) { pairs = []; }
-    render(body, st, progs, found, pairs);
+    var bios = null;
+    try { bios = await SS.bridge.call('/bios/status', {}); } catch (e) { bios = null; }
+    render(body, st, progs, found, pairs, bios);
   }
 
   /* ספירה לאחור חיה של הפתיחה הזמנית בכרטיס המצב (מתאפסת בכל רינדור) */
   var tempTimer = null;
 
-  function render(body, st, progs, found, pairs) {
+  function render(body, st, progs, found, pairs, bios) {
     var active = !!st.active;
     var tu = st.tempUnlock || {};
     clearInterval(tempTimer); tempTimer = null;
@@ -89,7 +91,9 @@
       '<p class="muted">הנעילה רצה בהרשאות המשתמש ומונעת שימוש מזדמן. מי שמבין במחשבים יכול לעקוף אותה. ' +
       'כדי שתעמוד גם מול ניסיון מכוון, השלימו שכבות שאינן תלויות בתוכנה:</p>' +
       '<ul class="feature-list">' +
-      '<li>' + ui.icon('key') + '<span><b>סיסמת BIOS/UEFI</b> וביטול אתחול מ-USB — חוסם כניסה ל-Safe Mode ואתחול מהתקן חיצוני. נעשה ידנית בהגדרות ה-BIOS של כל מחשב; תוכנה אינה יכולה לקבוע אותה.</span></li>' +
+      '<li>' + ui.icon('key') + '<span><b>סיסמת BIOS/UEFI</b> וביטול אתחול מ-USB — חוסם כניסה ל-Safe Mode ואתחול מהתקן חיצוני. ' +
+      'ב-Lenovo וב-HP (דגמים עסקיים) אפשר לנסות להפעיל אוטומטית בכרטיס „הקשחת BIOS/UEFI” למטה; ' +
+      'ב-Dell וב-Asus, וכשהניסיון האוטומטי לא מצליח, יש להגדיר ידנית בהגדרות ה-BIOS של המחשב.</span></li>' +
       '<li>' + ui.icon('shield') + '<span><b>חשבון משתמש רגיל</b> ללא הרשאות מנהל, וחשבון המנהל עם סיסמה שהתלמיד אינו יודע.</span></li>' +
       '<li>' + ui.icon('computer') + '<span><b>סינון תוכן על המחשב עצמו</b> (למשל נטפרי), ולא רק ברמת הרשת — כך מעבר לרשת אחרת אינו עוקף את הסינון.</span></li>' +
       '<li>' + ui.icon('lock') + '<span><b>Safe Mode:</b> במצב בטוח הגשר אינו עולה והנעילה אינה חלה. סיסמת BIOS שחוסמת את תפריט האתחול סוגרת גם את זה.</span></li>' +
@@ -132,6 +136,7 @@
       html += programsCard(progs, found, !!st.autoTorah);
       html += fxCard();
       html += hardCard(st.hard || {});
+      html += biosCard(bios);
       html += pairCard(pairs);
       html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
         '<p class="muted">בחלון „ביטול נעילה” אפשר להקליד גם את <b>קוד השחזור</b> שקיבלתם בהגדרת הסיסמה. במקרה חירום אפשר להריץ משורת הפקודה:</p>' +
@@ -143,6 +148,7 @@
     if (!active && tu.active) startTempCountdown(body, tu.secondsLeft);
     wire(body, st, progs, found);
     wireHard(body, st, pairs);
+    wireBios(body, bios);
   }
 
   function wire(body, st, progs, found) {
@@ -372,6 +378,88 @@
     return '<div class="card"><div class="card-title">תוספים מחוברים לגשר</div>' +
       '<p class="muted">מגרסה 3.0 רק תוסף שאושר בחלון של הגשר יכול להשתמש בו. תוכנה אחרת במחשב לא יכולה לגשת לקבצים ולהגדרות בלי אישור כזה.</p>' +
       (rows || '<p class="muted">אין תוספים מחוברים.</p>') + '</div>';
+  }
+
+  /* ---------- הקשחת BIOS/UEFI מתוך תוכנה (ניסיון אוטומטי, ללא כניסה ידנית לתפריט ה-BIOS) ---------- */
+  var BIOS_VENDOR_NAMES = { lenovo: 'Lenovo', hp: 'HP', dell: 'Dell', asus: 'Asus', other: 'לא זוהה' };
+
+  function biosCard(bios) {
+    if (!bios) return '';
+    var head = '<div class="card"><div class="card-title">הקשחת BIOS/UEFI (ניסיון אוטומטי)</div>' +
+      '<p class="muted">מנסה להגדיר סיסמת BIOS ולחסום אתחול ממדיה חיצונית (USB) ישירות מכאן, דרך ממשק הניהול של יצרן המחשב — ' +
+      'בלי להיכנס ידנית להגדרות ה-BIOS. <b>לא כל פעולה מובטחת להצליח</b> — תלוי ביצרן ובדגם המחשב.</p>' +
+      '<div class="setting-row"><div class="setting-text"><b>יצרן המחשב שזוהה</b><span class="muted">' +
+      ui.esc(BIOS_VENDOR_NAMES[bios.vendor] || bios.vendor) + (bios.model ? ' · ' + ui.esc(bios.model) : '') + '</span></div></div>';
+
+    if (!bios.supported) {
+      return head + '<div class="state-box"><div><b>לא נתמך להקשחה אוטומטית במחשב זה</b><span class="muted">' +
+        ui.esc(bios.reason || '') + '</span></div></div></div>';
+    }
+
+    var usb = bios.usbBootSetting;
+    head += '<div class="setting-row"><div class="setting-text"><b>חסימת אתחול מהתקן USB/חיצוני</b><span class="muted">' +
+      (usb ? 'נמצאה הגדרה במחשב זה: „' + ui.esc(usb.name) + '” (ערך נוכחי: ' + ui.esc(usb.currentValue || '—') + ')'
+           : 'לא נמצאה הגדרה מתאימה במחשב זה') + '</span></div></div>';
+    if (bios.wmiReachable === false) {
+      head += '<div class="state-box error"><div><b>לא ניתן לקרוא את הגדרות ה-BIOS כרגע</b><span class="muted">' +
+        ui.esc(bios.wmiError || '') + '</span></div></div>';
+    }
+    if (bios.note) head += '<p class="muted small">' + ui.esc(bios.note) + '</p>';
+    head += '<div class="row-actions"><button class="btn btn-primary" data-act="bios-harden">' + ui.icon('shield') + 'הפעלת הקשחה</button></div></div>';
+    return head;
+  }
+
+  function wireBios(body, bios) {
+    var b = body.querySelector('[data-act="bios-harden"]');
+    if (b) b.addEventListener('click', function () { biosHarden(body, bios); });
+  }
+
+  async function biosHarden(body, bios) {
+    var usb = bios && bios.usbBootSetting;
+    var v = await ui.dialog({
+      title: 'הקשחת BIOS/UEFI', icon: 'shield',
+      body: '<p class="muted"><b>אזהרה לפני שממשיכים:</b> סיסמת BIOS שנשכחה <b>אינה ניתנת לשחזור מתוך Windows</b> — ' +
+        'יש לפנות לתמיכת היצרן, ולעיתים נדרש איפוס פיזי של ה-BIOS (סוללת CMOS) בתוך המחשב. רשמו ושמרו את הסיסמה במקום בטוח לפני שממשיכים.</p>',
+      fields: [
+        { name: 'setPw', type: 'checkbox', label: 'הגדרת סיסמת BIOS', value: true,
+          hint: 'אם כבר מוגדרת סיסמה אחרת במחשב (שלא ידועה כאן), הפעולה פשוט תיכשל — אי אפשר לדרוס בטעות סיסמה קיימת.' },
+        { name: 'biosPw', label: 'סיסמת BIOS חדשה', type: 'password', dir: 'ltr' },
+        { name: 'biosPw2', label: 'אימות סיסמת BIOS', type: 'password', dir: 'ltr' },
+        { name: 'blockUsb', type: 'checkbox', label: 'חסימת אתחול ממדיה חיצונית (USB)', value: !!usb, disabled: !usb,
+          hint: usb ? 'ייעשה דרך ההגדרה „' + usb.name + '”.' : 'לא נמצאה הגדרה מתאימה במחשב זה — אי אפשר להפעיל אוטומטית.' },
+        { name: 'pw', label: 'סיסמת נעילה (של תוכנת החסימה)', type: 'password', dir: 'ltr' }
+      ],
+      actions: [{ label: 'ביטול', value: false }, { label: 'הפעלה', value: true, kind: 'primary' }],
+      validate: function (x) {
+        if (!x.setPw && !x.blockUsb) return 'יש לבחור לפחות פעולה אחת';
+        if (x.setPw) {
+          if (!x.biosPw || x.biosPw.length < 4) return 'סיסמת ה-BIOS חייבת להכיל לפחות 4 תווים';
+          if (x.biosPw !== x.biosPw2) return 'סיסמאות ה-BIOS אינן תואמות';
+        }
+        return x.pw ? '' : 'יש להקליד את סיסמת הנעילה';
+      },
+      onSubmit: async function (x) {
+        return await SS.bridge.call('/bios/harden', {
+          password: x.pw, setPassword: !!x.setPw, biosPassword: x.biosPw || '', blockUsbBoot: !!x.blockUsb
+        }, { timeoutMs: 30000 });
+      }
+    });
+    if (!v) return;
+    await showBiosResult(v);
+    load(body);
+  }
+
+  function showBiosResult(r) {
+    var rows = (r.steps || []).map(function (s) {
+      var label = s.id === 'password' ? 'סיסמת BIOS' : 'חסימת אתחול USB';
+      return '<li>' + ui.icon(s.success ? 'check' : 'warning') + '<span><b>' + label + (s.success ? ' — הצליח.' : ' — לא הצליח.') +
+        '</b> ' + ui.esc(s.message || '') + '</span></li>';
+    }).join('');
+    return ui.dialog({
+      title: 'תוצאת ההקשחה', icon: 'shield',
+      body: '<ul class="bullets">' + (rows || '<li>לא בוצעה אף פעולה.</li>') + '</ul>',
+      actions: [{ label: 'סגירה', value: true, kind: 'primary' }]
+    });
   }
 
   function wireHard(body, st, pairs) {
