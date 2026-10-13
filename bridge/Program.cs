@@ -80,6 +80,7 @@ public static class Program
             Port = Server.Start();
             Kiosk.RestoreOnStartup();
             HardLock.StartSync();
+            Kiosk.StartScheduler();
             Tray.Run();
             Server.Stop();
             return 0;
