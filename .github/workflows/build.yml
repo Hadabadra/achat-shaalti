@@ -196,18 +196,38 @@ jobs:
 
       # גרסה חדשה ב-OtzariaBridge.csproj (תג שעוד לא קיים) = Release אוטומטי
       - name: Release
-        if: github.ref == 'refs/heads/main'  # #55: רק ב-main
+        if: steps.rel.outputs.do == 'true'
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: true  # #55: לא ליצור מהדורה בלי קבצים
-          tag_name: ${{ steps.ver.outputs.tag }}
-          name: OtzariaBridge ${{ steps.ver.outputs.tag }}
+          tag_name: ${{ steps.rel.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: כלי מערכת לאוצריא ${{ steps.rel.outputs.tag }}
           prerelease: false
           make_latest: true
-          generate_release_notes: true
+          body_path: release-notes.md
           files: |
-            installer/Output/*.exe
             out/OtzariaBridge.exe
-            bridge/plugins/*.otzplugin
+            bridge/plugins/system-settings.otzplugin
+            bridge/plugins/file-explorer.otzplugin
             SHA256SUMS.txt
-            BRIDGE_VERSION.txt
+
+      - name: עדכון הערות של Release קיים
+        if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --notes-file release-notes.md
+
+      # Release שנשאר טיוטה (draft): מעדכנים את הקבצים לבנייה הנוכחית ומפרסמים
+      - name: השלמת Release שנשאר טיוטה
+        if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $draft = gh release view ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --json isDraft -q .isDraft
+          if ($draft -ne 'true') { Write-Host "not a draft"; exit 0 }
+          gh release upload ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --clobber out/OtzariaBridge.exe bridge/plugins/system-settings.otzplugin bridge/plugins/file-explorer.otzplugin SHA256SUMS.txt
+          gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --draft=false --latest --target ${{ github.sha }}
+
+  plugins:
