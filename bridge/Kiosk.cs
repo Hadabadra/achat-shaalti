@@ -253,6 +253,7 @@ public static class Kiosk
         clockPosition = Config.Get("kiosk.clockPosition", "bottom-left"),
         restScreen = Config.Get("kiosk.restScreen", true),
         restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 0),
+        restZmanimSide = Config.Get("kiosk.restZmanimSide", "right"),
         zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
         zmanimCity = Config.Get("kiosk.zmanimCity", ""),
         zmanimElevation = Config.Get("kiosk.zmanimElevation", 0.0),
@@ -805,6 +806,8 @@ public static class Kiosk
         }
         string cp = b.Str("clockPosition");
         if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right") Config.Set("kiosk.clockPosition", cp);
+        string rzs = b.Str("restZmanimSide");
+        if (rzs is "left" or "right") Config.Set("kiosk.restZmanimSide", rzs);
         string sbp = b.Str("sideBarPosition");
         if (sbp is "left" or "right" or "top" or "bottom") Config.Set("kiosk.sideBarPosition", sbp);
         if (b.Has("openSections"))

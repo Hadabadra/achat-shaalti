@@ -358,7 +358,13 @@ internal sealed class RestScreen : Form
         using var dedF = new Font("David", 17f, GraphicsUnit.Point);
         using var dedNameF = new Font("David", 21f, FontStyle.Bold, GraphicsUnit.Point);
         using var hintF = new Font("Segoe UI", 11f, GraphicsUnit.Point);
-        float W = r.Width;
+        // זמני היום בעמודה בצד (kiosk.restZmanimSide: right/left), כדי שלא יתנגשו בהקדשה ובשעה במרכז.
+        // העמודה לא זזה עם dx (רק dy), והתוכן במרכז מוגבל לרוחב שנשאר בין שתי השוליים.
+        var zmItems = ZmanimItems(Zmanim.Sections(DateTime.Now));
+        bool zmLeft = Config.Get("kiosk.restZmanimSide", "right") == "left";
+        float colW = zmItems.Count > 0 ? Math.Min(340 * s, r.Width * 0.24f) : 0;
+        float colMargin = 28 * s;
+        float W = zmItems.Count > 0 ? Math.Max(r.Width * 0.4f, r.Width - 2 * (colW + colMargin * 2) - 2 * Math.Abs(dx)) : r.Width;
         RectangleF Line(float y, float h) => new(cx - W / 2f, y, W, h);
 
         float y = r.Height * 0.09f + dy;
@@ -386,18 +392,9 @@ internal sealed class RestScreen : Form
             y += 34 * s;
             g.DrawString(Lang.T("אוצריא לא נמצאה במחשב. לביטול הנעילה: Ctrl+Alt+Shift+F12", "Otzaria was not found. To unlock: Ctrl+Alt+Shift+F12"), hintF, dim, Line(y, 30 * s), rtl);
         }
-        var zmSections = Zmanim.Sections(now);
-        if (zmSections.Length > 0)
-        {
-            using var zmF = new Font("David", 16f, GraphicsUnit.Point);
-            foreach (var sec in zmSections)
-            {
-                y += 30 * s;
-                int lineCount = sec.Count(ch => ch == '\n') + 1;
-                g.DrawString(sec, zmF, goldB, Line(y, 26 * s * lineCount), rtl);
-                y += 26 * s * (lineCount - 1);
-            }
-        }
+        if (zmItems.Count > 0)
+            DrawZmanimColumn(g, zmItems, zmLeft ? colMargin : r.Width - colMargin - colW,
+                r.Height * 0.08f + dy, colW, r.Height - 70 * s - (r.Height * 0.08f + dy), s, gold);
 
         // נר הנצחה בתחתית, עם להבה מרצדת והילה חמה
         float baseY = r.Height * 0.86f + dy;
@@ -445,6 +442,56 @@ internal sealed class RestScreen : Form
         _btn = Rectangle.Empty;
         g.DrawString(Lang.T("לחיצה או מקש כלשהו — חזרה לאוצריא", "Click or press any key to return to Otzaria"), hintF, dim,
             Line(r.Height - 40 * s, 30 * s), rtl);
+    }
+
+    /// <summary>מפרק את שורות הזמנים ("א · ב\nג") לפריטים — פריט אחד לכל שורה בעמודה</summary>
+    internal static List<string> ZmanimItems(string[] sections)
+    {
+        var items = new List<string>();
+        foreach (var sec in sections)
+        {
+            if (items.Count > 0) items.Add(""); // רווח בין קבוצות
+            foreach (var ln in sec.Split('\n'))
+                foreach (var part in ln.Split('·'))
+                {
+                    string x = part.Trim();
+                    if (x.Length > 0) items.Add(x);
+                }
+        }
+        return items;
+    }
+
+    /// <summary>עמודת זמנים עם רקע עדין; הגופן קטן עד שהכול נכנס בגובה הזמין (לעולם לא גולש למטה)</summary>
+    private static void DrawZmanimColumn(Graphics g, List<string> items, float x, float y, float w, float maxH, float s, Color gold)
+    {
+        float size = 16f; float lineH; int blank = items.Count(i => i.Length == 0);
+        Font f;
+        while (true)
+        {
+            f = new Font("David", size, GraphicsUnit.Point);
+            lineH = f.GetHeight(g) * 1.18f;
+            float need = 24 * s + lineH * (items.Count - blank) + lineH * 0.5f * blank;
+            if (need <= maxH || size <= 9f) { maxH = Math.Min(maxH, need); break; }
+            f.Dispose(); size -= 1f;
+        }
+        using (f)
+        using (var bg = new SolidBrush(Color.FromArgb(70, 10, 12, 22)))
+        using (var border = new Pen(Color.FromArgb(70, gold), 1f * s))
+        using (var path = Overlay.Round(new Rectangle((int)x, (int)y, (int)w, (int)maxH), (int)(14 * s)))
+        using (var goldB = new SolidBrush(gold))
+        {
+            g.FillPath(bg, path);
+            g.DrawPath(border, path);
+            var fmt = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Near, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.DirectionRightToLeft | StringFormatFlags.NoWrap };
+            float yy = y + 12 * s, bottom = y + maxH - 10 * s;
+            foreach (var it in items)
+            {
+                if (it.Length == 0) { yy += lineH * 0.5f; continue; }
+                if (yy + lineH > bottom + 1) break;
+                g.DrawString(it, f, goldB, new RectangleF(x + 14 * s, yy, w - 28 * s, lineH), fmt);
+                yy += lineH;
+            }
+        }
     }
 
     private static Color Mix(Color a, Color b, float k) =>
