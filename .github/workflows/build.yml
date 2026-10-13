@@ -10,11 +10,12 @@ on:
       - "system-settings/**"
       - "file-explorer/**"
       - "installer/**"
+      - "RELEASE_VERSION.txt"
       - ".github/workflows/build.yml"
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -71,3 +72,28 @@ jobs:
             bridge/plugins/*.otzplugin
             SHA256SUMS.txt
           if-no-files-found: error
+
+      # מספור ה-Release בפורק הזה עצמאי מגרסת הגשר הפנימית (OtzariaBridge.csproj) - נשלט
+      # ע"י RELEASE_VERSION.txt בשורש הריפו. לעדכן: לערוך את הקובץ הזה ולדחוף.
+      - name: גרסה לתגית ה-Release
+        id: ver
+        shell: pwsh
+        run: |
+          $ver = (Get-Content RELEASE_VERSION.txt -Raw).Trim()
+          "tag=v$ver" >> $env:GITHUB_OUTPUT
+
+      # Release מתעדכן בכל push (אותה תגית, "rolling release") - קישור קבוע אחד תמיד עם הבנייה האחרונה.
+      # לא תלוי במיזוג ל-main/next ולא בשער "חובה לפני אריזה" - פורק אישי, בלי ההגבלות של הריפו המשותף.
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: OtzariaBridge ${{ steps.ver.outputs.tag }}
+          prerelease: false
+          make_latest: true
+          generate_release_notes: true
+          files: |
+            installer/Output/*.exe
+            out/OtzariaBridge.exe
+            bridge/plugins/*.otzplugin
+            SHA256SUMS.txt
