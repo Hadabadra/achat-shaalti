@@ -1071,8 +1071,7 @@
       '<div class="fx-set-card fx-set-memorial"><p>לעילוי נשמת</p><b>אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א</b><p>תנצב"ה</p></div>' +
       '<div class="fx-set-card"><div class="fx-set-title">' + ic('info') + 'אחת שאלתי</div>' +
       setRow(b ? 'מחובר · גרסה ' + FX.esc(b.version || '?') : 'הגשר אינו מחובר', b ? '' : 'בלי הגשר הסייר עובד על תיקיות שאישרתם בלבד',
-        b ? '<button type="button" class="btn btn-tonal" data-act="upd">בדיקת עדכונים</button>' : '') +
-      '<div class="fx-upd muted small" data-slot="upd"></div>' +
+        '') + /* #59: בדיקת עדכונים רק בגשר */
       '</div>'; /* #19: יומן השינויים ועמוד ההוצאות נמצאים בגשר (אודות) */
   }
   function settingsDialog(cat) {
@@ -1120,16 +1119,6 @@
         saveOpts(Object.assign({}, OPT_DEF)); FX.layout.setZoom(0.9); FX.layout.setMode('details'); FX.layout.setPanes(false, false);
         S.showHidden = false; savePrefs(); refresh(); if (window.I18N) window.I18N.set('auto');
         showCat('general'); ui.toast('ההגדרות אופסו', 'success'); return;
-      }
-      if (act === 'upd') {
-        var slot = content.querySelector('[data-slot=upd]');
-        slot.textContent = 'בודק…';
-        try {
-          var r = await FX.Bridge.call('/sys/update-check', { force: true }, { timeoutMs: 30000 });
-          slot.textContent = r.newer ? 'גרסה ' + r.latest + ' זמינה. עדכון בלחיצה: הגדרות מערכת ← אודות, או תפריט הגשר ליד השעון ← אודות ועדכונים.'
-            : 'הכול מעודכן (גרסה ' + r.current + ').';
-        } catch (err) { slot.textContent = 'בדיקת העדכון נכשלה: ' + ((err && err.message) || err); }
-        return;
       }
       if (t.dataset.sw === 'stripes') {
         S.stripes = !S.stripes; t.classList.toggle('on', S.stripes); t.setAttribute('aria-checked', S.stripes ? 'true' : 'false');
