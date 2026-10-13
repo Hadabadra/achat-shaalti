@@ -108,6 +108,19 @@
   };
   /* מצב מנותק: מחשב בלי רשת — מסתירים Wi-Fi, בלוטות׳ ומצב טיסה */
   /* #8 (13.10.2026): נלקח ממצב המנותק של אוצריא עצמה דרך הגשר — אין הגדרה נפרדת בתוסף */
+  /* #13: מצב קומפקטי (אייקונים בלבד), נשמר בהעדפות */
+  function applyCompact() {
+    var on = !!SS.prefs.get('compact', false);
+    document.body.classList.toggle('ss-compact', on);
+    var b = document.getElementById('top-compact');
+    if (b) { b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.innerHTML = ui.icon('display'); }
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    var b = document.getElementById('top-compact');
+    if (b) b.addEventListener('click', function () { SS.prefs.set('compact', !SS.prefs.get('compact', false)); applyCompact(); });
+    applyCompact();
+  });
+  setTimeout(applyCompact, 0);
   SS._offline = false;
   SS.isOfflineMode = function () { return !!SS._offline; };
   async function syncOffline() {
