@@ -30,13 +30,15 @@
     });
     var pairs = [];
     try { pairs = (await SS.bridge.call('/pair/list', {})).clients || []; } catch (e) { pairs = []; }
-    render(body, st, progs, found, pairs);
+    var bios = null;
+    try { bios = await SS.bridge.call('/bios/status', {}); } catch (e) { bios = null; }
+    render(body, st, progs, found, pairs, bios);
   }
 
   /* ספירה לאחור חיה של הפתיחה הזמנית בכרטיס המצב (מתאפסת בכל רינדור) */
   var tempTimer = null;
 
-  function render(body, st, progs, found, pairs) {
+  function render(body, st, progs, found, pairs, bios) {
     var active = !!st.active;
     var tu = st.tempUnlock || {};
     clearInterval(tempTimer); tempTimer = null;
@@ -89,7 +91,9 @@
       '<p class="muted">הנעילה רצה בהרשאות המשתמש ומונעת שימוש מזדמן. מי שמבין במחשבים יכול לעקוף אותה. ' +
       'כדי שתעמוד גם מול ניסיון מכוון, השלימו שכבות שאינן תלויות בתוכנה:</p>' +
       '<ul class="feature-list">' +
-      '<li>' + ui.icon('key') + '<span><b>סיסמת BIOS/UEFI</b> וביטול אתחול מ-USB — חוסם כניסה ל-Safe Mode ואתחול מהתקן חיצוני. נעשה ידנית בהגדרות ה-BIOS של כל מחשב; תוכנה אינה יכולה לקבוע אותה.</span></li>' +
+      '<li>' + ui.icon('key') + '<span><b>סיסמת BIOS/UEFI</b> וביטול אתחול מ-USB — חוסם כניסה ל-Safe Mode ואתחול מהתקן חיצוני. ' +
+      'ב-Lenovo וב-HP (דגמים עסקיים) אפשר לנסות להפעיל אוטומטית בכרטיס „הקשחת BIOS/UEFI” למטה; ' +
+      'ב-Dell וב-Asus, וכשהניסיון האוטומטי לא מצליח, יש להגדיר ידנית בהגדרות ה-BIOS של המחשב.</span></li>' +
       '<li>' + ui.icon('shield') + '<span><b>חשבון משתמש רגיל</b> ללא הרשאות מנהל, וחשבון המנהל עם סיסמה שהתלמיד אינו יודע.</span></li>' +
       '<li>' + ui.icon('computer') + '<span><b>סינון תוכן על המחשב עצמו</b> (למשל נטפרי), ולא רק ברמת הרשת — כך מעבר לרשת אחרת אינו עוקף את הסינון.</span></li>' +
       '<li>' + ui.icon('lock') + '<span><b>Safe Mode:</b> במצב בטוח הגשר אינו עולה והנעילה אינה חלה. סיסמת BIOS שחוסמת את תפריט האתחול סוגרת גם את זה.</span></li>' +
@@ -133,6 +137,7 @@
       html += programsCard(progs, found, !!st.autoTorah);
       html += fxCard();
       html += hardCard(st.hard || {});
+      html += biosCard(bios);
       html += pairCard(pairs);
       html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
         '<p class="muted">בחלון „ביטול נעילה” אפשר להקליד גם את <b>קוד השחזור</b> שקיבלתם בהגדרת הסיסמה. במקרה חירום אפשר להריץ משורת הפקודה:</p>' +
@@ -144,6 +149,7 @@
     if (!active && tu.active) startTempCountdown(body, tu.secondsLeft);
     wire(body, st, progs, found);
     wireHard(body, st, pairs);
+    wireBios(body, bios);
   }
 
   function wire(body, st, progs, found) {
@@ -372,6 +378,173 @@
       (rows || '<p class="muted">אין תוספים מחוברים.</p>') + '</div>';
   }
 
+  /* ---------- הקשחת BIOS/UEFI מתוך תוכנה (ניסיון אוטומטי, ללא כניסה ידנית לתפריט ה-BIOS) ---------- */
+  var BIOS_VENDOR_NAMES = { lenovo: 'Lenovo', hp: 'HP', dell: 'Dell', asus: 'Asus', other: 'לא זוהה' };
+
+  function biosCard(bios) {
+    if (!bios) return '';
+    var head = '<div class="card"><div class="card-title">הקשחת BIOS/UEFI (ניסיון אוטומטי)</div>' +
+      '<p class="muted">מנסה להגדיר סיסמת BIOS ולחסום אתחול ממדיה חיצונית (USB) ישירות מכאן, דרך ממשק הניהול של יצרן המחשב — ' +
+      'בלי להיכנס ידנית להגדרות ה-BIOS. <b>לא כל פעולה מובטחת להצליח</b> — תלוי ביצרן ובדגם המחשב.</p>' +
+      '<div class="setting-row"><div class="setting-text"><b>יצרן המחשב שזוהה</b><span class="muted">' +
+      ui.esc(BIOS_VENDOR_NAMES[bios.vendor] || bios.vendor) + (bios.model ? ' · ' + ui.esc(bios.model) : '') + '</span></div></div>';
+    var manualBtn = '<div class="row-actions"><button class="btn btn-tonal" data-act="bios-manual">' + ui.icon('info') + 'הדרכה ידנית (כל היצרנים)</button></div>';
+
+    if (!bios.supported) {
+      return head + '<div class="state-box"><div><b>לא נתמך להקשחה אוטומטית במחשב זה</b><span class="muted">' +
+        ui.esc(bios.reason || '') + '</span></div></div>' + manualBtn + '</div>';
+    }
+
+    var usb = bios.usbBootSetting;
+    head += '<div class="setting-row"><div class="setting-text"><b>חסימת אתחול מהתקן USB/חיצוני</b><span class="muted">' +
+      (usb ? 'נמצאה הגדרה במחשב זה: „' + ui.esc(usb.name) + '” (ערך נוכחי: ' + ui.esc(usb.currentValue || '—') + ')'
+           : 'לא נמצאה הגדרה מתאימה במחשב זה') + '</span></div></div>';
+    var bootMenu = bios.bootMenuAuthSetting;
+    head += '<div class="setting-row"><div class="setting-text"><b>נעילת תפריט האתחול (F9/F12) בסיסמת BIOS</b><span class="muted">' +
+      (bootMenu ? 'נמצאה הגדרה במחשב זה: „' + ui.esc(bootMenu.name) + '” (ערך נוכחי: ' + ui.esc(bootMenu.currentValue || '—') + ')'
+           : 'לא נמצאה הגדרה מתאימה במחשב זה') + '</span></div></div>';
+    if (bios.wmiReachable === false) {
+      head += '<div class="state-box error"><div><b>לא ניתן לקרוא את הגדרות ה-BIOS כרגע</b><span class="muted">' +
+        ui.esc(bios.wmiError || '') + '</span></div></div>';
+    }
+    if (bios.note) head += '<p class="muted small">' + ui.esc(bios.note) + '</p>';
+    head += '<div class="row-actions">' +
+      '<button class="btn btn-primary" data-act="bios-harden">' + ui.icon('shield') + 'הפעלת הקשחה</button>' +
+      '<button class="btn btn-tonal" data-act="bios-manual">' + ui.icon('info') + 'הדרכה ידנית (כל היצרנים)</button></div></div>';
+    return head;
+  }
+
+  /* ---------- הדרכה ידנית לפי יצרן: מפתח כניסה ל-BIOS, איפה הסיסמה, איפה חסימת USB/תפריט אתחול ---------- */
+  var BIOS_MANUAL_GUIDE = [
+    { vendor: 'hp', title: 'HP', key: 'Esc ואז F10 באתחול (או F10 ישירות)',
+      steps: [
+        'כבו את המחשב לגמרי (לא רק הפעלה מחדש), ואז הפעילו ולחצו מיד ברצף על Esc, ואז F10, עד שנפתח מסך ה-BIOS הכחול/האפור.',
+        'היכנסו ללשונית Security ← Setup Password/Administrator Password ← הגדירו סיסמה (רשמו אותה!).',
+        'חזרו ללשונית Security ← חפשו "Prompt for Admin authentication on F9/F12" ← Enable (זה חוסם כניסה לתפריט האתחול בלי הסיסמה).',
+        'לחסימת USB: לשונית Advanced/System Configuration ← Boot Options ← חפשו "USB Storage Boot"/"Legacy Support" ← Disable.',
+        'שמרו ויציאה: F10 ← Yes (או Save Changes and Exit בתפריט Main).',
+      ] },
+    { vendor: 'lenovo', title: 'Lenovo', key: 'Enter ואז F1 באתחול (ThinkPad), או F2 (IdeaPad/Yoga)',
+      steps: [
+        'כבו את המחשב לגמרי, הפעילו ולחצו מיד על Enter ואז F1 (ThinkPad) או החזיקו F2 (IdeaPad) עד שנפתח ה-BIOS.',
+        'לשונית Security ← Password ← Supervisor Password ← הגדירו סיסמה (רשמו אותה!).',
+        'לשונית Security ← Secure Boot / Virtualization — לרוב אין הגדרת "סיסמה לתפריט אתחול" נפרדת ב-Lenovo; הגנת ה-Supervisor Password עצמה חוסמת גם שינוי סדר האתחול.',
+        'לחסימת USB: לשונית Startup/Boot ← Boot ← הסירו/הורידו "USB HDD"/"USB FDD" מרשימת סדר האתחול, או לשונית Security ← "USB Boot" ← Disable אם קיים.',
+        'שמרו ויציאה: F10 ← Yes.',
+      ] },
+    { vendor: 'dell', title: 'Dell', key: 'F2 באתחול (או F12 לתפריט אתחול חד-פעמי)',
+      steps: [
+        'כבו את המחשב לגמרי, הפעילו ולחצו מיד ברצף על F2 עד שנפתח BIOS Setup הכחול.',
+        'לשונית System Security ← Admin Password ← הגדירו סיסמה (רשמו אותה!).',
+        'לשונית System Security ← "Secure Boot"/"Password Bypass"/"Admin Setup Lockout" — אפשרו נעילה שדורשת סיסמה לפני כניסה לתפריט אתחול (F12) אם האפשרות קיימת בדגם.',
+        'לחסימת USB: לשונית System Configuration ← USB Configuration ← בטלו "Enable Boot Support"/"Enable External USB Port", או לשונית Boot Sequence ← הסירו USB מרשימת סדר האתחול.',
+        'שמרו ויציאה: Apply ← Exit (או F10).',
+      ] },
+    { vendor: 'asus', title: 'Asus', key: 'F2 (נייד, בלחיצה מוחזקת) או Del (שולחני)',
+      steps: [
+        'כבו את המחשב לגמרי. בנייד: החזיקו F2 ואז לחצו הפעלה. בשולחני: הקישו Del בחוזרה מיד עם ההפעלה.',
+        'אם נכנסתם למסך הפשוט (EZ Mode) — לחצו F7 או "Advanced Mode" כדי לראות את כל האפשרויות.',
+        'לשונית Security ← Administrator Password ← הגדירו סיסמה (רשמו אותה!).',
+        'לחסימת USB ותפריט אתחול: לשונית Boot ← Boot Configuration/CSM ← בטלו Launch CSM / הסירו התקני USB מ-Boot Option Priorities. חלק מהדגמים: Secure Boot ← Enable כדי לחסום אתחול ממדיה לא חתומה.',
+        'שמרו ויציאה: F10 ← Yes (או Exit ← Save Changes & Reset).',
+      ] },
+    { vendor: 'other', title: 'יצרנים אחרים (Acer, MSI, Toshiba, Samsung ועוד)',
+      steps: [
+        'מקש הכניסה הנפוץ: F2 או Del בחוזרה מיד עם ההפעלה (לפעמים Esc או F1 — מופיע לרוב במסך הפתיחה הראשון של היצרן, שימו לב ל"Press ... to enter Setup").',
+        'חפשו לשונית בשם Security/Password ← הגדירו Supervisor/Administrator/Setup Password (רשמו אותה!).',
+        'חפשו לשונית Boot ← הסירו/בטלו USB/"External Device" מרשימת סדר האתחול, או הפעילו הגנת-סיסמה לתפריט האתחול אם קיימת.',
+        'שמרו ויציאה: בדרך כלל F10, או Exit ← Save Changes.',
+      ] },
+  ];
+
+  function biosManualGuideHtml(detectedVendor) {
+    var ordered = BIOS_MANUAL_GUIDE.slice().sort(function (a, b) {
+      return (a.vendor === detectedVendor ? -1 : 0) - (b.vendor === detectedVendor ? -1 : 0);
+    });
+    var html = '<p class="muted"><b>לפני שמתחילים:</b> קחו דף ועט, ורשמו עליו כל סיסמה שתגדירו ברגע שהגדרתם אותה — ' +
+      'סיסמת BIOS שנשכחת <b>אינה ניתנת לשחזור מתוך Windows</b>, ולעיתים דורשת פנייה לתמיכת היצרן או איפוס פיזי בתוך המחשב. ' +
+      'שמרו את הדף במקום בטוח, לא ליד המחשב.</p>';
+    ordered.forEach(function (v) {
+      var isDetected = v.vendor === detectedVendor;
+      html += '<div class="state-box"><div>' +
+        '<b>' + ui.esc(v.title) + (isDetected ? ' — זוהה כיצרן המחשב שלכם' : '') + '</b>' +
+        (v.key ? '<span class="muted">מקש כניסה ל-BIOS: <b dir="ltr">' + ui.esc(v.key) + '</b></span>' : '') +
+        '<ol class="bullets">' + v.steps.map(function (s) { return '<li>' + ui.esc(s) + '</li>'; }).join('') + '</ol>' +
+        '</div></div>';
+    });
+    return html;
+  }
+
+  function biosManualGuide(bios) {
+    return ui.dialog({
+      title: 'הדרכה ידנית להקשחת BIOS/UEFI', icon: 'info',
+      body: biosManualGuideHtml(bios && bios.vendor),
+      actions: [{ label: 'סגירה', value: true, kind: 'primary' }]
+    });
+  }
+
+  function wireBios(body, bios) {
+    var b = body.querySelector('[data-act="bios-harden"]');
+    if (b) b.addEventListener('click', function () { biosHarden(body, bios); });
+    var m = body.querySelector('[data-act="bios-manual"]');
+    if (m) m.addEventListener('click', function () { biosManualGuide(bios); });
+  }
+
+  async function biosHarden(body, bios) {
+    var usb = bios && bios.usbBootSetting;
+    var bootMenu = bios && bios.bootMenuAuthSetting;
+    var pwNote = bios && bios.passwordRequiresPhysicalPresence
+      ? ' <b>שימו לב:</b> ביצרן/דגם הזה הגדרת סיסמת BIOS חסומה במכוון מרחוק (דורשת נוכחות פיזית ליד המחשב) — הניסיון כאן צפוי להיכשל; יש להגדיר ידנית ב-F10.'
+      : '';
+    var v = await ui.dialog({
+      title: 'הקשחת BIOS/UEFI', icon: 'shield',
+      body: '<p class="muted"><b>אזהרה לפני שממשיכים:</b> סיסמת BIOS שנשכחה <b>אינה ניתנת לשחזור מתוך Windows</b> — ' +
+        'יש לפנות לתמיכת היצרן, ולעיתים נדרש איפוס פיזי של ה-BIOS (סוללת CMOS) בתוך המחשב. רשמו ושמרו את הסיסמה במקום בטוח לפני שממשיכים.' + pwNote + '</p>',
+      fields: [
+        { name: 'setPw', type: 'checkbox', label: 'הגדרת סיסמת BIOS', value: true,
+          hint: 'אם כבר מוגדרת סיסמה אחרת במחשב (שלא ידועה כאן), הפעולה פשוט תיכשל — אי אפשר לדרוס בטעות סיסמה קיימת.' },
+        { name: 'biosPw', label: 'סיסמת BIOS חדשה', type: 'password', dir: 'ltr' },
+        { name: 'biosPw2', label: 'אימות סיסמת BIOS', type: 'password', dir: 'ltr' },
+        { name: 'blockUsb', type: 'checkbox', label: 'חסימת אתחול ממדיה חיצונית (USB)', value: !!usb, disabled: !usb,
+          hint: usb ? 'ייעשה דרך ההגדרה „' + usb.name + '”.' : 'לא נמצאה הגדרה מתאימה במחשב זה — אי אפשר להפעיל אוטומטית.' },
+        { name: 'lockBootMenu', type: 'checkbox', label: 'נעילת תפריט האתחול (F9/F12) בסיסמה', value: !!bootMenu, disabled: !bootMenu,
+          hint: bootMenu ? 'ייעשה דרך ההגדרה „' + bootMenu.name + '”. חזק יותר מחסימת USB בלבד — חוסם כניסה לתפריט האתחול כולו.'
+                         : 'לא נמצאה הגדרה מתאימה במחשב זה — אי אפשר להפעיל אוטומטית.' },
+        { name: 'pw', label: 'סיסמת נעילה (של תוכנת החסימה)', type: 'password', dir: 'ltr' }
+      ],
+      actions: [{ label: 'ביטול', value: false }, { label: 'הפעלה', value: true, kind: 'primary' }],
+      validate: function (x) {
+        if (!x.setPw && !x.blockUsb && !x.lockBootMenu) return 'יש לבחור לפחות פעולה אחת';
+        if (x.setPw) {
+          if (!x.biosPw || x.biosPw.length < 4) return 'סיסמת ה-BIOS חייבת להכיל לפחות 4 תווים';
+          if (x.biosPw !== x.biosPw2) return 'סיסמאות ה-BIOS אינן תואמות';
+        }
+        return x.pw ? '' : 'יש להקליד את סיסמת הנעילה';
+      },
+      onSubmit: async function (x) {
+        return await SS.bridge.call('/bios/harden', {
+          password: x.pw, setPassword: !!x.setPw, biosPassword: x.biosPw || '', blockUsbBoot: !!x.blockUsb, lockBootMenu: !!x.lockBootMenu
+        }, { timeoutMs: 30000 });
+      }
+    });
+    if (!v) return;
+    await showBiosResult(v);
+    load(body);
+  }
+
+  function showBiosResult(r) {
+    var rows = (r.steps || []).map(function (s) {
+      var label = s.id === 'password' ? 'סיסמת BIOS' : s.id === 'bootMenuAuth' ? 'נעילת תפריט האתחול' : 'חסימת אתחול USB';
+      return '<li>' + ui.icon(s.success ? 'check' : 'warning') + '<span><b>' + label + (s.success ? ' — הצליח.' : ' — לא הצליח.') +
+        '</b> ' + ui.esc(s.message || '') + '</span></li>';
+    }).join('');
+    return ui.dialog({
+      title: 'תוצאת ההקשחה', icon: 'shield',
+      body: '<ul class="bullets">' + (rows || '<li>לא בוצעה אף פעולה.</li>') + '</ul>',
+      actions: [{ label: 'סגירה', value: true, kind: 'primary' }]
+    });
+  }
+
   function wireHard(body, st, pairs) {
     function on(act, fn) { var b = body.querySelector('[data-act="' + act + '"]'); if (b) b.addEventListener('click', fn); }
     var h = st.hard || {};
@@ -492,38 +665,22 @@
     ZMAN_FIELDS.forEach(function (z) {
       fields.push({ name: 'zm_' + z.id, type: 'checkbox', label: z.label, value: zmanShow.indexOf(z.id) >= 0 });
     });
-    fields.push({ name: 'zmSide', type: 'select', label: 'עמודת זמני היום בשומר המסך', value: st.restZmanimSide || 'right', hint: 'הזמנים מוצגים בעמודה בצד, וההקדשה בתחתית בלי חפיפה', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }] });
-    fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
-      options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
-      hint: 'מציג שורה מיוחדת בשומר המסך ביום הזה בכל שנה. ריק = כבוי. לא קשור בהכרח להקדשה הקבועה שבתוסף' });
-    fields.push({ name: 'yzDay', label: 'יום השנה: יום בחודש (1–30)', value: String(st.yahrzeitDay || 0), dir: 'ltr', placeholder: '0' });
-    fields.push({ name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
-    return { fields: fields, cityByName: cityByName };
-  };
-  SS.screensaverPayload = function (x) {
-    return {
-      restScreen: !!x.rest, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide,
-      zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
-      zmanimElevation: +String(x.zelev).trim() || 0, zmanimFallbackEngine: x.zengine,
-      zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
-      zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
-      yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim()
-    };
-  };
-
-  async function editSettings(body, st) {
-    var all = st.allSections || Object.keys(SECTION_NAMES);
-    var open = st.openSections || [];
-
-
-    var fields = [
-      { name: 'ext', label: 'סיומות קבצים שמותר לפתוח בתוכנות אחרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
-      { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
-      { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
-    ];
+    fields.push({ name: 'parsha', type: 'checkbox', label: 'פרשת השבוע בשומר המסך', value: !!st.showParsha,
+      hint: 'שם הפרשה הקרובה (השבת הנוכחית/הבאה), מחושב על ידי ספריית Zmanim/KosherJava' });
+    fields.push({ name: 'dafyomi', type: 'checkbox', label: 'דף יומי בשומר המסך', value: !!st.showDafYomi,
+      hint: 'מסכת ודף נוכחיים לפי לוח דף היומי הסטנדרטי' });
     fields.push({ name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' });
     fields.push({ name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' });
-    fields.push({ name: 'sidePos', type: 'select', label: 'מיקום סרגל התוכנות', value: st.sideBarPosition || 'right', hint: 'לאיזה צד מסך הסרגל מוצמד', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }, { value: 'top', label: 'למעלה' }, { value: 'bottom', label: 'למטה' }] });
+    fields.push({
+      name: 'sidePos', type: 'select', label: 'מיקום סרגל התוכנות', value: st.sideBarPosition || 'right',
+      hint: 'לאיזה צד מסך הסרגל מוצמד',
+      options: [
+        { value: 'right', label: 'ימין' },
+        { value: 'left', label: 'שמאל' },
+        { value: 'top', label: 'למעלה' },
+        { value: 'bottom', label: 'למטה' }
+      ]
+    });
     fields.push({ name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' });
     fields.push({ name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' });
     fields.push({ name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' });
@@ -548,7 +705,20 @@
     fields.push({ name: 'schedStart', label: 'שעת התחלה', type: 'time', value: sc.start || '20:00', dir: 'ltr' });
     fields.push({ name: 'schedEnd', label: 'שעת סיום', type: 'time', value: sc.end || '02:00', dir: 'ltr' });
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
-    fields.push({ name: 'pos', label: 'מיקום השעון (bottom-left / bottom-right / top-left / top-right)', value: st.clockPosition || 'bottom-left', dir: 'ltr' });
+    fields.push({
+      name: 'pos', type: 'select', label: 'מיקום השעון', value: st.clockPosition || 'bottom-left',
+      options: [
+        { value: 'bottom-left', label: 'למטה-שמאל' },
+        { value: 'bottom-right', label: 'למטה-ימין' },
+        { value: 'top-left', label: 'למעלה-שמאל' },
+        { value: 'top-right', label: 'למעלה-ימין' }
+      ]
+    });
+    fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
+      options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
+      hint: 'מציג שורה מיוחדת בשומר המסך ביום הזה בכל שנה. ריק = כבוי. לא קשור בהכרח להקדשה הקבועה שבתוסף' });
+    fields.push({ name: 'yzDay', label: 'יום השנה: יום בחודש (1–30)', value: String(st.yahrzeitDay || 0), dir: 'ltr', placeholder: '0' });
+    fields.push({ name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
     fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
     var slot = body.querySelector('[data-slot=kset]'); if (!slot) return;
     var ok = await ui.inlineForm(slot, {
@@ -563,12 +733,12 @@
         if (!/^\d{1,4}$/.test(String(x.zelev).trim()) || +x.zelev > 5000) return 'גובה: מספר מטרים בין 0 ל-5000';
         if (['noaa', 'kosherjava'].indexOf(x.zengine) < 0) return 'מנוע חישוב גיבוי לא תקין';
         if (!/^\d{1,3}$/.test(String(x.candle).trim()) || +x.candle > 90) return 'הדלקת נרות: מספר דקות בין 0 ל-90';
-        if (['bottom-left', 'bottom-right', 'top-left', 'top-right'].indexOf(x.pos.trim()) < 0) return 'מיקום שעון לא תקין';
-        if (['right', 'left', 'top', 'bottom'].indexOf(x.sidePos) < 0) return 'מיקום סרגל לא תקין';
+        if (['bottom-left', 'bottom-right', 'top-left', 'top-right'].indexOf(x.pos) < 0) return 'מיקום שעון לא תקין';
         if (x.sched && (!/^\d{1,2}:\d{2}$/.test(x.schedStart || '') || !/^\d{1,2}:\d{2}$/.test(x.schedEnd || ''))) return 'יש להזין שעת התחלה ושעת סיום לתזמון';
         if (x.sched && x.schedStart === x.schedEnd) return 'שעת ההתחלה והסיום של התזמון זהות';
         if (!/^\d{1,2}$/.test(String(x.yzDay).trim()) || +x.yzDay > 30) return 'יום השנה: יום בחודש בין 0 ל-30';
         if (+x.yzDay > 0 && !x.yzMonth) return 'יום השנה: יש לבחור גם חודש עברי';
+        if (['right', 'left', 'top', 'bottom'].indexOf(x.sidePos) < 0) return 'מיקום סרגל לא תקין';
         if (!/^\d{1,2}$/.test(String(x.tuMin).trim()) || +x.tuMin < 1 || +x.tuMin > 60) return 'פתיחה זמנית: משך בדקות בין 1 ל-60';
         if (x.tuPw && x.tuPw.length < 6) return 'סיסמת הפתיחה הזמנית חייבת להכיל לפחות 6 תווים';
         if (x.tuPw !== x.tuPw2) return 'סיסמאות הפתיחה הזמנית אינן תואמות';
@@ -592,7 +762,13 @@
       onSubmit: async function (x) {
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
-          readOnly: !!x.ro, allowExcelDocs: !!x.xls, twoFactor: !!x.tfa, clock: !!x.clock, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos.trim(),
+          readOnly: !!x.ro, allowExcelDocs: !!x.xls, twoFactor: !!x.tfa, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos,
+          restIdleMinutes: +String(x.idle).trim() || 0, zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
+          zmanimElevation: +String(x.zelev).trim() || 0, zmanimFallbackEngine: x.zengine,
+          zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
+          zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
+          showParsha: !!x.parsha, showDafYomi: !!x.dafyomi,
+          yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim(),
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
           schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn },
           tempUnlockEnabled: !!x.tu, tempUnlockMinutes: +String(x.tuMin).trim() || 30, tempUnlockPassword: x.tuPw || ''

@@ -56,6 +56,7 @@ public static class Server
         OfflineMode.Register();
         DeviceApi.Register();
         MoreApi.Register();
+        BiosHardening.Register();
         Kiosk.Register();
         Pairing.Register();
         HardLock.Register();

@@ -7,7 +7,7 @@ namespace OtzariaBridge;
 
 public static class Program
 {
-    public const string Version = "3.4.0";
+    public const string Version = "3.5.0";
     public static int Port { get; set; }
 
     // שם המוצר (13.10.2026): "אחת שאלתי". קודם: "תוכנת חסימת אוצריא". הוחלף מ"תורת אסתר" לשם שמתאר בעברית פשוטה את מה שהתוכנה עושה, כי "קיוסק" ואפילו
@@ -48,7 +48,7 @@ public static class Program
             {
                 int i = Array.IndexOf(args, "--hello-helper");
                 string nonce = i >= 0 && i + 1 < args.Length ? args[i + 1] : "";
-                bool ok = TwoFactor.Verify(Lang.T("אימות פעולה ברכיב ההקשחה של תורת אסתר", "Verify an action in the Torat Esther hardened lock"));
+                bool ok = TwoFactor.Verify(Lang.T("אימות פעולה ברכיב ההקשחה של " + AppName, "Verify an action in the " + AppNameEn + " hardened lock"));
                 HardLock.Call(new JsonObject { ["op"] = "hello-done", ["nonce"] = nonce, ["ok"] = ok });
                 return ok ? 0 : 2;
             }
@@ -91,6 +91,9 @@ public static class Program
             Kiosk.RestoreOnStartup();
             HardLock.StartSync();
             Kiosk.StartScheduler();
+            // אכיפת FxPolicy/Kiosk.AllowedExtensions על דיאלוגי פתיחה/שמירה מקוריים של Windows בכל תהליך
+            // (בעיה #53/וורד: "קובץ ← פתיחה ← עיון" בתוכנה חיצונית מאושרת עוקף את הסייר הפנימי). ר' DialogGuard.cs
+            DialogGuard.Start();
             Tray.Run();
             Server.Stop();
             return 0;

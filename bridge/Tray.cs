@@ -58,7 +58,7 @@ public static class Tray
                 if (!HardLock.ServiceInstalled()) return;
                 var st = (dynamic)HardLock.Status(fresh: true);
                 if (st.needsUpdate == true)
-                    Invoke(() => _icon.ShowBalloonTip(8000, Lang.T("תורת אסתר", "Torat Esther"),
+                    Invoke(() => _icon.ShowBalloonTip(8000, Lang.T(Program.AppName, Program.AppNameEn),
                         Lang.T("רכיב ההקשחה בגרסה ישנה מהגשר. עדכנו ב\"הגדרות מערכת → נעילה\" (נדרשת סיסמת הנעילה).",
                                "The hardening component is on an older version than the bridge. Update it in “System Settings → Lock” (lock password required)."),
                         ToolTipIcon.Warning));
@@ -113,6 +113,10 @@ public static class Tray
         if (_exit != null) _exit.Enabled = !active; // במצב נעילה אין יציאה מהמגש
         UpdateStatus();
     });
+
+    /// <summary>בועת התראה קצרה במגש (למשל DialogGuard שחוסם דיאלוג קבצים חורג ממדיניות)</summary>
+    public static void Notify(string title, string message, ToolTipIcon icon = ToolTipIcon.Warning) =>
+        Invoke(() => _icon?.ShowBalloonTip(6000, title, message, icon));
 
     private static void UpdateStatus()
     {

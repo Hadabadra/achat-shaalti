@@ -13,7 +13,7 @@ namespace OtzariaBridge;
 /// </summary>
 public static class UpdateApi
 {
-    public const string Repo = "e0548433917-gif/otzaria-system-tools";
+    public const string Repo = "YairDaniel11/otzaria-system-tools";
     public const string ReleasesUrl = "https://github.com/" + Repo + "/releases/latest";
     public const string AllReleasesUrl = "https://github.com/" + Repo + "/releases";
     private const string ApiUrl = "https://api.github.com/repos/" + Repo + "/releases?per_page=20";
@@ -24,6 +24,13 @@ public static class UpdateApi
     private static Info _last;
 
     public record Info(string Current, string Latest, string Tag, bool Newer, string Url, string ExeUrl, string SumsUrl, string Notes);
+
+    /// <summary>
+    /// תגית ה-Release בפורק האישי (RELEASE_VERSION.txt, למשל v0.0.5) היא מספור עצמאי של המשתמש,
+    /// לא גרסת הגשר עצמה (Program.Version, למשל 3.5.0) - אי אפשר להשוות ביניהן ישירות. לכן ה-CI
+    /// מעלה גם קובץ BRIDGE_VERSION.txt עם Program.Version בפועל, וכאן משווים מולו, לא מול התגית.
+    /// </summary>
+    private const string BridgeVersionAssetName = "BRIDGE_VERSION.txt";
 
     private static HttpClient Create()
     {
@@ -80,24 +87,23 @@ public static class UpdateApi
                 throw new BridgeException("internal", "בדיקת העדכון נכשלה (אין חיבור לאינטרנט או ש-GitHub לא זמין): " + ex.Message, 502);
             }
 
-            Version best = null;
-            string bestTag = null, bestUrl = null, exeUrl = null, sumsUrl = null, notes = null;
+            // מועמד יחיד: ה-Release האחרון (latest=true) בפורק האישי, לא "הכי גבוה לפי תגית" - כי
+            // התגית כאן היא מספור עצמאי (RELEASE_VERSION.txt), לא גרסת הגשר, ולכן לא בר-השוואה כסדר.
+            string bestTag = null, bestUrl = null, exeUrl = null, sumsUrl = null, bridgeVerUrl = null, notes = null;
             using (var doc = JsonDocument.Parse(json))
             {
                 foreach (var rel in doc.RootElement.EnumerateArray())
                 {
                     string tag = rel.TryGetProperty("tag_name", out var t) ? t.GetString() : null;
-                    // התגים של ההוצאות: vX.Y.Z (וגם bridge-vX.Y.Z הישנים). בלי טיוטות ובלי גרסאות ניסיון
-                    if (tag == null || !Regex.IsMatch(tag, @"^(bridge-)?v\d", RegexOptions.IgnoreCase)) continue;
+                    if (tag == null) continue;
                     if (rel.TryGetProperty("draft", out var d) && d.GetBoolean()) continue;
                     if (rel.TryGetProperty("prerelease", out var p) && p.GetBoolean()) continue;
-                    var v = Parse(tag);
-                    if (v == null || (best != null && v <= best)) continue;
-                    best = v;
+                    bool isLatest = rel.TryGetProperty("latest", out var l) && l.GetBoolean();
+                    if (!isLatest && bestTag != null) continue; // כבר נמצא Release מסומן "latest" - עדיף עליו
                     bestTag = tag;
                     bestUrl = rel.TryGetProperty("html_url", out var u) ? u.GetString() : null;
                     notes = rel.TryGetProperty("body", out var bd) ? bd.GetString() : null;
-                    exeUrl = sumsUrl = null;
+                    exeUrl = sumsUrl = bridgeVerUrl = null;
                     if (rel.TryGetProperty("assets", out var assets))
                         foreach (var a in assets.EnumerateArray())
                         {
@@ -105,12 +111,20 @@ public static class UpdateApi
                             string dl = a.GetProperty("browser_download_url").GetString();
                             if (string.Equals(name, "OtzariaBridge.exe", StringComparison.OrdinalIgnoreCase)) exeUrl = dl;
                             if (string.Equals(name, "SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase)) sumsUrl = dl;
+                            if (string.Equals(name, BridgeVersionAssetName, StringComparison.OrdinalIgnoreCase)) bridgeVerUrl = dl;
                         }
+                    if (isLatest) break;
                 }
             }
 
+            Version latestBridgeVer = null;
+            if (bridgeVerUrl != null)
+            {
+                try { latestBridgeVer = Parse((await Http.GetStringAsync(bridgeVerUrl)).Trim()); }
+                catch { /* ההשוואה תיכשל בבטחה (לא "newer") אם זה נכשל */ }
+            }
             var cur = Parse(Program.Version);
-            _last = new Info(Program.Version, best?.ToString(3), bestTag, best != null && cur != null && best > cur,
+            _last = new Info(Program.Version, latestBridgeVer?.ToString(3), bestTag, latestBridgeVer != null && cur != null && latestBridgeVer > cur,
                 bestUrl ?? ReleasesUrl, exeUrl, sumsUrl, notes);
             _checked = DateTime.UtcNow;
             return _last;

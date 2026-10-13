@@ -50,8 +50,8 @@ public static class Programs
     // מילות מפתח לזיהוי תוכנות תורניות בשמות התוכנות המותקנות (אפשר להרחיב ב-kiosk.autoTorahKeywords)
     private static readonly string[] TorahKeywords =
     {
-        "אוצר החכמה", "אוצר הספרים", "בר אילן", "בר-אילן", "כתבי הקודש", "ספריא",
-        "otzar hachochma", "otzar hasfarim", "bar-ilan", "bar ilan", "responsa", "kitvei hakodesh",
+        "אוצר החכמה", "אוצר הספרים", "בר אילן", "בר-אילן", "כתבי הקודש", "ספריא", "זית",
+        "otzar hachochma", "otzar hasfarim", "bar-ilan", "bar ilan", "responsa", "kitvei hakodesh", "zayit",
     };
 
     private static readonly object AutoGate = new();
@@ -396,13 +396,10 @@ public static class Programs
             {
                 System.IO.Path.Combine(r, "OtzarApp", "OtzarLocal", "launcher", "bin", "x64", "app", "otzar.exe"),
                 System.IO.Path.Combine(r, "אוצר החכמה.exe"),
-                System.IO.Path.Combine(r, "OtzarApp", "OtzarLocal", "launcher", "otzar.exe"),
-            }).Concat(Portable("אוצר החכמה*.exe"))),
-        // #6: גשר חבורתא לאוצריא
-        new("חבורתא", new[] { "ChavrutaLauncher.exe" }, new[] { "ChavrutaLauncher", "Chavruta" }, () =>
-            new[] { System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Chavruta", "ChavrutaLauncher.exe") }),
-        // #7: הנקדן אופליין — תוכנה ניידת, איתור לפי שם הקובץ
-        new("הנקדן — אוצריא", new[] { "הנקדן - אוצריא - V1.0.exe" }, new[] { "הנקדן - אוצריא - V1.0" }, () => Portable("הנקדן*.exe")),
+            })),
+        // התקנה למשתמש בלבד (כמו VS Code/Electron) תחת %LOCALAPPDATA%\Programs — לא ב-Program Files
+        new("זית", new[] { "zayit.exe" }, new[] { "zayit" }, () =>
+            new[] { System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "zayit", "zayit.exe") }),
     };
 
     private static List<(string name, string path, string[] procs)> _knownCache;

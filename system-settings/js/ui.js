@@ -182,7 +182,8 @@
             return '<option value="' + ui.esc(o.value) + '"' + (o.value === f.value ? ' selected' : '') + '>' + ui.esc(o.label) + '</option>';
           }).join('');
           return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
-            '<select class="input" name="' + f.name + '"' + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select>' + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
+            '<select class="input" name="' + f.name + '"' + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select>' +
+            (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
         }
         return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
           '<input class="input" name="' + f.name + '" type="' + (f.type || 'text') + '"' +
@@ -248,7 +249,13 @@
       var msg = d.querySelector('.dlg-msg');
       requestAnimationFrame(function () { d.classList.add('open'); });
       var first = form.querySelector('input:not([type=checkbox])');
-      setTimeout(function () { if (first) first.focus(); else { var f = ui.focusables(form)[0]; if (f) f.focus(); } }, 60);
+      setTimeout(function () {
+        if (first) first.focus(); else { var f = ui.focusables(form)[0]; if (f) f.focus(); }
+        // דיאלוג ארוך בלי שדות (למשל הדרכה טקסטואלית): הפוקוס נופל על כפתור הפעולה - בדרך כלל
+        // בתחתית - והדפדפן גולל אליו אוטומטית. form עצמו הוא אזור הגלילה (overflow-y: auto ב-.dlg),
+        // אז מאפסים את הגלילה שלו בחזרה לראש אחרי שהפוקוס כבר נקבע.
+        form.scrollTop = 0;
+      }, 60);
 
       function values() {
         var v = {};

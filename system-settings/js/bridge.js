@@ -164,9 +164,11 @@
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
       allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, allowExcelDocs: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left',
+      sideBar: true, sideBarIconsOnly: false, sideBarPosition: 'right', resetOnShutdown: false,
       restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
-      candleLightingMinutes: 18, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
-      sideBar: true, sideBarIconsOnly: false, sideBarPosition: 'right', restZmanimSide: 'right', resetOnShutdown: false,
+      zmanimElevation: 0, zmanimFallbackEngine: 'noaa',
+      candleLightingMinutes: 18, showParsha: false, showDafYomi: false, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
+      sideBar: true, sideBarIconsOnly: false, resetOnShutdown: false,
       activatedBy: 'manual',
       /* פתיחה זמנית (תואם ל-Kiosk.TempUnlockStatus בגשר); active/secondsLeft/until מחושבים ב-/kiosk/status */
       tempUnlock: { enabled: false, configured: false, minutes: 30, maxMinutes: 60, twoFactorOn: false, usable: false,
@@ -332,7 +334,7 @@
       checkPw(b.password, false);
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
-      ['readOnly', 'allowExcelDocs', 'twoFactor', 'clock', 'restScreen', 'fullscreenOtzaria', 'sideBar', 'sideBarIconsOnly', 'resetOnShutdown'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
+      ['readOnly', 'allowExcelDocs', 'twoFactor', 'clock', 'restScreen', 'fullscreenOtzaria', 'sideBar', 'sideBarIconsOnly', 'resetOnShutdown', 'showParsha', 'showDafYomi'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
       /* פתיחה זמנית: אותם כללים כמו בגשר (Kiosk.ApplyTempUnlockSettings) */
       var tu = M.kiosk.tempUnlock;
       if (typeof b.tempUnlockPassword === 'string' && b.tempUnlockPassword) {
@@ -351,6 +353,8 @@
       if (typeof b.zmanimLocation === 'string') M.kiosk.zmanimLocation = b.zmanimLocation;
       if (typeof b.zmanimCity === 'string') M.kiosk.zmanimCity = b.zmanimCity;
       if (typeof b.zmanimDiaspora === 'boolean') M.kiosk.zmanimDiaspora = b.zmanimDiaspora;
+      if (typeof b.zmanimElevation === 'number') M.kiosk.zmanimElevation = Math.max(0, Math.min(5000, b.zmanimElevation));
+      if (typeof b.zmanimFallbackEngine === 'string') M.kiosk.zmanimFallbackEngine = b.zmanimFallbackEngine;
       if (typeof b.candleLightingMinutes === 'number') M.kiosk.candleLightingMinutes = Math.max(0, Math.min(90, b.candleLightingMinutes | 0));
       if (Array.isArray(b.zmanimShow)) M.kiosk.zmanimShow = b.zmanimShow.slice();
       if (typeof b.yahrzeitMonth === 'string') M.kiosk.yahrzeitMonth = b.yahrzeitMonth;
@@ -520,6 +524,47 @@
   };
   mockRoutes['/kiosk/hard/settings'] = function (b) { checkPw(b.password, false); M.hard.blockUsbStorage = !!b.blockUsbStorage; return clone(M.hard); };
   mockRoutes['/kiosk/hard/uninstall'] = function (b) { checkPw(b.password, true); M.hard = { installed: false, running: false, configured: false, active: false, blockUsbStorage: false, version: null, needsUpdate: false, sessions: 1 }; return clone(M.hard); };
+
+  /* ---------- mock: הקשחת BIOS/UEFI (browser preview) ---------- */
+  M.bios = {
+    vendor: 'lenovo', manufacturer: 'LENOVO', model: '20XW0013IL', supported: true,
+    wmiReachable: true, wmiError: null,
+    usbBootSetting: { name: 'USB Boot', currentValue: 'Enable', possibleValues: ['Enable', 'Disable'] },
+    bootMenuAuthSetting: { name: 'Prompt for Admin authentication on F9 (Boot Menu)', currentValue: 'Disable', possibleValues: ['Disable', 'Enable'] },
+    passwordRequiresPhysicalPresence: false,
+    note: 'ב-Lenovo מרבית הדגמים דורשים שתהיה כבר מוגדרת סיסמת Supervisor לפני ששינוי הגדרות אחרות (כמו חסימת USB) יתקבל ב-firmware. ' +
+      'לכן מוצע קודם להגדיר סיסמת BIOS, ורק אחר כך לחסום אתחול USB/לנעול את תפריט האתחול.'
+  };
+  mockRoutes['/bios/status'] = function () { return clone(M.bios); };
+  mockRoutes['/bios/harden'] = function (b) {
+    checkPw(b.password, true);
+    if (!b.setPassword && !b.blockUsbBoot && !b.lockBootMenu)
+      throw mockErr('bad_request', 'יש לבחור לפחות פעולה אחת: הגדרת סיסמת BIOS, חסימת אתחול USB, או נעילת תפריט האתחול');
+    var steps = [];
+    if (b.setPassword) {
+      if (!b.biosPassword || b.biosPassword.length < 4) throw mockErr('bad_request', 'סיסמת ה-BIOS חייבת להכיל לפחות 4 תווים');
+      steps.push({ id: 'password', attempted: true, success: true, message: 'סיסמת ה-BIOS הוגדרה בהצלחה (דמה בלבד — אין כאן מחשב אמיתי)' });
+    }
+    if (b.blockUsbBoot) {
+      if (M.bios.usbBootSetting) {
+        M.bios.usbBootSetting.currentValue = 'Disable';
+        steps.push({ id: 'usbBoot', attempted: true, success: true, settingName: M.bios.usbBootSetting.name,
+          message: 'ההגדרה „' + M.bios.usbBootSetting.name + '” הוגדרה ל-„Disable” ונשמרה (דמה בלבד)' });
+      } else {
+        steps.push({ id: 'usbBoot', attempted: false, success: false, settingName: null, message: 'לא נמצאה הגדרה מתאימה במחשב זה' });
+      }
+    }
+    if (b.lockBootMenu) {
+      if (M.bios.bootMenuAuthSetting) {
+        M.bios.bootMenuAuthSetting.currentValue = 'Enable';
+        steps.push({ id: 'bootMenuAuth', attempted: true, success: true, settingName: M.bios.bootMenuAuthSetting.name,
+          message: 'ההגדרה „' + M.bios.bootMenuAuthSetting.name + '” הוגדרה ל-„Enable” ונשמרה (דמה בלבד)' });
+      } else {
+        steps.push({ id: 'bootMenuAuth', attempted: false, success: false, settingName: null, message: 'לא נמצאה הגדרה מתאימה במחשב זה' });
+      }
+    }
+    return { vendor: M.bios.vendor, manufacturer: M.bios.manufacturer, model: M.bios.model, steps: steps };
+  };
   mockRoutes['/sys/update-check'] = function () {
     return { current: '3.0.0', latest: '3.0.0', newer: false, canInstall: false, url: 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest' };
   };

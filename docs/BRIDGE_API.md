@@ -224,10 +224,16 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 
 `/kiosk/status` כולל גם את השדה `hard`, באותו מבנה כמו `/kiosk/hard/status`.
 
-## דיווחים (Reports.cs — בסיס מינימלי, 13.10.2026)
-- `POST /diag/list` → `{enabled, items:[{id, sent, date, kind, text}]}` — ממתינים (outbox) ונשלחו (outbox/sent, 30 אחרונים).
-- `POST /diag/delete {ids}` — מחיקת ממתינים לפני שליחה.
-- `POST /diag/markSent {ids, details?}` — עם details: הארכיון שומר את הדיווח המאוחד כמו שנשלח (כולל היומן המקוצר) במקום הפריטים הבודדים.
-- `POST /diag/markSent {ids}` — העברה לארכיון "נשלחו" (במקום `/diag/ack` שמוחק; התוסף נופל ל-ack בגשר ישן).
-- `POST /diag/logTail` → `{text}` — 60 שורות אחרונות של bridge.log בלי שורות שנראות כסוד ובלי שם המשתמש.
-- `POST /diag/note {text}` — תיאור ידני לתור.
+### הקשחת BIOS/UEFI מתוך תוכנה — /bios/*
+
+ניסיון להגדיר סיסמת BIOS ולחסום אתחול מהתקן USB/חיצוני דרך ממשקי WMI ספציפיים ליצרן (ר' `bridge/BiosHardening.cs`
+ו-`docs/SECURITY_NOTES.md` לפירוט מלא, כולל מגבלות אמיתיות וסיכון סיסמה שנשכחה). נתמך בפועל: Lenovo, HP (דגמים
+עסקיים). Dell/Asus: זיהוי והסבר בלבד, בלי ניסיון הגדרה.
+
+| נתיב | גוף | data |
+|---|---|---|
+| `/bios/status` | `{}` | `{ vendor: "lenovo"\|"hp"\|"dell"\|"asus"\|"other", manufacturer, model, supported: bool, wmiReachable?, wmiError?, usbBootSetting?: {name, currentValue, possibleValues} \| null, note?, reason? }` — לא דורש סיסמה, לא משנה כלום |
+| `/bios/harden` | `{ password, setPassword: bool, biosPassword?, blockUsbBoot: bool }` | `{ vendor, manufacturer, model, steps: [{ id: "password"\|"usbBoot", attempted, success, settingName?, message }] }` — דורש סיסמת מנהל (או קוד שחזור) ו-Windows Hello כשהאימות הדו-שלבי פעיל; `unsupported` ביצרן שאינו Lenovo/HP |
+
+כל שלב מדווח בכנות `success`/`message` גם כשהפעולה נכשלת (למשל הגדרה לא נמצאה בדגם הזה, או שכבר מוגדרת סיסמה אחרת) —
+אין החזרת "הצלחה" ללא אישור בפועל מה-WMI.

@@ -17,7 +17,7 @@
     'פתיחה': 'Unlock',
     'עדיין לא הוגדרה סיסמת נעילה': 'No lock password has been set yet',
     'סיסמה שגויה': 'Wrong password',
-    'הגדרות הנעילה דורשות את גשר אוצריא. בלעדיו הסייר מוגבל ממילא לתיקיות שאישרתם.': 'Lock settings require the Otzaria bridge. Without it the explorer is limited to the folders you approved anyway.',
+    'הגדרות הנעילה דורשות את תוכנת חסימת אוצריא. בלעדיה הסייר מוגבל ממילא לתיקיות שאישרתם.': 'Lock settings require the Otzaria Blocking Software. Without it the explorer is limited to the folders you approved anyway.',
     'שינוי ההגדרות דורש את סיסמת המנהל (או קוד השחזור). המדיניות נאכפת בגשר, ולכן גם תוסף אחר לא יוכל לעקוף אותה.': 'Changing these settings requires the admin password (or recovery code). The policy is enforced in the bridge, so another plugin cannot bypass it.',
     'מצב נוכחי: נעול': 'Current mode: locked',
     'מצב נוכחי: מוגבל לתיקיות שנבחרו': 'Current mode: restricted to the chosen folders',

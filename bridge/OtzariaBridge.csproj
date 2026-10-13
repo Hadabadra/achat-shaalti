@@ -10,9 +10,9 @@
     <Nullable>disable</Nullable>
     <AssemblyName>OtzariaBridge</AssemblyName>
     <RootNamespace>OtzariaBridge</RootNamespace>
-    <Version>3.6.0</Version>
-    <Product>אחת שאלתי</Product>
-    <AssemblyTitle>אחת שאלתי - גמח תורת אסתר</AssemblyTitle>
+    <Version>3.5.0</Version>
+    <Product>תוכנת חסימת אוצריא</Product>
+    <AssemblyTitle>תוכנת חסימת אוצריא - גמח תורת אסתר</AssemblyTitle>
     <Company>גמח תורת אסתר</Company>
     <ApplicationIcon>..\assets\icon.ico</ApplicationIcon>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
@@ -31,6 +31,7 @@
          מאת Eliyahu Hershfeld (kosherjava.com), רישיון LGPL-2.1. PackageReference רגיל
          (קישור דינמי, לא קוד מועתק) — ראו README.md וחלון "אודות" לקרדיט המלא -->
     <PackageReference Include="Zmanim" Version="1.5.0" />
+    <PackageReference Include="Interop.UIAutomationClient" Version="10.19041.0" />
   </ItemGroup>
 
   <!-- התוספים נארזים ב-CI לתיקייה plugins ומוטמעים כמשאב -->

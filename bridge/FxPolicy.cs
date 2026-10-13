@@ -124,6 +124,13 @@ public static class FxPolicy
     /// <summary>האם המדיניות מגבילה כרגע לתיקיות מסוימות</summary>
     internal static bool IsRestricted => Current().Effective == "restricted";
 
+    /// <summary>
+    /// המצב האפקטיבי הנוכחי: open (אין הגבלה) / restricted (מוגבל לתיקיות) / locked.
+    /// נקרא בלייב בכל קריאה (אין קאשינג מעבר ל-Current עצמו) כדי ש-DialogGuard (אכיפה על דיאלוגי
+    /// פתיחה/שמירה מקוריים של Windows בכל תהליך) יגיב מיידית לשינוי מדיניות, בלי להפעיל מחדש את הגשר.
+    /// </summary>
+    internal static string EffectiveMode() => Current().Effective;
+
     /// <summary>זורק אם הנתיב אסור: נעול -> fx_locked; מחוץ לתיקיות -> fx_outside_policy; כל כשל בפענוח נחשב אסור</summary>
     internal static void EnsurePathAllowed(string path)
     {

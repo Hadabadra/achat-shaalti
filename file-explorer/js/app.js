@@ -542,9 +542,12 @@
       var orig = S.prov.parentOf(e.origPath || '') || '';
       where = '<span class="fx-cell fx-cell-where" title="' + FX.esc(e.origPath || '') + '">' + FX.esc(orig) + '</span>';
     }
+    /* שורת מטא-דאטה משנית (סוג · גודל · תאריך), מוצגת רק בתצוגות "אריחים" ו"תוכן" (ר' fx.css) */
+    var subMeta = [FX.typeLabel(e), size, e.modified ? FX.formatDate(e.modified) : ''].filter(Boolean).join(' · ');
     return '<div class="fx-row' + (e.snippet && S.search ? ' has-snip' : '') + (S.sel[e.path] ? ' sel' : '') + (i === S.focus ? ' focus' : '') + (cut ? ' cut' : '') + (e.hidden ? ' hid' : '') +
       '" role="option" aria-selected="' + (S.sel[e.path] ? 'true' : 'false') + '" data-i="' + i + '" draggable="false">' +
-      '<span class="fx-cell fx-cell-name"><span class="fx-ic k-' + kind + '">' + ic(icon) + '</span><span class="fx-name-wrap"><span class="fx-name" title="' + FX.esc(e.name) + '">' + FX.esc(e.name) + '</span>' + snipHtml(e) + '</span></span>' +
+      '<span class="fx-cell fx-cell-name"><span class="fx-ic k-' + kind + '">' + ic(icon) + '</span><span class="fx-name-wrap"><span class="fx-name" title="' + FX.esc(e.name) + '">' + FX.esc(e.name) + '</span>' + snipHtml(e) +
+      (subMeta ? '<span class="fx-sub-meta">' + FX.esc(subMeta) + '</span>' : '') + '</span></span>' +
       (S.cols.date !== false ? '<span class="fx-cell fx-cell-date">' + (e.modified ? FX.esc(FX.formatDate(e.modified)) : '') + '</span>' : '') +
       (S.cols.type !== false ? '<span class="fx-cell fx-cell-type">' + FX.esc(FX.typeLabel(e)) + '</span>' : '') +
       (S.cols.size !== false ? '<span class="fx-cell fx-cell-size">' + (e.type === 'drive' && e.totalBytes ? '<span class="fx-dbar' + (e.freeBytes < e.totalBytes / 10 ? ' low' : '') + '"><i style="width:' + Math.round(100 - e.freeBytes * 100 / e.totalBytes) + '%"></i></span>' : '') + FX.esc(size || '') + '</span>' : '') + where + '</div>';
@@ -996,7 +999,7 @@
 
   /* ---------- הגדרות פתיחה (לכל צופה, נשמרות בדפדפן) ---------- */
   var OPT_KEY = 'fx.options';
-  var OPT_DEF = { pdf: 'internal', word: 'two', text: 'internal', image: 'internal' };
+  var OPT_DEF = { pdf: 'internal', word: 'two', text: 'internal', image: 'internal', singleClickOpen: false };
   function opts() {
     var o = {};
     try { o = JSON.parse(localStorage.getItem(OPT_KEY) || '{}') || {}; } catch (e) { o = {}; }
@@ -1035,17 +1038,24 @@
     var o = opts();
     var ext = [['external', 'יישום חיצוני'], ['ask', 'לשאול כל פעם']]; /* #16 */
     var pref = window.I18N ? window.I18N.pref() : 'auto';
-    if (id === 'open') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('open') + 'באיזה צופה לפתוח</div>' +
+    if (id === 'open') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('open') + 'ניווט בתיקיות</div>' +
+      setRow('פתיחת תיקיות בקליק יחיד', 'קליק אחד (ללא Ctrl/Shift) על תיקייה ייכנס אליה מיד, כמו קליק כפול. בחירה מרובה עם Ctrl/Shift ממשיכה לעבוד כרגיל', setSwitch('singleClickOpen', !!o.singleClickOpen)) +
+      '</div><div class="fx-set-card"><div class="fx-set-title">' + ic('open') + 'באיזה צופה לפתוח</div>' +
       setRow('קובצי PDF', 'הצופה הפנימי, צופה PDF+OCR (תוסף), או התוכנה שמוגדרת ב-Windows', seg('pdf', o.pdf, [['internal', 'צופה פנימי'], ['ocr', 'PDF+OCR']].concat(ext))) +
       setRow('מסמכי Word', 'שני טורים נוחים לקריאה, טור אחד, או תוסף וורד לאוצריא', seg('word', o.word, [['two', 'שני טורים'], ['one', 'טור אחד'], ['wordplugin', 'וורד לאוצריא']].concat(ext))) +
       setRow('קובצי טקסט', '', seg('text', o.text, [['internal', 'צופה פנימי']].concat(ext))) +
       setRow('תמונות', '', seg('image', o.image, [['internal', 'תצוגה מקדימה']].concat(ext))) +
       '<p class="muted small">פתיחה ביישום חיצוני דורשת את אחת שאלתי; בלעדיו הקובץ נפתח בצופה הפנימי.</p></div>';
     if (id === 'view') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('grid') + 'תצוגת הקבצים</div>' +
-      setRow('פריסה', '', seg('mode', FX.layout.mode(), [['details', 'פרטים'], ['list', 'רשימה'], ['icons', 'סמלים']])) +
+      setRow('פריסה', 'כמו בתפריט "תצוגה" של סייר הקבצים של Windows', seg('mode', FX.layout.mode(), [
+        ['xlicons', 'סמלים גדולים מאוד'], ['licons', 'סמלים גדולים'], ['micons', 'סמלים בינוניים'], ['sicons', 'סמלים קטנים'],
+        ['list', 'רשימה'], ['details', 'פרטים'], ['tiles', 'אריחים'], ['content', 'תוכן']
+      ])) +
+      setRow('חלונית תצוגה מקדימה', 'פאנל בצד שמראה תצוגה מקדימה של הקובץ שנבחר (טקסט, תמונה, PDF ועוד)', setSwitch('preview', FX.layout.isPreview())) +
+      setRow('חלונית פרטים', 'פאנל בצד שמראה מידע על הפריט שנבחר (סוג, גודל, תאריך) בלי לטעון תצוגה מקדימה. חולק את אותו אזור עם חלונית התצוגה המקדימה', setSwitch('details', FX.layout.isDetailsPane())) +
       setRow('גודל טקסט', 'גם ב-Ctrl+ / Ctrl- / Ctrl+0', seg('zoom', String(FX.layout.zoom()), [['0.8', 'קטן מאוד'], ['0.9', 'רגיל'], ['1', 'בינוני'], ['1.1', 'גדול'], ['1.2', 'גדול מאוד'], ['1.35', 'ענק']])) +
       setRow('שורות מצוילות', 'צבע מתחלף בין השורות, כמו ב-Everything', setSwitch('stripes', S.stripes)) +
-      setRow('עמודות להצגה', 'אפשר גם בלחיצה ימנית על כותרת העמודות. הרחבת עמודה: גרירת הקצה שלה', seg('cols', '', [['date', 'תאריך ' + (S.cols.date !== false ? '✓' : '✗')], ['type', 'סוג ' + (S.cols.type !== false ? '✓' : '✗')], ['size', 'גודל ' + (S.cols.size !== false ? '✓' : '✗')]])) +
+      setRow('עמודות להצגה', 'רלוונטי לתצוגת "פרטים". אפשר גם בלחיצה ימנית על כותרת העמודות. הרחבת עמודה: גרירת הקצה שלה', seg('cols', '', [['date', 'תאריך ' + (S.cols.date !== false ? '✓' : '✗')], ['type', 'סוג ' + (S.cols.type !== false ? '✓' : '✗')], ['size', 'גודל ' + (S.cols.size !== false ? '✓' : '✗')]])) +
       setRow('הצגת קבצים מוסתרים', 'קבצים ותיקיות עם התכונה "מוסתר" יוצגו בצבע חלש', setSwitch('hidden', S.showHidden)) +
       '</div>';
     if (id === 'general') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('settings') + 'כללי</div>' +
@@ -1107,7 +1117,7 @@
       if (act === 'releases') { openUrl('https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest'); return; }
       if (act === 'reset') {
         if (!(await ui.confirm('איפוס הגדרות', '<p>להחזיר את הגדרות הסייר לברירת המחדל?</p>', 'איפוס'))) return;
-        saveOpts(Object.assign({}, OPT_DEF)); FX.layout.setZoom(0.9); FX.layout.setMode('details');
+        saveOpts(Object.assign({}, OPT_DEF)); FX.layout.setZoom(0.9); FX.layout.setMode('details'); FX.layout.setPanes(false, false);
         S.showHidden = false; savePrefs(); refresh(); if (window.I18N) window.I18N.set('auto');
         showCat('general'); ui.toast('ההגדרות אופסו', 'success'); return;
       }
@@ -1132,6 +1142,14 @@
         var hb = $('fx-hidden'); hb.classList.toggle('on', S.showHidden); hb.setAttribute('aria-pressed', S.showHidden ? 'true' : 'false');
         savePrefs(); refresh(); return;
       }
+      if (t.dataset.sw === 'singleClickOpen') {
+        var o1 = opts(); o1.singleClickOpen = !o1.singleClickOpen; saveOpts(o1);
+        t.classList.toggle('on', o1.singleClickOpen); t.setAttribute('aria-checked', o1.singleClickOpen ? 'true' : 'false');
+        return;
+      }
+      /* חלונית תצוגה מקדימה וחלונית פרטים חולקות אותו אזור בצד (כמו בסייר של Windows): הפעלת אחת מכבה את השנייה */
+      if (t.dataset.sw === 'preview') { FX.layout.togglePreview(); showCat('view'); return; }
+      if (t.dataset.sw === 'details') { FX.layout.toggleDetailsPane(); showCat('view'); return; }
       var sg = t.closest('[data-seg]');
       if (sg && t.dataset.v != null) {
         sg.querySelectorAll('.fx-seg-btn').forEach(function (x) { var on = x === t; x.classList.toggle('on', on); x.setAttribute('aria-checked', on ? 'true' : 'false'); });
@@ -1527,7 +1545,14 @@
       clickRow(+row.dataset.i, e);
     });
     list.addEventListener('click', function (e) {
-      if (e.target.closest('[data-add]')) addFolder();
+      if (e.target.closest('[data-add]')) { addFolder(); return; }
+      if (e.detail > 1) return;   /* לחיצה כפולה מטופלת ב-dblclick; כאן רק הלחיצה הבודדת הראשונה */
+      if (!opts().singleClickOpen) return;
+      if (e.ctrlKey || e.metaKey || e.shiftKey) return;   /* לא לפגוע בבחירה מרובה */
+      var row = e.target.closest('.fx-row');
+      if (!row) return;
+      var en = S.view[+row.dataset.i];
+      if (en && (en.type === 'dir' || en.type === 'drive')) openEntry(en);
     });
     list.addEventListener('dblclick', function (e) {
       var row = e.target.closest('.fx-row');
