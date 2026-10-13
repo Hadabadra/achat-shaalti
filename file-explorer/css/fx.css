@@ -445,3 +445,8 @@ mark.fx-hit.cur { background: #f6a21b; color: #1c1c1c; outline: 0.125em solid #f
 .fx-pol-add { display: flex; gap: 0.5em; flex-wrap: wrap; margin-top: 0.375em; }
 .fx-pol-add .input { flex: 1 1 14em; width: auto; }
 .fx-pol-min { max-width: 14em; }
+
+/* חבילה [ב]: פס מקום בכוננים */
+.fx-dbar { display: block; height: 6px; border-radius: 3px; background: var(--fx-line, rgba(127,127,127,.25)); overflow: hidden; margin-bottom: 2px; }
+.fx-dbar > i { display: block; height: 100%; background: var(--accent, #2b6cb0); }
+.fx-dbar.low > i { background: #c53030; }

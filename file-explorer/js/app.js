@@ -547,7 +547,7 @@
       '<span class="fx-cell fx-cell-name"><span class="fx-ic k-' + kind + '">' + ic(icon) + '</span><span class="fx-name-wrap"><span class="fx-name" title="' + FX.esc(e.name) + '">' + FX.esc(e.name) + '</span>' + snipHtml(e) + '</span></span>' +
       (S.cols.date !== false ? '<span class="fx-cell fx-cell-date">' + (e.modified ? FX.esc(FX.formatDate(e.modified)) : '') + '</span>' : '') +
       (S.cols.type !== false ? '<span class="fx-cell fx-cell-type">' + FX.esc(FX.typeLabel(e)) + '</span>' : '') +
-      (S.cols.size !== false ? '<span class="fx-cell fx-cell-size">' + FX.esc(size || '') + '</span>' : '') + where + '</div>';
+      (S.cols.size !== false ? '<span class="fx-cell fx-cell-size">' + (e.type === 'drive' && e.totalBytes ? '<span class="fx-dbar' + (e.freeBytes < e.totalBytes / 10 ? ' low' : '') + '"><i style="width:' + Math.round(100 - e.freeBytes * 100 / e.totalBytes) + '%"></i></span>' : '') + FX.esc(size || '') + '</span>' : '') + where + '</div>';
   }
 
   function renderList() {
@@ -676,7 +676,11 @@
     { id: 'openNewTab', icon: 'open', label: 'פתיחה בכרטיסייה חדשה', menuOnly: true },
     { id: 'openLocation', icon: 'folderOpen', label: 'פתיחת מיקום הקובץ', menuOnly: true },
     { id: 'copyPath', icon: 'copy', label: 'העתקה כנתיב', key: 'Ctrl+Shift+C', menuOnly: true },
-    { id: 'props', icon: 'info', label: 'מאפיינים', cap: 'properties', key: 'Alt+Enter' }
+    { id: 'props', icon: 'info', label: 'מאפיינים', cap: 'properties', key: 'Alt+Enter' },
+    { id: 'zip', icon: 'copy', label: 'דחיסה ל-ZIP', menuOnly: true },
+    { id: 'unzip', icon: 'folderOpen', label: 'חילוץ כאן', menuOnly: true },
+    { id: 'sendTo', icon: 'usb', label: 'שליחה לכונן נייד', menuOnly: true },
+    { id: 'eject', icon: 'usb', label: 'הוצאה בטוחה', menuOnly: true }
   ];
   function inFolder() { return !S.isRoot && !S.search && !S.recycle; }
   function recycleCmdState(id) {
@@ -707,6 +711,7 @@
       case 'openNewTab': return { on: n === 1 && (sel[0].type === 'dir' || sel[0].type === 'drive') };
       case 'openLocation': return { on: n === 1 && !S.recycle && !!S.search };
       case 'copyPath': return { on: n >= 1 };
+      default: if (FX.packb && FX.packb.state) return FX.packb.state(id, sel, inFolder());
     }
     return { on: false };
   }
@@ -751,6 +756,7 @@
       case 'props': return props();
       case 'openNewTab': return newTab(selected()[0].path);
       case 'openLocation': return openLocation(selected()[0]);
+      case 'zip': case 'unzip': case 'sendTo': case 'eject': return FX.packb[id](selected(), S.path);
       case 'copyPath': return copyText(selected().map(function (x) { return S.prov.displayPath(x.path); }).join('\n')).then(function () { ui.toast('הנתיב הועתק', 'success'); });
     }
   }
@@ -1267,6 +1273,7 @@
     var d;
     try { d = S.prov.kind === 'bridge' ? await S.prov.stat(path) : await S.prov.stat(path, e); }
     catch (err) { busy(false); opError(err, 'קריאת המאפיינים נכשלה'); return; }
+    if (d.type === 'dir' && S.prov.kind === 'bridge' && FX.packb) { var ds = await FX.packb.dirSize(d.path || path); if (ds) { d.size = ds.size; d.itemCount = ds.files + ds.dirs; } }
     busy(false);
     var name = d.name || (e ? e.name : S.prov.nameOf(path));
     var isDir = d.type === 'dir';
@@ -1400,6 +1407,7 @@
     if (sel.length) items.push('delete');
     if (S.prov.caps.reveal && sel.length) items.push('reveal');
     if (!sel.length && inFolder()) items.push('newFolder', 'newFile');
+    if (FX.packb) items = items.concat(FX.packb.items(sel, inFolder()));
     items.push('props');
     if (S.recycle) items = sel.length ? ['restore', 'delete'] : ['emptyBin'];
     var html = items.map(function (id) {
