@@ -92,6 +92,27 @@
         '<dt>מצב נעילה</dt><dd>' + (h.kioskActive ? 'פעיל' : 'לא פעיל') + '</dd></dl>' +
         '<div class="setting-row"><div class="setting-text"><b>שליחת תקלות אוטומטית</b><span class="muted">קריסות ושגיאות של הגשר נשלחות למפתחת דרך מערכת הדיווח של אוצריא, בלי סיסמאות. בלי חיבור – יישלחו כשיחזור.</span></div>' + ui.switchHtml('ss-autoreport', true, 'שליחת תקלות אוטומטית') + '</div>';
       var sw = slot.querySelector('#ss-autoreport');
+      /* מסך "מה נשלח" — בסיס מינימלי: ממתינים ונשלחו, תוכן מלא, מחיקה לפני שליחה */
+      var sentBox = document.createElement('div');
+      slot.appendChild(sentBox);
+      async function loadSent() {
+        var l = null;
+        try { l = await SS.bridge.call('/diag/list', {}, { timeoutMs: 15000 }); } catch (e) { sentBox.innerHTML = ''; return; }
+        var items = (l && l.items) || [];
+        sentBox.innerHTML = '<div class="card-title">מה נשלח</div>' + (items.length ? items.map(function (x) {
+          return '<details class="setting-row"><summary><span class="chip' + (x.sent ? ' ok' : '') + '">' + (x.sent ? 'נשלח' : 'ממתין') + '</span> <bdi dir="ltr">' +
+            ui.esc(String(x.date || '').replace('T', ' ')) + '</bdi> · ' + ui.esc(x.kind || '') +
+            (x.sent ? '' : ' <button class="btn btn-tonal" data-del="' + ui.esc(x.id) + '">' + ui.icon('close') + 'מחיקה</button>') +
+            '</summary><pre class="path" dir="auto" style="white-space:pre-wrap">' + ui.esc(x.text || '') + '</pre></details>';
+        }).join('') : '<p class="muted">אין דיווחים.</p>');
+        Array.prototype.forEach.call(sentBox.querySelectorAll('[data-del]'), function (b) {
+          b.addEventListener('click', function (e) {
+            e.preventDefault();
+            SS.bridge.call('/diag/delete', { ids: [b.getAttribute('data-del')] }, { timeoutMs: 15000 }).then(loadSent, loadSent);
+          });
+        });
+      }
+      loadSent();
       SS.bridge.call('/diag/pending', {}, { timeoutMs: 15000 }).then(function (p) { if (p) ui.setSwitch(sw, p.enabled !== false); }).catch(function () { /* גשר ישן */ });
       sw.addEventListener('click', function () {
         var on = sw.getAttribute('aria-checked') !== 'true';

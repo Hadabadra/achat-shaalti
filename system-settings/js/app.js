@@ -292,15 +292,21 @@
     try { r = await SS.bridge.call('/diag/pending', {}, { timeoutMs: 15000 }); } catch (e) { return; }
     if (!r || r.enabled === false || !r.items || !r.items.length) return;
     reportsSent = true;
+    var tail = '';
+    try { tail = ((await SS.bridge.call('/diag/logTail', {}, { timeoutMs: 15000 })) || {}).text || ''; } catch (e) { tail = ''; }
     var details = ('דיווח תקלות אוטומטי מהגשר (' + r.items.length + ')\nתוסף: הגדרות מערכת ' + SS.VERSION + '\n\n' +
-      r.items.map(function (x) { return x.text; }).join('\n\n=====\n\n')).slice(0, 5000);
+      r.items.map(function (x) { return x.text; }).join('\n\n=====\n\n') + (tail ? '\n\n===== יומן מקוצר =====\n' + tail : '')).slice(0, 5000);
     var res = null;
     try { res = await window.Otzaria.call('feedback.report', { details: details, reportType: 'bug' }); } catch (e) { res = null; }
     var val = res && (res.data !== undefined ? res.data : res);
     if (val === 'sent' || val === 'queued') {
-      try { await SS.bridge.call('/diag/ack', { ids: r.items.map(function (x) { return x.id; }) }, { timeoutMs: 15000 }); } catch (e) { /* ננסה בפעם הבאה */ }
+      var ids = r.items.map(function (x) { return x.id; });
+      try { await SS.bridge.call('/diag/markSent', { ids: ids }, { timeoutMs: 15000 }); }
+      catch (e) { try { await SS.bridge.call('/diag/ack', { ids: ids }, { timeoutMs: 15000 }); } catch (e2) { /* ננסה בפעם הבאה */ } }
     }
+    reportsSent = false; /* מינימלי: מאפשר שליחה חוזרת בסבב הבא */
   }
+  setInterval(function () { if (state.connected) sendPendingReports(); }, 30 * 60 * 1000);
   SS.sendPendingReports = sendPendingReports;
 
   SS.bridge.onPairing = function (on) {

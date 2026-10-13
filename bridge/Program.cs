@@ -86,6 +86,7 @@ public static class Program
 
             Tray.Init();
             Outbox.Init();
+            Reports.Init();
             Port = Server.Start();
             Kiosk.RestoreOnStartup();
             HardLock.StartSync();
