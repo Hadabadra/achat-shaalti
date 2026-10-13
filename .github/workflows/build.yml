@@ -196,8 +196,10 @@ jobs:
 
       # גרסה חדשה ב-OtzariaBridge.csproj (תג שעוד לא קיים) = Release אוטומטי
       - name: Release
+        if: github.ref == 'refs/heads/main'  # #55: רק ב-main
         uses: softprops/action-gh-release@v2
         with:
+          fail_on_unmatched_files: true  # #55: לא ליצור מהדורה בלי קבצים
           tag_name: ${{ steps.ver.outputs.tag }}
           name: OtzariaBridge ${{ steps.ver.outputs.tag }}
           prerelease: false

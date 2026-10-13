@@ -142,7 +142,7 @@
     slot.innerHTML =
       '<div class="setting-row"><div class="setting-text"><b>תאורה</b><span class="muted" dir="ltr">' + ui.esc(d.name || '') + '</span></div>' +
       ui.switchHtml('sw-bl', d.enabled, 'תאורה') + '</div>' +
-      '<div class="slider-row"><span class="icon-btn big static">' + ui.icon('sun') + '</span>' +
+      '<div class="slider-row"><span class="icon-btn big static" aria-hidden="true">' + ui.icon('sun') + '</span>' +
       '<input type="range" class="range" min="0" max="100" step="1" value="' + d.brightness + '" aria-label="בהירות התאורה">' +
       '<output class="range-val">' + d.brightness + '%</output></div>';
     var sw = slot.querySelector('#sw-bl'), r = slot.querySelector('.range'), out = slot.querySelector('.range-val');
