@@ -51,6 +51,8 @@ public static class Server
         FsApi.Register();
         RecycleApi.Register();
         OcrApi.Register();
+        SnipApi.Register();
+        OneOcrApi.Register();
         UpdateApi.Register();
         SysApi.Register();
         OfflineMode.Register();
