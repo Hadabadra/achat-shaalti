@@ -410,3 +410,30 @@ mark.fx-hit.cur { background: #f6a21b; color: #1c1c1c; outline: 0.125em solid #f
 .fx-slide h4 { margin: 0 0 0.5em; color: var(--color-primary); }
 .fx-unknown { gap: 0.5em; }
 .fx-unknown .fx-ic svg { width: 4em; height: 4em; }
+
+/* ---------- נעילה והגבלה של הסייר ---------- */
+.fx-lock { display: none; flex: 1 1 auto; align-items: center; justify-content: center; padding: 1.5em; overflow: auto; }
+.fx-shell.is-locked .fx-lock { display: flex; }
+.fx-shell.is-locked .fx-tabs, .fx-shell.is-locked .fx-nav, .fx-shell.is-locked .fx-cmds,
+.fx-shell.is-locked .fx-body, .fx-shell.is-locked .fx-status { display: none; }
+.fx-lock-card {
+  display: flex; flex-direction: column; gap: 0.75em; width: min(24em, 100%); text-align: center;
+  background: var(--color-surface-container-lowest); border: 0.0625em solid var(--fx-line);
+  border-radius: 1.25em; padding: 1.5em 1.5em 1.75em;
+}
+.fx-lock-ic { display: inline-flex; align-self: center; align-items: center; justify-content: center; width: 3.5em; height: 3.5em; border-radius: 1em; background: var(--color-primary-container); color: var(--color-on-primary-container); }
+.fx-lock-ic .ic { width: 2em; height: 2em; }
+.fx-lock-form { display: flex; flex-direction: column; gap: 0.75em; text-align: start; margin-top: 0.25em; }
+.fx-lock-form .form-msg[hidden], .fx-pol .form-msg[hidden] { display: none; }
+
+.fx-pol form { display: flex; flex-direction: column; gap: 0.875em; margin-top: 0.5em; }
+.fx-pol-fs { border: 0.0625em solid var(--fx-line); border-radius: 0.75em; padding: 0.5em 0.875em 0.75em; margin: 0; min-width: 0; }
+.fx-pol-fs legend { padding: 0 0.375em; font-weight: 600; color: var(--fx-muted); font-size: 0.875em; }
+.fx-pol-mode, .fx-pol-root { display: flex; align-items: flex-start; gap: 0.625em; padding: 0.4375em 0; cursor: pointer; }
+.fx-pol-mode > span, .fx-pol-root > span { display: flex; flex-direction: column; gap: 0.125em; min-width: 0; }
+.fx-pol-mode input, .fx-pol-root input { accent-color: var(--color-primary); width: 1.125em; height: 1.125em; margin-top: 0.1875em; flex: 0 0 auto; }
+.fx-pol-mode input:focus-visible, .fx-pol-root input:focus-visible { outline: 0.1875em solid var(--color-primary); outline-offset: 0.125em; }
+.fx-pol-path { color: var(--fx-muted); font-size: 0.875em; overflow-wrap: anywhere; unicode-bidi: plaintext; }
+.fx-pol-add { display: flex; gap: 0.5em; flex-wrap: wrap; margin-top: 0.375em; }
+.fx-pol-add .input { flex: 1 1 14em; width: auto; }
+.fx-pol-min { max-width: 14em; }

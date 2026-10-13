@@ -130,9 +130,24 @@
     $('fx-hidden').hidden = !p.caps.hidden;
     $('fx-add-folder').hidden = !p.caps.addFolder;
     $('fx-content-wrap').hidden = !p.caps.contentSearch;
+    await FX.Policy.refresh();
+    if (FX.Policy.locked()) { FX.Policy.showLock(); return; }
+    FX.Policy.hideLock();
     await renderSide();
     var start = prefs['last.' + p.kind] || '';
+    if (!FX.Policy.pathAllowed(start)) start = '';   /* מצב מוגבל: לא פותחים נתיב שמחוץ לתיקיות המותרות */
     try { await load(start, false); } catch (e) { await load('', false); }
+  }
+
+  /* אחרי שינוי מדיניות או פתיחה בסיסמה: טוענים מחדש את הסרגל והתיקייה */
+  async function afterPolicy() {
+    if (!S.prov) return;
+    await FX.Policy.refresh();
+    if (FX.Policy.locked()) { FX.Policy.showLock(); return; }
+    FX.Policy.hideLock();
+    await renderSide();
+    var start = FX.Policy.pathAllowed(S.path) ? S.path : '';
+    try { await load(start, false); } catch (e) { try { await load('', false); } catch (e2) { /* כבר דווח */ } }
   }
 
   async function connect(manual) {
@@ -163,6 +178,10 @@
     return c === 'unreachable' || c === 'transport' || c === 'offline';
   }
   function opError(e, prefix) {
+    if (e && e.code === 'fx_locked') {   /* הגשר נעל את הסייר (למשל בתום הזמן): מסך הנעילה */
+      FX.Policy.refresh().then(function () { if (FX.Policy.locked()) FX.Policy.showLock(); });
+      return;
+    }
     ui.toast((prefix ? prefix + ': ' : '') + FX.errorText(e), 'error');
     if (S.prov && S.prov.kind === 'bridge' && isLinkError(e)) connect(false);
   }
@@ -932,6 +951,7 @@
   var SET_CATS = [
     ['open', 'פתיחת קבצים', 'open'],
     ['view', 'תצוגה', 'grid'],
+    ['security', 'נעילה והגבלה', 'lock'],
     ['general', 'כללי', 'settings'],
     ['about', 'אודות', 'info']
   ];
@@ -969,6 +989,7 @@
       setRow('שליחת הערה או דיווח על תקלה', '', '<button type="button" class="btn btn-tonal" data-act="fb">שליחת הערה</button>') +
       setRow('איפוס הגדרות הסייר', 'מחזיר את כל ההגדרות שבמסך הזה לברירת המחדל', '<button type="button" class="btn btn-tonal" data-act="reset">איפוס</button>') +
       '</div>';
+    if (id === 'security') return '<div id="fx-pol-host">' + ui.loading('טוען…') + '</div>';
     var b = FX.Bridge && FX.Bridge.info;
     return '<div class="fx-set-card fx-set-hero"><div class="fx-set-logo">' + ic('folder') + '</div><div>' +
       '<h3>סייר קבצים</h3><p class="muted">גרסה ' + FX.esc(FX.VERSION) + ' · תורת אסתר</p>' +
@@ -999,6 +1020,14 @@
       page.querySelectorAll('.fx-set-navbtn').forEach(function (x) { x.classList.toggle('on', x.dataset.cat === id); });
       content.innerHTML = setCat(id);
       content.scrollTop = 0;
+      if (id === 'security') {
+        var host = content.querySelector('#fx-pol-host');
+        FX.Policy.refresh().then(function () {
+          if (!host.isConnected) return;
+          host.innerHTML = FX.Policy.editorHtml();
+          FX.Policy.bindEditor(host);
+        });
+      }
       try { localStorage.setItem('fx.setCat', id); } catch (e) { /* כלום */ }
     }
     function close() { page.remove(); document.removeEventListener('keydown', onKey, true); $('fx-main').focus(); }
@@ -1606,7 +1635,7 @@
       window.Otzaria.on('plugin.resumed', function () {
         S.suspended = false;
         if (!S.prov || S.prov.kind !== 'bridge') connect(false);
-        else FX.Bridge.probe().then(function (h) { if (!h) connect(false); });
+        else FX.Bridge.probe().then(function (h) { if (!h) connect(false); else afterPolicy(); });
       });
     } else {
       document.body.classList.add('preview');
@@ -1615,7 +1644,7 @@
     }
   }
 
-  FX.app = { go: go, refresh: refresh, connect: connect, selected: function () { return S.prov ? selected() : []; }, prov: function () { return S.prov; } };
+  FX.app = { go: go, refresh: refresh, connect: connect, afterPolicy: afterPolicy, selected: function () { return S.prov ? selected() : []; }, prov: function () { return S.prov; } };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
