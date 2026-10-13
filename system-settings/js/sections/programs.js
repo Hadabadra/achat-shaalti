@@ -27,8 +27,13 @@
           '<button class="btn btn-primary" data-open="' + ui.esc(p.id) + '"' + (p.exists ? '' : ' disabled') + '>' + ui.icon('computer') + 'פתיחה</button></div>';
       }).join('');
     }
+    var auto = !!r.autoTorah;
+    /* #5 (13.10.2026): זיהוי אוטומטי כאן, כמתג גלולה (שינוי דורש סיסמת נעילה) */
+    html += '<div class="setting-row"><div class="setting-text"><b>זיהוי אוטומטי של תוכנות תורניות</b><span class="muted">אוצר החכמה, בר אילן, כתבי הקודש, חבורתא, הנקדן ו-Word שנמצאים במחשב נוספים לרשימה מעצמם</span></div>' +
+      ui.switchHtml('sw-auto', auto, 'זיהוי אוטומטי') + '</div>';
     html += '<div class="row-actions"><button class="btn btn-tonal" data-act="manage">' + ui.icon('edit') + 'ניהול הרשימה</button></div></div>';
     body.innerHTML = html;
+    body.querySelector('#sw-auto').addEventListener('click', function () { if (SS.kioskToggleAuto) SS.kioskToggleAuto(body, auto, load); });
     body.querySelector('[data-act=manage]').addEventListener('click', function () { SS.show('kiosk'); });
     body.querySelectorAll('[data-open]').forEach(function (b) {
       b.addEventListener('click', async function () {

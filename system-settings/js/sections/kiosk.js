@@ -177,7 +177,6 @@
     editSettings(body, st); /* הגדרות הנעילה מוצגות ישירות בעמוד, לא מאחורי כפתור */
     on('settings3', function () { SS.show('screensaver'); });
     on('prog-add', function () { addProgram(body, {}); });
-    on('prog-auto', function () { toggleAuto(body, !!st.autoTorah); });
     found.forEach(function (f, i) {
       on('prog-found-' + i, function () { addProgram(body, f); });
     });
@@ -622,9 +621,7 @@
     }).join('');
     return '<div class="card"><div class="card-title">תוכנות מותרות לפתיחה</div>' +
       '<p class="muted">תוכנות לימוד (כתבי הקודש, אוצר החכמה, בר אילן, Word ועוד) שאפשר לפתוח מכאן גם בזמן נעילה. ההוספה וההסרה דורשות את סיסמת הנעילה. בסיום העבודה סוגרים את התוכנה וחוזרים לאוצריא.</p>' +
-      '<div class="setting-row"><div class="setting-text"><b>זיהוי אוטומטי של תוכנות תורניות</b><span class="muted">' +
-        (autoTorah ? 'דולק: תוכנות תורניות ו-Word שמותקנות במחשב נוספות לרשימה מעצמן.' : 'כבוי: אפשר להדליק כדי שהתוכנות התורניות ו-Word יתווספו לרשימה אוטומטית.') + '</span></div>' +
-        '<button class="btn ' + (autoTorah ? 'btn-tonal' : 'btn-primary') + '" data-act="prog-auto">' + ui.icon(autoTorah ? 'unlock' : 'check') + (autoTorah ? 'כיבוי הזיהוי' : 'הדלקה') + '</button></div>' +
+      /* #5: הזיהוי האוטומטי עבר לטאב "תוכנות לימוד" */
       (rows || '<p class="muted">עדיין לא הוגדרו תוכנות.</p>') +
       '<div class="row-actions"><button class="btn btn-tonal" data-act="prog-add">' + ui.icon('edit') + 'הוספת תוכנה</button>' + suggest + '</div></div>';
   }
@@ -660,7 +657,8 @@
     if (ok) { ui.toast('התוכנה נוספה', 'success'); load(body); }
   }
 
-  async function toggleAuto(body, current) {
+  SS.kioskToggleAuto = function (body, current, reload) { return toggleAuto(body, current, reload); };
+  async function toggleAuto(body, current, reload) {
     var ok = await ui.dialog({
       title: current ? 'כיבוי הזיהוי האוטומטי' : 'הדלקת הזיהוי האוטומטי', icon: 'computer',
       body: '<p>' + (current
@@ -674,7 +672,7 @@
         return true;
       }
     });
-    if (ok) { ui.toast(current ? 'הזיהוי האוטומטי כובה' : 'הזיהוי האוטומטי הודלק', 'success'); load(body); }
+    if (ok) { ui.toast(current ? 'הזיהוי האוטומטי כובה' : 'הזיהוי האוטומטי הודלק', 'success'); (reload || load)(body); }
   }
 
   async function removeProgram(body, p) {
