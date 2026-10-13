@@ -90,12 +90,12 @@
   }
 
   /* סדר וקבוצות כמו בהגדרות של Windows */
-  var ORDER = ['display', 'audio', 'energy', 'time', 'keyboard', 'mouse', 'printer', 'usb', 'bluetooth', 'wifi', 'airplane', 'programs', 'kiosk', 'system', 'about'];
+  var ORDER = ['display', 'audio', 'energy', 'time', 'keyboard', 'mouse', 'printer', 'usb', 'bluetooth', 'wifi', 'airplane', 'programs', 'kiosk', 'screensaver', 'system', 'about'];
   var GROUPS = [
     ['system', 'מערכת', ['display', 'audio', 'energy', 'time', 'system']],
     ['devices', 'התקנים', ['keyboard', 'mouse', 'printer', 'usb', 'bluetooth']],
     ['network', 'רשת', ['wifi', 'airplane']],
-    ['study', 'לימוד ונעילה', ['programs', 'kiosk']],
+    ['study', 'לימוד ונעילה', ['programs', 'kiosk', 'screensaver']],
     ['about', '', ['about']]
   ];
   /* הגדרות שאפשר לסגור בנעילה (חייב להתאים ל-Kiosk.AllSections בגשר) */

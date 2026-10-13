@@ -123,10 +123,10 @@
         '<div class="setting-row"><div class="setting-text"><b>קבצים שמותר לפתוח בזמן נעילה</b><span class="muted"><bdi dir="ltr">' +
         ui.esc((st.allowOpenExtensions || []).length ? st.allowOpenExtensions.map(function (x) { return '.' + x; }).join(', ') : '—') + '</bdi></span></div>' +
         '<button class="btn btn-tonal" data-act="settings2">' + ui.icon('edit') + 'עריכה</button></div>' +
-        '<div class="setting-row"><div class="setting-text"><b>זמני היום בשומר המסך</b><span class="muted">' +
+        '<div class="setting-row"><div class="setting-text"><b>שומר מסך וזמני היום</b><span class="muted">' +
         ui.esc(st.zmanimCity || (st.zmanimLocation ? 'קואורדינטות מותאמות אישית' : 'לא הוגדר מיקום')) +
         (st.yahrzeitDay ? ' · יום השנה מוגדר' : '') + '</span></div>' +
-        '<button class="btn btn-tonal" data-act="settings3">' + ui.icon('edit') + 'עריכה</button></div>' +
+        '<button class="btn btn-tonal" data-act="settings3">' + ui.icon('clock') + 'לטאב שומר מסך</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
       html += programsCard(progs, found, !!st.autoTorah);
@@ -175,7 +175,7 @@
     on('chpw', function () { changePw(body); });
     on('settings', function () { editSettings(body, st); });
     on('settings2', function () { editSettings(body, st); });
-    on('settings3', function () { editSettings(body, st); });
+    on('settings3', function () { SS.show('screensaver'); });
     on('settings4', function () { editSettings(body, st); });
     on('prog-add', function () { addProgram(body, {}); });
     on('prog-auto', function () { toggleAuto(body, !!st.autoTorah); });
@@ -447,11 +447,10 @@
   var DEFAULT_ZMAN_SHOW = ['alot', 'netz', 'shemaGra', 'chatzot', 'shkia', 'tzeit'];
   var YAHRZEIT_MONTHS = ['תשרי', 'חשון', 'כסלו', 'טבת', 'שבט', 'אדר', 'אדר א', 'אדר ב', 'ניסן', 'אייר', 'סיון', 'תמוז', 'אב', 'אלול'];
 
-  async function editSettings(body, st) {
-    var all = st.allSections || Object.keys(SECTION_NAMES);
-    var open = st.openSections || [];
-    var zmanShow = st.zmanimShow || DEFAULT_ZMAN_SHOW;
 
+  /* שדות שומר המסך — משותפים לטאב "שומר מסך" (sections/screensaver.js) */
+  SS.screensaverFields = async function (st) {
+    var zmanShow = st.zmanimShow || DEFAULT_ZMAN_SHOW;
     /* רשימת ערים מלוח השנה של אוצריא עצמה (calendar.getCities) — אם זמינה. קואורדינטות
        נשארות תמיד כאפשרות מתקדמת ("מותאם אישית") גם כשיש רשימת ערים */
     var cities = [];
@@ -467,11 +466,7 @@
     );
     var cityByName = {};
     cities.forEach(function (c) { cityByName[c.name] = c; });
-
     var fields = [
-      { name: 'ext', label: 'סיומות קבצים שמותר לפתוח בתוכנות אחרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
-      { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
-      { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
       { name: 'rest', type: 'checkbox', label: 'מסך מנוחה כשאוצריא ממוזערת', value: st.restScreen !== false, hint: 'סמל אוצריא, שעה ותאריך במסך מלא. לחיצה בכל מקום מחזירה לאוצריא' },
       { name: 'idle', label: 'שומר מסך אחרי דקות ללא פעילות (0 = כבוי)', value: String(st.restIdleMinutes || 0), dir: 'ltr', placeholder: '0', hint: 'מסך המנוחה מופיע גם כשאוצריא פתוחה, אחרי הזמן הזה בלי מקלדת ועכבר. עד 240 דקות' }
     ];
@@ -499,9 +494,37 @@
     ZMAN_FIELDS.forEach(function (z) {
       fields.push({ name: 'zm_' + z.id, type: 'checkbox', label: z.label, value: zmanShow.indexOf(z.id) >= 0 });
     });
+    fields.push({ name: 'zmSide', type: 'select', label: 'עמודת זמני היום בשומר המסך', value: st.restZmanimSide || 'right', hint: 'הזמנים מוצגים בעמודה בצד, וההקדשה בתחתית בלי חפיפה', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }] });
+    fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
+      options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
+      hint: 'מציג שורה מיוחדת בשומר המסך ביום הזה בכל שנה. ריק = כבוי. לא קשור בהכרח להקדשה הקבועה שבתוסף' });
+    fields.push({ name: 'yzDay', label: 'יום השנה: יום בחודש (1–30)', value: String(st.yahrzeitDay || 0), dir: 'ltr', placeholder: '0' });
+    fields.push({ name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
+    return { fields: fields, cityByName: cityByName };
+  };
+  SS.screensaverPayload = function (x) {
+    return {
+      restScreen: !!x.rest, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide,
+      zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
+      zmanimElevation: +String(x.zelev).trim() || 0, zmanimFallbackEngine: x.zengine,
+      zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
+      zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
+      yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim()
+    };
+  };
+
+  async function editSettings(body, st) {
+    var all = st.allSections || Object.keys(SECTION_NAMES);
+    var open = st.openSections || [];
+
+
+    var fields = [
+      { name: 'ext', label: 'סיומות קבצים שמותר לפתוח בתוכנות אחרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
+      { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
+      { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
+    ];
     fields.push({ name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' });
     fields.push({ name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' });
-    fields.push({ name: 'zmSide', type: 'select', label: 'עמודת זמני היום בשומר המסך', value: st.restZmanimSide || 'right', hint: 'הזמנים מוצגים בעמודה בצד, וההקדשה בתחתית בלי חפיפה', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }] });
     fields.push({ name: 'sidePos', type: 'select', label: 'מיקום סרגל התוכנות', value: st.sideBarPosition || 'right', hint: 'לאיזה צד מסך הסרגל מוצמד', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }, { value: 'top', label: 'למעלה' }, { value: 'bottom', label: 'למטה' }] });
     fields.push({ name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' });
     fields.push({ name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' });
@@ -528,11 +551,6 @@
     fields.push({ name: 'schedEnd', label: 'שעת סיום', type: 'time', value: sc.end || '02:00', dir: 'ltr' });
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
     fields.push({ name: 'pos', label: 'מיקום השעון (bottom-left / bottom-right / top-left / top-right)', value: st.clockPosition || 'bottom-left', dir: 'ltr' });
-    fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
-      options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
-      hint: 'מציג שורה מיוחדת בשומר המסך ביום הזה בכל שנה. ריק = כבוי. לא קשור בהכרח להקדשה הקבועה שבתוסף' });
-    fields.push({ name: 'yzDay', label: 'יום השנה: יום בחודש (1–30)', value: String(st.yahrzeitDay || 0), dir: 'ltr', placeholder: '0' });
-    fields.push({ name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
     fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
     var ok = await ui.dialog({
       title: 'הגדרות נעילה', icon: 'edit',
@@ -571,25 +589,11 @@
           if (hint) hint.textContent = on ? TU_HINT_ON : TU_HINT_OFF;
         }
         if (tfa && tuCb) { tfa.addEventListener('change', syncTu); syncTu(); }
-        if (cityOptions.length > 1) {
-          /* בחירת עיר מהרשימה ממלאת אוטומטית את הקואורדינטות (גם כגיבוי לחישוב המקומי בגשר) */
-          var sel = form.querySelector('[name=zcity]'), loc = form.querySelector('[name=zloc]');
-          if (!sel || !loc) return;
-          sel.addEventListener('change', function () {
-            var c = cityByName[sel.value];
-            if (c && typeof c.lat === 'number' && typeof c.lng === 'number') loc.value = c.lat + ', ' + c.lng;
-          });
-        }
       },
       onSubmit: async function (x) {
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
-          readOnly: !!x.ro, allowExcelDocs: !!x.xls, twoFactor: !!x.tfa, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, restZmanimSide: x.zmSide, resetOnShutdown: !!x.reset, clockPosition: x.pos.trim(),
-          restIdleMinutes: +String(x.idle).trim() || 0, zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
-          zmanimElevation: +String(x.zelev).trim() || 0, zmanimFallbackEngine: x.zengine,
-          zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
-          zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
-          yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim(),
+          readOnly: !!x.ro, allowExcelDocs: !!x.xls, twoFactor: !!x.tfa, clock: !!x.clock, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos.trim(),
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
           schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn },
           tempUnlockEnabled: !!x.tu, tempUnlockMinutes: +String(x.tuMin).trim() || 30, tempUnlockPassword: x.tuPw || ''

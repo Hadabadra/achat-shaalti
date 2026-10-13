@@ -167,12 +167,8 @@
   /* options: title, body (html), icon, tone (danger|primary), actions [{label, value, kind}], fields [{name,label,type,placeholder,value,disabled}],
      onSubmit(values) -> may throw to keep dialog open (shows message), dismissible.
      disabled: השדה מושבת (data-locked) ונשאר מושבת גם אחרי מצב "שומר…"; onOpen יכול לשנות זאת עם ui.lockField */
-  ui.dialog = function (opt) {
-    return new Promise(function (resolve) {
-      var host = document.getElementById('dialogs');
-      Array.prototype.forEach.call(host.querySelectorAll('.dlg-scrim:not(.open)'), function (x) { x.remove(); });
-      var prevFocus = document.activeElement; /* להחזרת הפוקוס לאחר סגירת הדיאלוג */
-      var fieldsHtml = (opt.fields || []).map(function (f) {
+  ui.fieldsHtml = function (fields) {
+    return (fields || []).map(function (f) {
         if (f.type === 'note') {
           return '<div class="field-note muted small">' + f.label + '</div>';
         }
@@ -193,7 +189,26 @@
           (f.placeholder ? ' placeholder="' + ui.esc(f.placeholder) + '"' : '') +
           (f.value ? ' value="' + ui.esc(f.value) + '"' : '') +
           (f.dir ? ' dir="' + f.dir + '"' : '') + (f.disabled ? ' disabled data-locked' : '') + ' autocomplete="off"></label>';
-      }).join('');
+    }).join('');
+  };
+
+  /* ערכי שדות מתוך טופס (גם בתוך עמוד, לא רק בדיאלוג) */
+  ui.fieldValues = function (form, fields) {
+    var v = {};
+    (fields || []).forEach(function (f) {
+      if (f.type === 'note') return;
+      var inp = form.querySelector('[name="' + f.name + '"]');
+      if (inp) v[f.name] = f.type === 'checkbox' ? inp.checked : inp.value;
+    });
+    return v;
+  };
+
+  ui.dialog = function (opt) {
+    return new Promise(function (resolve) {
+      var host = document.getElementById('dialogs');
+      Array.prototype.forEach.call(host.querySelectorAll('.dlg-scrim:not(.open)'), function (x) { x.remove(); });
+      var prevFocus = document.activeElement; /* להחזרת הפוקוס לאחר סגירת הדיאלוג */
+      var fieldsHtml = ui.fieldsHtml(opt.fields);
       var actions = opt.actions || [{ label: 'ביטול', value: false }, { label: 'אישור', value: true, kind: 'primary' }];
       var d = ui.el(
         '<div class="dlg-scrim"><form class="dlg ' + (opt.tone || '') + '" role="dialog" aria-modal="true" novalidate>' +
