@@ -31,6 +31,7 @@
          מאת Eliyahu Hershfeld (kosherjava.com), רישיון LGPL-2.1. PackageReference רגיל
          (קישור דינמי, לא קוד מועתק) — ראו README.md וחלון "אודות" לקרדיט המלא -->
     <PackageReference Include="Zmanim" Version="1.5.0" />
+    <PackageReference Include="Interop.UIAutomationClient" Version="10.19041.0" />
   </ItemGroup>
 
   <!-- התוספים נארזים ב-CI לתיקייה plugins ומוטמעים כמשאב -->

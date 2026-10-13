@@ -113,6 +113,10 @@ public static class Tray
         UpdateStatus();
     });
 
+    /// <summary>בועת התראה קצרה במגש (למשל DialogGuard שחוסם דיאלוג קבצים חורג ממדיניות)</summary>
+    public static void Notify(string title, string message, ToolTipIcon icon = ToolTipIcon.Warning) =>
+        Invoke(() => _icon?.ShowBalloonTip(6000, title, message, icon));
+
     private static void UpdateStatus()
     {
         if (_status == null) return;

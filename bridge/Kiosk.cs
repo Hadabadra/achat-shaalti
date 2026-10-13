@@ -30,6 +30,23 @@ public static class Kiosk
 
     public static string[] AllowedExtensions => Config.GetList("kiosk.allowOpenExtensions");
 
+    /// <summary>
+    /// בסיס קבוע (תמיד מותר, לא ניתן להסרה דרך ההגדרות) לרשימת הסיומות ש-DialogGuard מתיר לבחור/לפתוח
+    /// בדיאלוגי Open/Save מקוריים של תוכנות חיצוניות מאושרות (Word וכו') בזמן שמגבלה כלשהי פעילה.
+    /// נשאר קטן בכוונה: רק סוגי המסמכים שהפרויקט עצמו כבר מתייחס אליהם כ"ספרים"/מסמכים רלוונטיים
+    /// (ר' docs/ROADMAP.md, docs/SDK-998-OPPORTUNITIES.md — "קבצי PDF/Word"). מנהל יכול להוסיף עוד
+    /// דרך אותה הגדרה קיימת (kiosk.allowOpenExtensions) שמשמשת גם את /fs/open הפנימי.
+    /// </summary>
+    public static readonly string[] DialogGuardBaselineExtensions = { "docx", "pdf" };
+
+    /// <summary>האיחוד בפועל שנאכף ב-DialogGuard: הבסיס הקבוע + מה שהמנהל הוסיף דרך ההגדרות</summary>
+    public static HashSet<string> DialogGuardAllowedExtensions()
+    {
+        var set = new HashSet<string>(DialogGuardBaselineExtensions, StringComparer.OrdinalIgnoreCase);
+        foreach (string x in AllowedExtensions) set.Add(x.TrimStart('.'));
+        return set;
+    }
+
     /// <summary>במצב readOnly (ברירת מחדל כבוי) שינוי קבצים חסום בזמן נעילה</summary>
     public static bool ReadOnly => Config.Get("kiosk.readOnly", false);
 
