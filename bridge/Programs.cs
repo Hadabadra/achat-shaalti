@@ -180,6 +180,14 @@ public static class Programs
     /// פותח תוכנה מהרשימה, ואם היא כבר פתוחה (גם מוקטנת) — מחזיר אותה לחזית ולא פותח עותק שני.
     /// מחזיר true אם הייתה פתוחה.
     /// </summary>
+    /// <summary>
+    /// פותח חלון חסד זמני: השומר (Kiosk.Watch) לא יחזיר את אוצריא לחזית במשך כמה שניות, גם אם
+    /// החלון הקדמי הוא תהליך לא-מוכר. לשימוש בפתיחת תוכנה חיצונית מאושרת שלא עוברת דרך Activate
+    /// (למשל "הצגה בסייר Windows" ב-FsApi.cs) - בלעדיו השומר היה מחזיר את אוצריא תוך 2 שניות,
+    /// עוד לפני שהחלון שנפתח מספיק להיראות בכלל.
+    /// </summary>
+    internal static void GrantForegroundGrace() => GraceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
+
     public static bool Activate(Entry e)
     {
         if (!File.Exists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);

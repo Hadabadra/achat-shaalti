@@ -592,6 +592,9 @@ public static class FsApi
         if (FxPolicy.IsRestricted) throw FxPolicy.Outside("במצב מוגבל אי אפשר להציג בסייר Windows");
         if (!Exists(path)) throw BridgeException.NotFound("לא נמצא: " + path);
         string args = File.Exists(path) ? "/select,\"" + path + "\"" : "\"" + path + "\"";
+        // בלי זה: השומר (Kiosk.Watch, רץ כל 2 שניות) לא מכיר explorer.exe שנפתח כך כ"מותר", ומחזיר
+        // את אוצריא לחזית כמעט מיד - נראה כאילו הסייר "נפתח ברקע" בעוד שבפועל הוא נפתח וממש נסגר-לחזית
+        Programs.GrantForegroundGrace();
         Process.Start(new ProcessStartInfo("explorer.exe", args) { UseShellExecute = true });
         return new { ok = true };
     }
