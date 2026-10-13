@@ -18,7 +18,16 @@
     "reader.toolbar",
     "app.startup_contributions",
     "navigation.write",
-    "plugin.open_other"
+    "plugin.open_other",
+    "events.subscribe:settings.changed",
+    "events.subscribe:plugin.permissions_changed",
+    "app.info.read",
+    "notifications.system",
+    "notifications.send",
+    "app.shortcuts",
+    "clipboard.read",
+    "fonts.local.read",
+    "library.books.provide"
   ],
   "network": {
     "enabled": true,

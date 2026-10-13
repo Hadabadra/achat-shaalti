@@ -14,7 +14,13 @@
   "permissions": [
     "network.localhost",
     "app.open_url",
-    "calendar.read"
+    "calendar.read",
+    "events.subscribe:settings.changed",
+    "events.subscribe:plugin.permissions_changed",
+    "app.info.read",
+    "notifications.system",
+    "notifications.send",
+    "events.subscribe:calendar.city_changed"
   ],
   "network": {
     "enabled": true,

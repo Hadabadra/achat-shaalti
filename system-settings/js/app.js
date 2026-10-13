@@ -211,6 +211,8 @@
   SS.setStatus = setStatus;
 
   function showOffline() {
+    /* notifications.system: התראה כשהגשר נופל (רק במעבר ממחובר למנותק) */
+    if (state.connected && window.SdkX) SdkX.notify('גשר אוצריא אינו מחובר', 'הגדרות המערכת ומצב הנעילה אינם זמינים עד שהגשר יחזור');
     state.connected = false;
     setStatus(false);
     document.getElementById('shell-body').hidden = true;
@@ -341,6 +343,7 @@
     if (window.Otzaria) {
       window.Otzaria.on('plugin.boot', boot);
       window.Otzaria.on('theme.changed', ui.applyTheme);
+      window.Otzaria.on('calendar.city_changed', function () { pushZmanimCache(); });
       window.Otzaria.on('plugin.suspended', function () { state.suspended = true; clearTimeout(state.probeTimer); clearTimeout(zmanimTimer); });
       window.Otzaria.on('plugin.resumed', function () {
         state.suspended = false;

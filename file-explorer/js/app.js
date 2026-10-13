@@ -1685,11 +1685,41 @@
     connect(false);
   }
 
+  /* הרשאות SDK (sdk-extras.js): קיצור Ctrl+Shift+E, הדבקת נתיב מהלוח, ספרים בחיפוש הספרייה */
+  function sdkExtras() {
+    var X = window.SdkX; if (!X) return;
+    X.call('storage.get', { key: 'shortcut.explorer' }).then(function (r) {
+      var keys = (r && (r.value || r.data)) || 'Ctrl+Shift+E';
+      X.registerShortcut('open-explorer', keys, function () { X.call('plugin.openOther', { pluginId: X.self, param: null }); });
+    });
+    /* Ctrl+Shift+V: נתיב שהועתק מחוץ לאוצריא -> מעבר אליו */
+    document.addEventListener('keydown', function (e) {
+      if (!(e.ctrlKey && e.shiftKey && (e.key === 'V' || e.key === 'v'))) return;
+      e.preventDefault();
+      X.readClipboard().then(function (t) { t = t.replace(/^"|"$/g, ''); if (/^([a-z]:\\|\\\\)/i.test(t)) go(t); });
+    });
+    /* ספרים: storage 'library.folders' = רשימת תיקיות; PDF/Word מהן מופיעים בחיפוש הספרייה */
+    X.call('storage.get', { key: 'library.folders' }).then(async function (r) {
+      var dirs = (r && (r.value || r.data)) || [];
+      if (!Array.isArray(dirs) || !dirs.length || !FX.Bridge) return;
+      var books = [];
+      for (var i = 0; i < dirs.length && books.length < 2000; i++) {
+        var d; try { d = await FX.Bridge.call('/fs/list', { path: dirs[i] }, { timeoutMs: 60000 }); } catch (e) { continue; }
+        ((d && (d.entries || d.items)) || []).forEach(function (en) {
+          if (/\.(pdf|docx)$/i.test(en.name || '')) books.push({ id: en.path || FX.win.join(dirs[i], en.name), title: (en.name || '').replace(/\.[^.]+$/, ''), category: 'קבצים מהמחשב' });
+        });
+      }
+      if (books.length) X.setLibraryBooks(books);
+    });
+    X.onLibraryBookOpen(function (p) { var id = p && (p.id || p.bookId); if (id) go(id.replace(/[\\/][^\\/]*$/, '')); });
+  }
+
   function init() {
     if (window.Otzaria) {
       window.Otzaria.on('plugin.boot', boot);
       window.Otzaria.on('theme.changed', ui.applyTheme);
       window.Otzaria.on('reader.toolbar_item_clicked', onToolbarItem);
+      sdkExtras();
       window.Otzaria.on('plugin.suspended', function () { S.suspended = true; clearTimeout(S.probeTimer); clearTimeout(TU.poll); cancelSearch(); });
       window.Otzaria.on('plugin.resumed', function () {
         S.suspended = false;
