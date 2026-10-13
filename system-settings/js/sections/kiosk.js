@@ -134,7 +134,9 @@
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
       html += '<div class="card"><div class="card-title">הגדרות נעילה</div><div data-slot="kset">' + ui.loading('טוען הגדרות…') + '</div></div>';
-      html += programsCard(progs, found, !!st.autoTorah);
+      /* #60: הרשימה המלאה עברה לטאב "תוכנות תורניות" */
+      html += '<div class="card"><div class="card-title">תוכנות מותרות לפתיחה</div><div class="setting-row"><div class="setting-text"><span class="muted">' + progs.length + ' תוכנות מותרות' + (st.autoTorah ? ' · זיהוי אוטומטי פעיל' : '') + '</span></div>' +
+        '<button class="btn btn-tonal" data-act="prog-manage">' + ui.icon('computer') + 'ניהול בטאב „תוכנות לימוד”</button></div></div>';
       html += fxCard();
       html += hardCard(st.hard || {});
       html += biosCard(bios);
@@ -182,6 +184,7 @@
     on('chpw', function () { changePw(body); });
     editSettings(body, st); /* הגדרות הנעילה מוצגות ישירות בעמוד, לא מאחורי כפתור */
     on('settings3', function () { SS.show('screensaver'); });
+    on('prog-manage', function () { SS.show('programs'); });
     on('prog-add', function () { addProgram(body, {}); });
     found.forEach(function (f, i) {
       on('prog-found-' + i, function () { addProgram(body, f); });
@@ -817,7 +820,7 @@
     } catch (err) { ui.toast(ui.errText(err), 'error'); }
   }
 
-  async function addProgram(body, preset) {
+  async function addProgram(body, preset, reload) {
     var ok = await ui.dialog({
       title: 'הוספת תוכנה מותרת', icon: 'computer',
       body: '<p class="muted">התוכנה תופיע ברשימה ותיפתח מתוך אוצריא גם בזמן נעילה. מומלץ להוסיף רק תוכנות לימוד. אם התוכנה נפתחת דרך תהליך נוסף (מפעיל נפרד), הוסיפו את שמו בשדה „תהליכים נוספים”, כדי שהחלון לא יוחזר לרקע.</p>',
@@ -838,9 +841,11 @@
         return true;
       }
     });
-    if (ok) { ui.toast('התוכנה נוספה', 'success'); load(body); }
+    if (ok) { ui.toast('התוכנה נוספה', 'success'); (reload || load)(body); }
   }
 
+  /* #60: הטאב "תוכנות תורניות" משתמש באותם רכיבים (כולל "העבר לחזית") */
+  SS.kioskProg = { card: programsCard, add: addProgram, remove: removeProgram, open: openProgram };
   SS.kioskToggleAuto = function (body, current, reload) { return toggleAuto(body, current, reload); };
   async function toggleAuto(body, current, reload) {
     var ok = await ui.dialog({
@@ -859,7 +864,7 @@
     if (ok) { ui.toast(current ? 'הזיהוי האוטומטי כובה' : 'הזיהוי האוטומטי הודלק', 'success'); (reload || load)(body); }
   }
 
-  async function removeProgram(body, p) {
+  async function removeProgram(body, p, reload) {
     var ok = await ui.dialog({
       title: 'הסרת תוכנה מהרשימה', icon: 'warning',
       body: '<p>להסיר את <b>' + ui.esc(p.name) + '</b> מרשימת התוכנות המותרות? התוכנה עצמה לא תימחק.</p>',
@@ -871,7 +876,7 @@
         return true;
       }
     });
-    if (ok) { ui.toast('התוכנה הוסרה', 'success'); load(body); }
+    if (ok) { ui.toast('התוכנה הוסרה', 'success'); (reload || load)(body); }
   }
 
   function parseExt(s) {
