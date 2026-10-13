@@ -390,10 +390,11 @@
       'בלי להיכנס ידנית להגדרות ה-BIOS. <b>לא כל פעולה מובטחת להצליח</b> — תלוי ביצרן ובדגם המחשב.</p>' +
       '<div class="setting-row"><div class="setting-text"><b>יצרן המחשב שזוהה</b><span class="muted">' +
       ui.esc(BIOS_VENDOR_NAMES[bios.vendor] || bios.vendor) + (bios.model ? ' · ' + ui.esc(bios.model) : '') + '</span></div></div>';
+    var manualBtn = '<div class="row-actions"><button class="btn btn-tonal" data-act="bios-manual">' + ui.icon('info') + 'הדרכה ידנית (כל היצרנים)</button></div>';
 
     if (!bios.supported) {
       return head + '<div class="state-box"><div><b>לא נתמך להקשחה אוטומטית במחשב זה</b><span class="muted">' +
-        ui.esc(bios.reason || '') + '</span></div></div></div>';
+        ui.esc(bios.reason || '') + '</span></div></div>' + manualBtn + '</div>';
     }
 
     var usb = bios.usbBootSetting;
@@ -409,13 +410,86 @@
         ui.esc(bios.wmiError || '') + '</span></div></div>';
     }
     if (bios.note) head += '<p class="muted small">' + ui.esc(bios.note) + '</p>';
-    head += '<div class="row-actions"><button class="btn btn-primary" data-act="bios-harden">' + ui.icon('shield') + 'הפעלת הקשחה</button></div></div>';
+    head += '<div class="row-actions">' +
+      '<button class="btn btn-primary" data-act="bios-harden">' + ui.icon('shield') + 'הפעלת הקשחה</button>' +
+      '<button class="btn btn-tonal" data-act="bios-manual">' + ui.icon('info') + 'הדרכה ידנית (כל היצרנים)</button></div></div>';
     return head;
+  }
+
+  /* ---------- הדרכה ידנית לפי יצרן: מפתח כניסה ל-BIOS, איפה הסיסמה, איפה חסימת USB/תפריט אתחול ---------- */
+  var BIOS_MANUAL_GUIDE = [
+    { vendor: 'hp', title: 'HP', key: 'Esc ואז F10 באתחול (או F10 ישירות)',
+      steps: [
+        'כבו את המחשב לגמרי (לא רק הפעלה מחדש), ואז הפעילו ולחצו מיד ברצף על Esc, ואז F10, עד שנפתח מסך ה-BIOS הכחול/האפור.',
+        'היכנסו ללשונית Security ← Setup Password/Administrator Password ← הגדירו סיסמה (רשמו אותה!).',
+        'חזרו ללשונית Security ← חפשו "Prompt for Admin authentication on F9/F12" ← Enable (זה חוסם כניסה לתפריט האתחול בלי הסיסמה).',
+        'לחסימת USB: לשונית Advanced/System Configuration ← Boot Options ← חפשו "USB Storage Boot"/"Legacy Support" ← Disable.',
+        'שמרו ויציאה: F10 ← Yes (או Save Changes and Exit בתפריט Main).',
+      ] },
+    { vendor: 'lenovo', title: 'Lenovo', key: 'Enter ואז F1 באתחול (ThinkPad), או F2 (IdeaPad/Yoga)',
+      steps: [
+        'כבו את המחשב לגמרי, הפעילו ולחצו מיד על Enter ואז F1 (ThinkPad) או החזיקו F2 (IdeaPad) עד שנפתח ה-BIOS.',
+        'לשונית Security ← Password ← Supervisor Password ← הגדירו סיסמה (רשמו אותה!).',
+        'לשונית Security ← Secure Boot / Virtualization — לרוב אין הגדרת "סיסמה לתפריט אתחול" נפרדת ב-Lenovo; הגנת ה-Supervisor Password עצמה חוסמת גם שינוי סדר האתחול.',
+        'לחסימת USB: לשונית Startup/Boot ← Boot ← הסירו/הורידו "USB HDD"/"USB FDD" מרשימת סדר האתחול, או לשונית Security ← "USB Boot" ← Disable אם קיים.',
+        'שמרו ויציאה: F10 ← Yes.',
+      ] },
+    { vendor: 'dell', title: 'Dell', key: 'F2 באתחול (או F12 לתפריט אתחול חד-פעמי)',
+      steps: [
+        'כבו את המחשב לגמרי, הפעילו ולחצו מיד ברצף על F2 עד שנפתח BIOS Setup הכחול.',
+        'לשונית System Security ← Admin Password ← הגדירו סיסמה (רשמו אותה!).',
+        'לשונית System Security ← "Secure Boot"/"Password Bypass"/"Admin Setup Lockout" — אפשרו נעילה שדורשת סיסמה לפני כניסה לתפריט אתחול (F12) אם האפשרות קיימת בדגם.',
+        'לחסימת USB: לשונית System Configuration ← USB Configuration ← בטלו "Enable Boot Support"/"Enable External USB Port", או לשונית Boot Sequence ← הסירו USB מרשימת סדר האתחול.',
+        'שמרו ויציאה: Apply ← Exit (או F10).',
+      ] },
+    { vendor: 'asus', title: 'Asus', key: 'F2 (נייד, בלחיצה מוחזקת) או Del (שולחני)',
+      steps: [
+        'כבו את המחשב לגמרי. בנייד: החזיקו F2 ואז לחצו הפעלה. בשולחני: הקישו Del בחוזרה מיד עם ההפעלה.',
+        'אם נכנסתם למסך הפשוט (EZ Mode) — לחצו F7 או "Advanced Mode" כדי לראות את כל האפשרויות.',
+        'לשונית Security ← Administrator Password ← הגדירו סיסמה (רשמו אותה!).',
+        'לחסימת USB ותפריט אתחול: לשונית Boot ← Boot Configuration/CSM ← בטלו Launch CSM / הסירו התקני USB מ-Boot Option Priorities. חלק מהדגמים: Secure Boot ← Enable כדי לחסום אתחול ממדיה לא חתומה.',
+        'שמרו ויציאה: F10 ← Yes (או Exit ← Save Changes & Reset).',
+      ] },
+    { vendor: 'other', title: 'יצרנים אחרים (Acer, MSI, Toshiba, Samsung ועוד)',
+      steps: [
+        'מקש הכניסה הנפוץ: F2 או Del בחוזרה מיד עם ההפעלה (לפעמים Esc או F1 — מופיע לרוב במסך הפתיחה הראשון של היצרן, שימו לב ל"Press ... to enter Setup").',
+        'חפשו לשונית בשם Security/Password ← הגדירו Supervisor/Administrator/Setup Password (רשמו אותה!).',
+        'חפשו לשונית Boot ← הסירו/בטלו USB/"External Device" מרשימת סדר האתחול, או הפעילו הגנת-סיסמה לתפריט האתחול אם קיימת.',
+        'שמרו ויציאה: בדרך כלל F10, או Exit ← Save Changes.',
+      ] },
+  ];
+
+  function biosManualGuideHtml(detectedVendor) {
+    var ordered = BIOS_MANUAL_GUIDE.slice().sort(function (a, b) {
+      return (a.vendor === detectedVendor ? -1 : 0) - (b.vendor === detectedVendor ? -1 : 0);
+    });
+    var html = '<p class="muted"><b>לפני שמתחילים:</b> קחו דף ועט, ורשמו עליו כל סיסמה שתגדירו ברגע שהגדרתם אותה — ' +
+      'סיסמת BIOS שנשכחת <b>אינה ניתנת לשחזור מתוך Windows</b>, ולעיתים דורשת פנייה לתמיכת היצרן או איפוס פיזי בתוך המחשב. ' +
+      'שמרו את הדף במקום בטוח, לא ליד המחשב.</p>';
+    ordered.forEach(function (v) {
+      var isDetected = v.vendor === detectedVendor;
+      html += '<div class="state-box"><div>' +
+        '<b>' + ui.esc(v.title) + (isDetected ? ' — זוהה כיצרן המחשב שלכם' : '') + '</b>' +
+        (v.key ? '<span class="muted">מקש כניסה ל-BIOS: <b dir="ltr">' + ui.esc(v.key) + '</b></span>' : '') +
+        '<ol class="bullets">' + v.steps.map(function (s) { return '<li>' + ui.esc(s) + '</li>'; }).join('') + '</ol>' +
+        '</div></div>';
+    });
+    return html;
+  }
+
+  function biosManualGuide(bios) {
+    return ui.dialog({
+      title: 'הדרכה ידנית להקשחת BIOS/UEFI', icon: 'info',
+      body: biosManualGuideHtml(bios && bios.vendor),
+      actions: [{ label: 'סגירה', value: true, kind: 'primary' }]
+    });
   }
 
   function wireBios(body, bios) {
     var b = body.querySelector('[data-act="bios-harden"]');
     if (b) b.addEventListener('click', function () { biosHarden(body, bios); });
+    var m = body.querySelector('[data-act="bios-manual"]');
+    if (m) m.addEventListener('click', function () { biosManualGuide(bios); });
   }
 
   async function biosHarden(body, bios) {
