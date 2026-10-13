@@ -46,18 +46,89 @@ Filename: "{app}\OtzariaBridge.exe"; Parameters: "--install --quiet"; StatusMsg:
 
 [Code]
 // ---- אישור בפועל שהתוספים הותקנו באוצריא (לא רק שהזרימה הופעלה) ----
-// אין לנו דרך תכנותית לדעת אם המשתמש אכן אישר את חלון ההתקנה באוצריא (זו זרימה
-// חד-כיוונית דרך otzaria://plugin/install-local, בלי ערוץ חזרה) - לכן שואלים במפורש,
-// עם אפשרות להפעיל את ההתקנה שוב ולתת את הנתיב המדויק אם עדיין לא בוצע.
+// otzaria://plugin/install-local הוא חד-כיווני, בלי ערוץ חזרה - אבל אוצריא עצמה
+// כן כותבת כל תוסף שהותקן בפועל ל-%APPDATA%\otzaria\plugins\installed\<id>\current
+// (ר' app_paths.dart: getPluginInstallPath). בודקים שם ישירות, כולל את גרסת
+// המניפסט בפועל (כדי לתפוס גם מקרה של תוסף ישן שהותקן בעבר ולא עודכן) - ורק אם
+// הבדיקה האוטומטית לא מצליחה תוך זמן סביר, שואלים את המשתמש כגיבוי.
+const
+  FxPluginId = 'com.chadbedera.fileexplorer';
+  SettingsPluginId = 'com.chadbedera.systemsettings';
+
 var
   PluginsConfirmed: Boolean;
+
+function AppDataPluginDir(const PluginId: String): String;
+begin
+  // תואם ל-Windows בלבד את getDataRootPath() באוצריא (לא אוצריא פורטבילית - זו מגבלה ידועה)
+  Result := ExpandConstant('{userappdata}') + '\otzaria\plugins\installed\' + PluginId + '\current';
+end;
+
+// Inno Setup's Pascal Script אין בו PosEx מובנה - חיפוש תת-מחרוזת החל ממיקום נתון
+function FindFrom(const SubStr, S: String; Offset: Integer): Integer;
+var
+  r: Integer;
+begin
+  if Offset < 1 then Offset := 1;
+  if Offset > Length(S) then begin Result := 0; exit; end;
+  r := Pos(SubStr, Copy(S, Offset, Length(S) - Offset + 1));
+  if r = 0 then Result := 0 else Result := r + Offset - 1;
+end;
+
+// חילוץ פשטני של "version": "..." מתוך manifest.json - מספיק למניפסטים שלנו (JSON שורה-אחר-שורה)
+function ManifestVersion(const InstallDir: String): String;
+var
+  lines: TArrayOfString;
+  i, p1, p2: Integer;
+begin
+  Result := '';
+  if not LoadStringsFromFile(InstallDir + '\manifest.json', lines) then exit;
+  for i := 0 to GetArrayLength(lines) - 1 do
+  begin
+    if Pos('"version"', lines[i]) = 0 then continue;
+    p1 := Pos(':', lines[i]);
+    if p1 = 0 then continue;
+    p1 := FindFrom('"', lines[i], p1);
+    if p1 = 0 then continue;
+    p2 := FindFrom('"', lines[i], p1 + 1);
+    if p2 <= p1 then continue;
+    Result := Copy(lines[i], p1 + 1, p2 - p1 - 1);
+    exit;
+  end;
+end;
+
+function PluginUpToDate(const PluginId: String): Boolean;
+var
+  dir: String;
+begin
+  dir := AppDataPluginDir(PluginId);
+  Result := DirExists(dir) and (ManifestVersion(dir) = '{#AppVersion}');
+end;
+
+function BothPluginsUpToDate(): Boolean;
+begin
+  Result := PluginUpToDate(FxPluginId) and PluginUpToDate(SettingsPluginId);
+end;
 
 procedure RerunPluginInstall();
 var
   rc: Integer;
 begin
   Exec(ExpandConstant('{app}\OtzariaBridge.exe'), '--install --quiet', '', SW_HIDE, ewWaitUntilTerminated, rc);
-  Sleep(1500);
+end;
+
+// ממתינים עד ~20 שניות לאחר ההתקנה - אוצריא צריכה להיפתח והמשתמש צריך ללחוץ "אישור"
+// בחלון שלה; תוסף שכבר מותקן ועדכני נראה מיד, בלי המתנה מיותרת
+function WaitForPluginsAutoDetected(): Boolean;
+var
+  i: Integer;
+begin
+  for i := 1 to 20 do
+  begin
+    if BothPluginsUpToDate() then begin Result := True; exit; end;
+    Sleep(1000);
+  end;
+  Result := False;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -65,20 +136,19 @@ var
   choice: Integer;
 begin
   if CurStep <> ssPostInstall then exit;
-  PluginsConfirmed := MsgBox(
-    'אוצריא היה אמור להיפתח ולבקש לאשר את התקנת שני התוספים: "סייר קבצים" ו"הגדרות מערכת".' + #13#10#13#10 +
-    'האם אישרת את ההתקנה של שני התוספים בחלון שנפתח באוצריא?',
-    mbConfirmation, MB_YESNO) = IDYES;
+  PluginsConfirmed := WaitForPluginsAutoDetected();
   while not PluginsConfirmed do
   begin
     choice := MsgBox(
-      'בלי התקנת שני התוספים באוצריא, החסימה לא תעבוד!' + #13#10#13#10 +
-      'נתיב התוספים: ' + ExpandConstant('{app}') + '\plugins' + #13#10#13#10 +
-      'ללחוץ "כן" כדי להפעיל שוב את ההתקנה באוצריא, או "לא" כדי להמשיך בלעדיה (לא מומלץ).',
+      'לא זיהיתי שהתוספים "סייר קבצים" ו"הגדרות מערכת" הותקנו/עודכנו בפועל באוצריא - ' +
+      'בלעדיהם החסימה לא תעבוד!' + #13#10#13#10 +
+      'נתיב התוספים לפתיחה ידנית: ' + ExpandConstant('{app}') + '\plugins' + #13#10#13#10 +
+      'ללחוץ "כן" כדי להפעיל שוב את ההתקנה באוצריא (ודא שאוצריא פתוחה ואשר את החלון שנפתח), ' +
+      'או "לא" כדי להמשיך בלעדיה (לא מומלץ).',
       mbError, MB_YESNO);
     if choice = IDNO then break;
     RerunPluginInstall();
-    PluginsConfirmed := MsgBox('האם אישרת עכשיו את התקנת שני התוספים באוצריא?', mbConfirmation, MB_YESNO) = IDYES;
+    PluginsConfirmed := WaitForPluginsAutoDetected();
   end;
 end;
 
