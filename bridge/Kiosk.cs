@@ -843,7 +843,7 @@ public static partial class Kiosk
             Config.Set("kiosk.yahrzeitLabel", lbl);
         }
         string cp = b.Str("clockPosition");
-        if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right") Config.Set("kiosk.clockPosition", cp);
+        if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right" or "bar-bottom" or "bar-top") Config.Set("kiosk.clockPosition", cp);
         string rzs = b.Str("restZmanimSide");
         if (rzs is "left" or "right") Config.Set("kiosk.restZmanimSide", rzs);
         string sbp = b.Str("sideBarPosition");

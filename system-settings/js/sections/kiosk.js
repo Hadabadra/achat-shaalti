@@ -748,7 +748,9 @@
         { value: 'bottom-left', label: 'למטה-שמאל' },
         { value: 'bottom-right', label: 'למטה-ימין' },
         { value: 'top-left', label: 'למעלה-שמאל' },
-        { value: 'top-right', label: 'למעלה-ימין' }
+        { value: 'top-right', label: 'למעלה-ימין' },
+        { value: 'bar-bottom', label: 'שורת משימות מלאה למטה (לוגו, הנצחה, שעון ותאריך)' },
+        { value: 'bar-top', label: 'שורת משימות מלאה למעלה' }
       ]
     });
     fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
@@ -773,7 +775,7 @@
       actions: [{ label: 'ביטול', value: false }, { label: 'שמירה', value: true, kind: 'primary' }],
       validate: function (x) {
         if (!x.pw) return 'יש להקליד את סיסמת הנעילה';
-        if (['bottom-left', 'bottom-right', 'top-left', 'top-right'].indexOf(x.pos) < 0) return 'מיקום שעון לא תקין';
+        if (['bottom-left', 'bottom-right', 'top-left', 'top-right', 'bar-bottom', 'bar-top'].indexOf(x.pos) < 0) return 'מיקום שעון לא תקין';
         if (['right', 'left', 'top', 'bottom'].indexOf(x.sidePos) < 0) return 'מיקום סרגל לא תקין';
         if (x.sched && (!/^\d{1,2}:\d{2}$/.test(x.schedStart || '') || !/^\d{1,2}:\d{2}$/.test(x.schedEnd || ''))) return 'יש להזין שעת התחלה ושעת סיום לתזמון';
         if (x.sched && x.schedStart === x.schedEnd) return 'שעת ההתחלה והסיום של התזמון זהות';

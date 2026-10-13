@@ -196,6 +196,15 @@ internal sealed class ClockBar : Form
         var wa = Screen.PrimaryScreen!.Bounds;
         int m = ScaleX(12);
         string pos = Config.Get("kiosk.clockPosition", "bottom-left");
+        if (IsBar)
+        {
+            // #60: שורת משימות מלאה ברוחב המסך (לוגו, סלוגן, הנצחה, שעון ותאריך)
+            Size = new Size(wa.Width, ScaleX(40));
+            Location = new Point(wa.Left, pos == "bar-top" ? wa.Top : wa.Bottom - Height);
+            Region = null;
+            return;
+        }
+        Size = new Size(ScaleX(250), ScaleX(64));
         int x = pos.EndsWith("right") ? wa.Right - Width - m : wa.Left + m;
         int y = pos.StartsWith("top") ? wa.Top + m : wa.Bottom - Height - m;
         Location = new Point(x, y);
@@ -226,21 +235,46 @@ internal sealed class ClockBar : Form
         g.SmoothingMode = SmoothingMode.AntiAlias;
         using var big = new Font("Segoe UI Semibold", 20f, GraphicsUnit.Point);
         using var small = new Font("Segoe UI", 9f, GraphicsUnit.Point);
-        using var dim = new SolidBrush(Color.FromArgb(200, 220, 225, 232));
+        using var dim = new SolidBrush(Color.FromArgb(200, ForeColor));
+        using var fore = new SolidBrush(ForeColor);
         var r = ClientRectangle;
         int pad = ScaleX(12);
+        if (IsBar) { PaintBar(g, r, pad, big, small, fore, dim); return; }
         var timeSize = g.MeasureString(_time, big);
-        g.DrawString(_time, big, Brushes.White, r.Right - pad - timeSize.Width, (r.Height - timeSize.Height) / 2f);
+        g.DrawString(_time, big, fore, r.Right - pad - timeSize.Width, (r.Height - timeSize.Height) / 2f);
         var sf = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Near };
         var textRect = new RectangleF(pad, ScaleX(8), r.Width - pad * 2 - timeSize.Width - ScaleX(6), ScaleX(22));
-        g.DrawString(_heb, small, Brushes.White, textRect, sf);
+        g.DrawString(_heb, small, fore, textRect, sf);
         textRect.Y += ScaleX(24);
         g.DrawString(_date + (_bat.Length > 0 ? "   " + _bat : ""), small, dim, textRect, sf);
     }
 
+    private static bool IsBar => Config.Get("kiosk.clockPosition", "bottom-left").StartsWith("bar-");
+    private Bitmap _logo;
+
+    /// #60: שורת המשימות של הנעילה. מימין: לוגו וסלוגן; במרכז: נוסח ההנצחה; משמאל: שעה, תאריך עברי ולועזי, סוללה.
+    /// התאריך העברי מהחישוב הפנימי (Overlay.HebrewDate) — רכיב "תאריכון" רק אחרי תשובה ב-#61.
+    private void PaintBar(Graphics g, Rectangle r, int pad, Font big, Font small, Brush fore, Brush dim)
+    {
+        var rtl = new StringFormat(StringFormatFlags.DirectionRightToLeft) { LineAlignment = StringAlignment.Center, Alignment = StringAlignment.Near };
+        var mid = new StringFormat { LineAlignment = StringAlignment.Center, Alignment = StringAlignment.Center };
+        using var accent = new SolidBrush(Theme.Accent(Color.FromArgb(232, 200, 140)));
+        using var mf = new Font("Segoe UI Semibold", 12f, GraphicsUnit.Point);
+        int h = r.Height, logo = h - ScaleX(10);
+        try { _logo ??= new Icon(AppIcon(), 64, 64).ToBitmap(); g.DrawImage(_logo, r.Right - pad - logo, (h - logo) / 2, logo, logo); } catch { }
+        float right = r.Right - pad - logo - ScaleX(8);
+        var brand = new RectangleF(right - ScaleX(320), 0, ScaleX(320), h);
+        g.DrawString(Lang.T("כלי מערכת לאוצריא · לימוד ללא הפרעות", "Otzaria System Tools · Learning without distractions"), mf, fore, brand, rtl);
+        g.DrawString("לעילוי נשמת אסתר גיטה דינר ע\"ה", small, accent, new RectangleF(r.Width / 2f - ScaleX(220), 0, ScaleX(440), h), mid);
+        string left = _time + "   " + _heb + "   " + _date + (_bat.Length > 0 ? "   " + _bat : "");
+        var sz = g.MeasureString(left, mf);
+        g.DrawString(left, mf, fore, new RectangleF(pad, 0, sz.Width + ScaleX(8), h), new StringFormat { LineAlignment = StringAlignment.Center });
+    }
+    private static Icon AppIcon() => Overlay.AppIcon();
+
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _tick.Dispose();
+        if (disposing) { _tick.Dispose(); _logo?.Dispose(); }
         base.Dispose(disposing);
     }
 }
