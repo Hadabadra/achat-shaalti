@@ -163,7 +163,7 @@
     kiosk: {
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
-      allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left',
+      allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, allowExcelDocs: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left',
       sideBar: true, sideBarIconsOnly: false, sideBarPosition: 'right', resetOnShutdown: false,
       restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
       zmanimElevation: 0, zmanimFallbackEngine: 'noaa',
@@ -299,7 +299,7 @@
       checkPw(b.password, false);
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
-      ['readOnly', 'twoFactor', 'clock', 'restScreen', 'fullscreenOtzaria', 'sideBar', 'sideBarIconsOnly', 'resetOnShutdown'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
+      ['readOnly', 'allowExcelDocs', 'twoFactor', 'clock', 'restScreen', 'fullscreenOtzaria', 'sideBar', 'sideBarIconsOnly', 'resetOnShutdown'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
       if (typeof b.restIdleMinutes === 'number') M.kiosk.restIdleMinutes = Math.max(0, Math.min(240, b.restIdleMinutes | 0));
       if (typeof b.zmanimLocation === 'string') M.kiosk.zmanimLocation = b.zmanimLocation;
       if (typeof b.zmanimCity === 'string') M.kiosk.zmanimCity = b.zmanimCity;
