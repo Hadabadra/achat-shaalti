@@ -1119,6 +1119,17 @@ public static partial class Kiosk
     /// קיצור חירום מהגשר הרץ (Ctrl+Alt+Shift+F12): מבטל את הנעילה כולה (גם את השירות) — אבל רק עם קוד השחזור.
     /// קיצור בלי שום אימות היה מאפשר לכל תלמיד לבטל את הנעילה, ולכן הקוד נדרש.
     /// </summary>
+    /// <summary>#8: כשהנעילה כבויה אבל נשארו שאריות (מסך שחור בלי סייר) — Ctrl+Alt+Shift+F12 משחזר בלי קוד.
+    /// כשהנעילה פעילה הקיצור נתפס ב-hook ודורש קוד שחזור (EmergencyRelease) — אין כאן עקיפה.</summary>
+    public static bool RestoreShellIfUnlocked()
+    {
+        if (IsActive || HardLock.ServiceActive) return false;
+        try { ClearRegistry(); } catch (Exception ex) { Config.Log("restore-shell: " + ex.Message); }
+        if (Process.GetProcessesByName("explorer").Length == 0) StartExplorer();
+        Config.Log("kiosk: שחזור סייר בקיצור (נעילה כבויה) — #8");
+        return true;
+    }
+
     public static bool EmergencyRelease(string code)
     {
         if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;

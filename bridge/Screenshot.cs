@@ -7,7 +7,7 @@ namespace OtzariaBridge;
 /// Ctrl+Shift+F12 (אזור). נשמר ל"צילומי מסך" בשולחן העבודה, או בתיקייה המותרת הראשונה כשהסייר מוגבל.</summary>
 public static class Screenshot
 {
-    private const int IdFull = 0x6A01, IdRegion = 0x6A02, WM_HOTKEY = 0x312;
+    private const int IdFull = 0x6A01, IdRegion = 0x6A02, IdRescue = 0x6A03, MOD_ALT_ = 1, WM_HOTKEY = 0x312;
     private const uint MOD_CONTROL = 2, MOD_SHIFT = 4, MOD_NOREPEAT = 0x4000;
     [DllImport("user32.dll")] private static extern bool RegisterHotKey(IntPtr h, int id, uint mod, uint vk);
     private static HotkeyWindow _win;
@@ -19,6 +19,8 @@ public static class Screenshot
             _win = new HotkeyWindow();
             bool a = RegisterHotKey(_win.Handle, IdFull, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, (uint)Keys.F11);
             bool b = RegisterHotKey(_win.Handle, IdRegion, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, (uint)Keys.F12);
+            // #8: Ctrl+Alt+Shift+F12 כשהנעילה כבויה — שחזור הסייר (בנעילה פעילה ה-hook תופס לפני)
+            RegisterHotKey(_win.Handle, IdRescue, MOD_CONTROL | MOD_SHIFT | MOD_ALT_ | MOD_NOREPEAT, (uint)Keys.F12);
             if (!a || !b) Config.Log("screenshot: רישום קיצור נכשל (תפוס?) full=" + a + " region=" + b);
         }
         catch (Exception ex) { Config.Log("screenshot init: " + ex.Message); }
@@ -64,7 +66,12 @@ public static class Screenshot
         public HotkeyWindow() => CreateHandle(new CreateParams());
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_HOTKEY) Capture(region: (int)m.WParam == IdRegion);
+            if (m.Msg == WM_HOTKEY && (int)m.WParam == IdRescue)
+            {
+                if (Kiosk.RestoreShellIfUnlocked()) Tray.Notify(Lang.T("שחזור", "Restore"), Lang.T("הסייר ושולחן העבודה שוחזרו", "Explorer and desktop restored"), ToolTipIcon.Info);
+                else Tray.Invoke(EmergencyForm.Open);
+            }
+            else if (m.Msg == WM_HOTKEY) Capture(region: (int)m.WParam == IdRegion);
             base.WndProc(ref m);
         }
     }
