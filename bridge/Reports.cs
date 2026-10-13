@@ -140,7 +140,7 @@ internal sealed class ReportsForm : Form
     private static ReportsForm _inst;
     private readonly ListView _list = new() { Dock = DockStyle.Top, Height = 180, View = View.Details, FullRowSelect = true, MultiSelect = false };
     private readonly TextBox _view = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
-    private readonly TextBox _note = new() { Dock = DockStyle.Fill, Multiline = true, Height = 60 };
+    private readonly TextBox _note = new() { Anchor = AnchorStyles.Left | AnchorStyles.Right, Multiline = true, Height = 60 };
     private readonly Button _del = new() { AutoSize = true, Enabled = false };
 
     public static void Open()
@@ -154,7 +154,7 @@ internal sealed class ReportsForm : Form
     private ReportsForm()
     {
         Text = Lang.T("דיווחים — מה נשלח", "Reports — what was sent");
-        Width = 620; Height = 560; StartPosition = FormStartPosition.CenterScreen;
+        Width = 640; Height = 620; MinimumSize = new System.Drawing.Size(520, 480); AutoScaleMode = AutoScaleMode.Dpi; StartPosition = FormStartPosition.CenterScreen;
         if (!Lang.En) { RightToLeft = RightToLeft.Yes; RightToLeftLayout = true; }
 
         var info = new Label
@@ -183,10 +183,10 @@ internal sealed class ReportsForm : Form
         var zip = new Button { AutoSize = true, Text = Lang.T("איסוף יומנים לקובץ zip…", "Collect logs to zip…") };
         zip.Click += (_, _) => Diagnostics_.Report();
 
-        var bottom = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 110, ColumnCount = 1 };
+        var bottom = new TableLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Padding = new Padding(4, 4, 4, 8) }; // #21: גובה לפי התוכן — הכפתורים לא נחתכים
         bottom.Controls.Add(new Label { Text = Lang.T("תיאור (מה קרה?) — יישלח עם הדיווח הבא:", "Description (what happened?) — sent with the next report:"), AutoSize = true });
         bottom.Controls.Add(_note);
-        var btns = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
+        var btns = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
         btns.Controls.AddRange(new Control[] { add, _del, zip });
         bottom.Controls.Add(btns);
 
