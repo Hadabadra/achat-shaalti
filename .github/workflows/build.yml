@@ -63,6 +63,14 @@ jobs:
           $lines | Set-Content SHA256SUMS.txt -Encoding ascii
           Get-Content SHA256SUMS.txt
 
+      # נפרד ממספור ה-Release (RELEASE_VERSION.txt, מספור עצמאי של המשתמש) - UpdateApi.cs בגשר
+      # משווה מול הקובץ הזה כדי לדעת אם יש עדכון אמיתי לגשר, לא מול תגית ה-Release.
+      - name: גרסת הגשר לבדיקת עדכון עצמי
+        shell: pwsh
+        run: |
+          $ver = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          Set-Content BRIDGE_VERSION.txt $ver -Encoding ascii -NoNewline
+
       - uses: actions/upload-artifact@v4
         with:
           name: OtzariaBridge-Setup
@@ -71,6 +79,7 @@ jobs:
             out/OtzariaBridge.exe
             bridge/plugins/*.otzplugin
             SHA256SUMS.txt
+            BRIDGE_VERSION.txt
           if-no-files-found: error
 
       # מספור ה-Release בפורק הזה עצמאי מגרסת הגשר הפנימית (OtzariaBridge.csproj) - נשלט
@@ -97,3 +106,4 @@ jobs:
             out/OtzariaBridge.exe
             bridge/plugins/*.otzplugin
             SHA256SUMS.txt
+            BRIDGE_VERSION.txt
