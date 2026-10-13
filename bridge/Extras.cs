@@ -536,6 +536,11 @@ internal static class Diagnostics_
                 }
                 AddText(z, "config.sanitized.json", Sanitize(File.Exists(Config.FilePath) ? File.ReadAllText(Config.FilePath) : "{}"));
                 AddText(z, "info.txt", Info());
+                // #60: צילומי מסך שצורפו מחלון "דיווחים"
+                string shots = Path.Combine(Config.Dir, "report-shots");
+                if (Directory.Exists(shots))
+                    foreach (var f in Directory.GetFiles(shots, "*.png").OrderByDescending(x => x).Take(5))
+                        z.CreateEntryFromFile(f, "screenshots/" + Path.GetFileName(f));
             }
             Process.Start(new ProcessStartInfo(IssuesUrl + "?title=" + Uri.EscapeDataString("דיווח מהגשר " + Program.Version) +
                 "&body=" + Uri.EscapeDataString("**מה קרה?**\n\n\n**מה ציפיתי שיקרה?**\n\n\n(צרפו כאן את קובץ ה-zip מהשולחן העבודה בגרירה)\n\n" + Info())) { UseShellExecute = true });

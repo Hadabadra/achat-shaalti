@@ -180,6 +180,8 @@ internal sealed class ReportsForm : Form
         };
         var add = new Button { AutoSize = true, Text = Lang.T("הוספת תיאור לדיווח", "Add a description") };
         add.Click += (_, _) => { if (Reports.AddNote(_note.Text)) { _note.Clear(); Reload(); } };
+        var shot = new Button { AutoSize = true, Text = Lang.T("צרף צילום מסך", "Attach a screenshot") };
+        shot.Click += (_, _) => AttachShot();
         var zip = new Button { AutoSize = true, Text = Lang.T("איסוף יומנים לקובץ zip…", "Collect logs to zip…") };
         zip.Click += (_, _) => Diagnostics_.Report();
 
@@ -187,13 +189,34 @@ internal sealed class ReportsForm : Form
         bottom.Controls.Add(new Label { Text = Lang.T("תיאור (מה קרה?) — יישלח עם הדיווח הבא:", "Description (what happened?) — sent with the next report:"), AutoSize = true });
         bottom.Controls.Add(_note);
         var btns = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
-        btns.Controls.AddRange(new Control[] { add, _del, zip });
+        btns.Controls.AddRange(new Control[] { add, shot, _del, zip });
         bottom.Controls.Add(btns);
 
         Controls.Add(_view);
         Controls.Add(_list);
         Controls.Add(info);
         Controls.Add(bottom);
+    }
+
+    /// #60: צילום אזור (החלון מוסתר בזמן הצילום), נשמר בתיקיית report-shots ונרשם כתיאור לדיווח.
+    /// הדיווח עצמו טקסט בלבד (feedback.report), ולכן התמונה מצורפת לקובץ ה-zip של "איסוף יומנים".
+    private void AttachShot()
+    {
+        Hide();
+        string path = null;
+        try { System.Threading.Thread.Sleep(250); path = Screenshot.Capture(region: true); }
+        finally { Show(); Activate(); }
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        try
+        {
+            string dir = Path.Combine(Config.Dir, "report-shots");
+            Directory.CreateDirectory(dir);
+            string dest = Path.Combine(dir, Path.GetFileName(path));
+            File.Copy(path, dest, overwrite: true);
+            string txt = (_note.Text.Trim() + "\n[צורף צילום מסך: " + Path.GetFileName(dest) + " — מצורף לקובץ ה-zip של איסוף היומנים]").Trim();
+            if (Reports.AddNote(txt)) { _note.Clear(); Reload(); }
+        }
+        catch { }
     }
 
     private void Reload()
