@@ -269,7 +269,7 @@ public static partial class Kiosk
         clock = Config.Get("kiosk.clock", true),
         clockPosition = Config.Get("kiosk.clockPosition", "bottom-left"),
         restScreen = Config.Get("kiosk.restScreen", true),
-        restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 0),
+        restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 1),
         restZmanimSide = Config.Get("kiosk.restZmanimSide", "right"),
         zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
         zmanimCity = Config.Get("kiosk.zmanimCity", ""),
@@ -1323,7 +1323,7 @@ public static partial class Kiosk
             // אוצריא תמיד ממוקסמת: בלי מזעור, בלי חלון קטן, ובלי חור במקום שורת המשימות
             // אוצריא ממוזערת: מסך מנוחה עם סמל אוצריא, שעה ותאריך, במקום החזרה מיידית
             // שומר מסך אחרי זמן ללא פעילות (0 = כבוי), גם כשאוצריא פתוחה
-            int idleMin = Config.Get("kiosk.restIdleMinutes", 0);
+            int idleMin = Config.Get("kiosk.restIdleMinutes", 1);
             if (idleMin > 0 && !Overlay.RestVisible && IdleMs() >= idleMin * 60000L) { Overlay.ShowRest(hwnd, idle: true); return; }
             if (Overlay.RestIdle) return;
             if (IsIconic(hwnd))

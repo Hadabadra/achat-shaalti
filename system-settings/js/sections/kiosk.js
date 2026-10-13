@@ -642,7 +642,7 @@
     cities.forEach(function (c) { cityByName[c.name] = c; });
     var fields = [
       { name: 'rest', type: 'checkbox', label: 'מסך מנוחה כשאוצריא ממוזערת', value: st.restScreen !== false, hint: 'סמל אוצריא, שעה ותאריך במסך מלא. לחיצה בכל מקום מחזירה לאוצריא' },
-      { name: 'idle', label: 'שומר מסך אחרי דקות ללא פעילות (0 = כבוי)', value: String(st.restIdleMinutes || 0), dir: 'ltr', placeholder: '0', hint: 'מסך המנוחה מופיע גם כשאוצריא פתוחה, אחרי הזמן הזה בלי מקלדת ועכבר. עד 240 דקות' }
+      { name: 'idle', label: 'שומר מסך אחרי דקות ללא פעילות (0 = כבוי, ברירת מחדל: 1)', value: String(st.restIdleMinutes || 0), dir: 'ltr', placeholder: '0', hint: 'מסך המנוחה מופיע גם כשאוצריא פתוחה, אחרי הזמן הזה בלי מקלדת ועכבר. עד 240 דקות' }
     ];
     if (cityOptions.length > 1) {
       fields.push({ name: 'zcity', type: 'select', label: 'עיר לזמני היום בשומר המסך', value: st.zmanimCity || '', options: cityOptions,
