@@ -164,8 +164,8 @@ internal sealed class ClockBar : Form
         ShowInTaskbar = false;
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
-        BackColor = Color.FromArgb(28, 32, 38);
-        ForeColor = Color.White;
+        BackColor = Theme.Bar;
+        ForeColor = Theme.BarText;
         Opacity = 0.92;
         DoubleBuffered = true;
         Size = new Size(ScaleX(250), ScaleX(64));
@@ -348,7 +348,7 @@ internal sealed class RestScreen : Form
         float cx = r.Width / 2f + dx;
         var rtl = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Center };
         var center = new StringFormat { Alignment = StringAlignment.Center };
-        Color gold = Color.FromArgb(232, 200, 140);
+        Color gold = Theme.Accent(Color.FromArgb(232, 200, 140));
         using var goldB = new SolidBrush(gold);
         using var dim = new SolidBrush(Color.FromArgb(170, 220, 214, 200));
         using var headF = new Font("David", 40f, FontStyle.Bold, GraphicsUnit.Point);

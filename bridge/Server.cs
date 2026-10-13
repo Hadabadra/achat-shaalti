@@ -63,6 +63,7 @@ public static class Server
         Pairing.Register();
         HardLock.Register();
         Zmanim.Register();
+        Theme.Register();
 
         int port = FindPort();
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory });

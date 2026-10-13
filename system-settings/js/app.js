@@ -313,6 +313,7 @@
       show(hash || start || (h.kioskActive ? 'kiosk' : 'audio'));
     }
     SS.pushZmanimNow();
+    pushTheme();
     return true;
   }
   SS.reprobe = connect;
@@ -355,7 +356,7 @@
   async function boot(payload) {
     if (state.booted) return;
     state.booted = true;
-    if (payload && payload.theme) ui.applyTheme(payload.theme);
+    if (payload && payload.theme) onTheme(payload.theme);
     try { await window.I18N.init(payload); } catch (e) { /* נשארים בעברית */ }
     var lb = document.getElementById('top-lang');
     lb.textContent = window.I18N.toggleLabel();
@@ -380,10 +381,20 @@
     connect();
   }
 
+  /* #56: ערכת העיצוב של אוצריא גם לחלונות הגשר (שורת שעון בנעילה, מסך מנוחה) */
+  var lastTheme = null;
+  function pushTheme() {
+    if (!lastTheme || !state.connected) return;
+    var cs = lastTheme.colorScheme || {};
+    SS.bridge.call('/theme', { mode: lastTheme.mode === 'light' ? 'light' : 'dark', primary: String(cs.primary || '') }).catch(function () { /* גשר ישן */ });
+  }
+  function onTheme(th) { ui.applyTheme(th); lastTheme = th; pushTheme(); }
+  SS.pushTheme = pushTheme;
+
   function init() {
     if (window.Otzaria) {
       window.Otzaria.on('plugin.boot', boot);
-      window.Otzaria.on('theme.changed', ui.applyTheme);
+      window.Otzaria.on('theme.changed', onTheme);
       window.Otzaria.on('plugin.page_opened', function (ev) { /* #56: נפתח מהסייר — {section} */
         var pr = ev && (ev.param || (ev.data && ev.data.param));
         if (pr && pr.section) { try { location.hash = pr.section; } catch (e) { /* כלום */ } if (state.connected) show(pr.section); }
