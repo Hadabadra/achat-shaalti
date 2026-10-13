@@ -5,7 +5,7 @@ namespace OtzariaBridge;
 public static class Tray
 {
     private static NotifyIcon _icon;
-    private static ToolStripMenuItem _status, _exit, _plugins, _install, _lang, _about, _unpair, _changelog, _report;
+    private static ToolStripMenuItem _status, _exit, _plugins, _install, _lang, _about, _unpair, _changelog, _report, _shot, _shotRegion;
     private static ContextMenuStrip _menu;
     private static Control _invoker;
 
@@ -25,7 +25,9 @@ public static class Tray
         _unpair = new ToolStripMenuItem("", null, (_, _) => PairingForm.Open());
         _changelog = new ToolStripMenuItem("", null, (_, _) => ChangelogForm.Open());
         _report = new ToolStripMenuItem("", null, (_, _) => ReportsForm.Open());
-        menu.Items.AddRange(new ToolStripItem[] { _status, _about, _changelog, _report, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
+        _shot = new ToolStripMenuItem("", null, (_, _) => _invoker.BeginInvoke(() => { _menu.Close(); Thread.Sleep(250); Screenshot.Capture(false); }));
+        _shotRegion = new ToolStripMenuItem("", null, (_, _) => _invoker.BeginInvoke(() => { _menu.Close(); Thread.Sleep(250); Screenshot.Capture(true); }));
+        menu.Items.AddRange(new ToolStripItem[] { _status, _about, _changelog, _report, _shot, _shotRegion, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
 
         _icon = new NotifyIcon
         {
@@ -76,6 +78,8 @@ public static class Tray
     {
         if (_menu == null) return;
         _menu.RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
+        _shot.Text = Lang.T("צילום מסך (Ctrl+Shift+F11)", "Screenshot (Ctrl+Shift+F11)");
+        _shotRegion.Text = Lang.T("צילום אזור (Ctrl+Shift+F12)", "Region screenshot (Ctrl+Shift+F12)");
         _plugins.Text = Lang.T("פתח את תיקיית התוספים", "Open the plugins folder");
         _about.Text = Lang.T("אודות ועדכונים…", "About and updates…");
         _changelog.Text = Lang.T("יומן שינויים (מקומי)…", "Changelog (offline)…");

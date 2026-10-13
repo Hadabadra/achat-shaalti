@@ -85,6 +85,7 @@ public static class Program
             Application.SetCompatibleTextRenderingDefault(false);
 
             Tray.Init();
+            Screenshot.Init(); // #60
             Outbox.Init();
             Reports.Init();
             Port = Server.Start();

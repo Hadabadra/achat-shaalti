@@ -68,6 +68,13 @@ public static class FxPolicy
         HardLock.SetFxPolicy(password, RawMode(null) ?? "off", RawRoots(null), Math.Clamp(RawMinutes(null), 1, MaxMinutes));
     }
 
+    /// <summary>תיקיות מותרות לשמירה כשהסייר מוגבל; null = אין הגבלה (#60 צילום מסך)</summary>
+    public static string[] SaveRootsOrNull()
+    {
+        var st = Current();
+        return st.Effective == "open" ? null : st.Roots;
+    }
+
     private static State Current()
     {
         var sp = ServicePolicy();
