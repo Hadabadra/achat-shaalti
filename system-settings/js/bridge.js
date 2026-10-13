@@ -530,13 +530,16 @@
     vendor: 'lenovo', manufacturer: 'LENOVO', model: '20XW0013IL', supported: true,
     wmiReachable: true, wmiError: null,
     usbBootSetting: { name: 'USB Boot', currentValue: 'Enable', possibleValues: ['Enable', 'Disable'] },
+    bootMenuAuthSetting: { name: 'Prompt for Admin authentication on F9 (Boot Menu)', currentValue: 'Disable', possibleValues: ['Disable', 'Enable'] },
+    passwordRequiresPhysicalPresence: false,
     note: 'ב-Lenovo מרבית הדגמים דורשים שתהיה כבר מוגדרת סיסמת Supervisor לפני ששינוי הגדרות אחרות (כמו חסימת USB) יתקבל ב-firmware. ' +
-      'לכן מוצע קודם להגדיר סיסמת BIOS, ורק אחר כך לחסום אתחול USB.'
+      'לכן מוצע קודם להגדיר סיסמת BIOS, ורק אחר כך לחסום אתחול USB/לנעול את תפריט האתחול.'
   };
   mockRoutes['/bios/status'] = function () { return clone(M.bios); };
   mockRoutes['/bios/harden'] = function (b) {
     checkPw(b.password, true);
-    if (!b.setPassword && !b.blockUsbBoot) throw mockErr('bad_request', 'יש לבחור לפחות פעולה אחת: הגדרת סיסמת BIOS או חסימת אתחול USB');
+    if (!b.setPassword && !b.blockUsbBoot && !b.lockBootMenu)
+      throw mockErr('bad_request', 'יש לבחור לפחות פעולה אחת: הגדרת סיסמת BIOS, חסימת אתחול USB, או נעילת תפריט האתחול');
     var steps = [];
     if (b.setPassword) {
       if (!b.biosPassword || b.biosPassword.length < 4) throw mockErr('bad_request', 'סיסמת ה-BIOS חייבת להכיל לפחות 4 תווים');
@@ -549,6 +552,15 @@
           message: 'ההגדרה „' + M.bios.usbBootSetting.name + '” הוגדרה ל-„Disable” ונשמרה (דמה בלבד)' });
       } else {
         steps.push({ id: 'usbBoot', attempted: false, success: false, settingName: null, message: 'לא נמצאה הגדרה מתאימה במחשב זה' });
+      }
+    }
+    if (b.lockBootMenu) {
+      if (M.bios.bootMenuAuthSetting) {
+        M.bios.bootMenuAuthSetting.currentValue = 'Enable';
+        steps.push({ id: 'bootMenuAuth', attempted: true, success: true, settingName: M.bios.bootMenuAuthSetting.name,
+          message: 'ההגדרה „' + M.bios.bootMenuAuthSetting.name + '” הוגדרה ל-„Enable” ונשמרה (דמה בלבד)' });
+      } else {
+        steps.push({ id: 'bootMenuAuth', attempted: false, success: false, settingName: null, message: 'לא נמצאה הגדרה מתאימה במחשב זה' });
       }
     }
     return { vendor: M.bios.vendor, manufacturer: M.bios.manufacturer, model: M.bios.model, steps: steps };

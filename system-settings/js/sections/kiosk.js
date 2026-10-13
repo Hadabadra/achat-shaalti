@@ -400,6 +400,10 @@
     head += '<div class="setting-row"><div class="setting-text"><b>חסימת אתחול מהתקן USB/חיצוני</b><span class="muted">' +
       (usb ? 'נמצאה הגדרה במחשב זה: „' + ui.esc(usb.name) + '” (ערך נוכחי: ' + ui.esc(usb.currentValue || '—') + ')'
            : 'לא נמצאה הגדרה מתאימה במחשב זה') + '</span></div></div>';
+    var bootMenu = bios.bootMenuAuthSetting;
+    head += '<div class="setting-row"><div class="setting-text"><b>נעילת תפריט האתחול (F9/F12) בסיסמת BIOS</b><span class="muted">' +
+      (bootMenu ? 'נמצאה הגדרה במחשב זה: „' + ui.esc(bootMenu.name) + '” (ערך נוכחי: ' + ui.esc(bootMenu.currentValue || '—') + ')'
+           : 'לא נמצאה הגדרה מתאימה במחשב זה') + '</span></div></div>';
     if (bios.wmiReachable === false) {
       head += '<div class="state-box error"><div><b>לא ניתן לקרוא את הגדרות ה-BIOS כרגע</b><span class="muted">' +
         ui.esc(bios.wmiError || '') + '</span></div></div>';
@@ -416,10 +420,14 @@
 
   async function biosHarden(body, bios) {
     var usb = bios && bios.usbBootSetting;
+    var bootMenu = bios && bios.bootMenuAuthSetting;
+    var pwNote = bios && bios.passwordRequiresPhysicalPresence
+      ? ' <b>שימו לב:</b> ביצרן/דגם הזה הגדרת סיסמת BIOS חסומה במכוון מרחוק (דורשת נוכחות פיזית ליד המחשב) — הניסיון כאן צפוי להיכשל; יש להגדיר ידנית ב-F10.'
+      : '';
     var v = await ui.dialog({
       title: 'הקשחת BIOS/UEFI', icon: 'shield',
       body: '<p class="muted"><b>אזהרה לפני שממשיכים:</b> סיסמת BIOS שנשכחה <b>אינה ניתנת לשחזור מתוך Windows</b> — ' +
-        'יש לפנות לתמיכת היצרן, ולעיתים נדרש איפוס פיזי של ה-BIOS (סוללת CMOS) בתוך המחשב. רשמו ושמרו את הסיסמה במקום בטוח לפני שממשיכים.</p>',
+        'יש לפנות לתמיכת היצרן, ולעיתים נדרש איפוס פיזי של ה-BIOS (סוללת CMOS) בתוך המחשב. רשמו ושמרו את הסיסמה במקום בטוח לפני שממשיכים.' + pwNote + '</p>',
       fields: [
         { name: 'setPw', type: 'checkbox', label: 'הגדרת סיסמת BIOS', value: true,
           hint: 'אם כבר מוגדרת סיסמה אחרת במחשב (שלא ידועה כאן), הפעולה פשוט תיכשל — אי אפשר לדרוס בטעות סיסמה קיימת.' },
@@ -427,11 +435,14 @@
         { name: 'biosPw2', label: 'אימות סיסמת BIOS', type: 'password', dir: 'ltr' },
         { name: 'blockUsb', type: 'checkbox', label: 'חסימת אתחול ממדיה חיצונית (USB)', value: !!usb, disabled: !usb,
           hint: usb ? 'ייעשה דרך ההגדרה „' + usb.name + '”.' : 'לא נמצאה הגדרה מתאימה במחשב זה — אי אפשר להפעיל אוטומטית.' },
+        { name: 'lockBootMenu', type: 'checkbox', label: 'נעילת תפריט האתחול (F9/F12) בסיסמה', value: !!bootMenu, disabled: !bootMenu,
+          hint: bootMenu ? 'ייעשה דרך ההגדרה „' + bootMenu.name + '”. חזק יותר מחסימת USB בלבד — חוסם כניסה לתפריט האתחול כולו.'
+                         : 'לא נמצאה הגדרה מתאימה במחשב זה — אי אפשר להפעיל אוטומטית.' },
         { name: 'pw', label: 'סיסמת נעילה (של תוכנת החסימה)', type: 'password', dir: 'ltr' }
       ],
       actions: [{ label: 'ביטול', value: false }, { label: 'הפעלה', value: true, kind: 'primary' }],
       validate: function (x) {
-        if (!x.setPw && !x.blockUsb) return 'יש לבחור לפחות פעולה אחת';
+        if (!x.setPw && !x.blockUsb && !x.lockBootMenu) return 'יש לבחור לפחות פעולה אחת';
         if (x.setPw) {
           if (!x.biosPw || x.biosPw.length < 4) return 'סיסמת ה-BIOS חייבת להכיל לפחות 4 תווים';
           if (x.biosPw !== x.biosPw2) return 'סיסמאות ה-BIOS אינן תואמות';
@@ -440,7 +451,7 @@
       },
       onSubmit: async function (x) {
         return await SS.bridge.call('/bios/harden', {
-          password: x.pw, setPassword: !!x.setPw, biosPassword: x.biosPw || '', blockUsbBoot: !!x.blockUsb
+          password: x.pw, setPassword: !!x.setPw, biosPassword: x.biosPw || '', blockUsbBoot: !!x.blockUsb, lockBootMenu: !!x.lockBootMenu
         }, { timeoutMs: 30000 });
       }
     });
@@ -451,7 +462,7 @@
 
   function showBiosResult(r) {
     var rows = (r.steps || []).map(function (s) {
-      var label = s.id === 'password' ? 'סיסמת BIOS' : 'חסימת אתחול USB';
+      var label = s.id === 'password' ? 'סיסמת BIOS' : s.id === 'bootMenuAuth' ? 'נעילת תפריט האתחול' : 'חסימת אתחול USB';
       return '<li>' + ui.icon(s.success ? 'check' : 'warning') + '<span><b>' + label + (s.success ? ' — הצליח.' : ' — לא הצליח.') +
         '</b> ' + ui.esc(s.message || '') + '</span></li>';
     }).join('');

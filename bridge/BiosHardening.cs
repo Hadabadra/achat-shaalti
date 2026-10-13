@@ -64,6 +64,7 @@ public static class BiosHardening
             {
                 var settings = LenovoSettings(out string err);
                 var usb = settings.FirstOrDefault(s => LooksLikeUsbBootSetting(s.name));
+                var bootMenu = settings.FirstOrDefault(s => LooksLikeBootMenuAuthSetting(s.name));
                 return new
                 {
                     vendor,
@@ -73,14 +74,16 @@ public static class BiosHardening
                     wmiReachable = err == null,
                     wmiError = err,
                     usbBootSetting = usb.name == null ? null : new { name = usb.name, currentValue = usb.value, possibleValues = usb.possible },
+                    bootMenuAuthSetting = bootMenu.name == null ? null : new { name = bootMenu.name, currentValue = bootMenu.value, possibleValues = bootMenu.possible },
                     note = "ב-Lenovo מרבית הדגמים דורשים שתהיה כבר מוגדרת סיסמת Supervisor לפני ששינוי הגדרות אחרות (כמו חסימת USB) יתקבל ב-firmware. " +
-                           "לכן מוצע קודם להגדיר סיסמת BIOS, ורק אחר כך לחסום אתחול USB.",
+                           "לכן מוצע קודם להגדיר סיסמת BIOS, ורק אחר כך לחסום אתחול USB/לנעול את תפריט האתחול.",
                 };
             }
             case "hp":
             {
                 var settings = HpSettings(out string err);
                 var usb = settings.FirstOrDefault(s => LooksLikeUsbBootSetting(s.name));
+                var bootMenu = settings.FirstOrDefault(s => LooksLikeBootMenuAuthSetting(s.name));
                 bool pwRequiresPhysical = HpPasswordRequiresPhysicalPresence();
                 return new
                 {
@@ -91,6 +94,7 @@ public static class BiosHardening
                     wmiReachable = err == null,
                     wmiError = err,
                     usbBootSetting = usb.name == null ? null : new { name = usb.name, currentValue = usb.value, possibleValues = usb.possible },
+                    bootMenuAuthSetting = bootMenu.name == null ? null : new { name = bootMenu.name, currentValue = bootMenu.value, possibleValues = bootMenu.possible },
                     passwordRequiresPhysicalPresence = pwRequiresPhysical,
                     note = "נתמך בעיקר בדגמים עסקיים (EliteBook/EliteDesk/ProBook/Z). במחשבי צרכן (Pavilion/Envy וכו') ייתכן שהממשק אינו חשוף כלל. " +
                         (pwRequiresPhysical
@@ -145,9 +149,10 @@ public static class BiosHardening
 
         bool wantPassword = b.Bool("setPassword");
         bool wantUsbBlock = b.Bool("blockUsbBoot");
+        bool wantBootMenuAuth = b.Bool("lockBootMenu");
         string newBios = b.Str("biosPassword") ?? "";
-        if (!wantPassword && !wantUsbBlock)
-            throw BridgeException.BadRequest("יש לבחור לפחות פעולה אחת: הגדרת סיסמת BIOS או חסימת אתחול USB");
+        if (!wantPassword && !wantUsbBlock && !wantBootMenuAuth)
+            throw BridgeException.BadRequest("יש לבחור לפחות פעולה אחת: הגדרת סיסמת BIOS, חסימת אתחול USB, או נעילת תפריט האתחול");
         if (wantPassword && newBios.Length < 4)
             throw BridgeException.BadRequest("סיסמת ה-BIOS חייבת להכיל לפחות 4 תווים");
 
@@ -168,6 +173,12 @@ public static class BiosHardening
             var r = vendor == "lenovo" ? LenovoBlockUsbBoot() : HpBlockUsbBoot();
             steps.Add(new { id = "usbBoot", attempted = r.attempted, success = r.success, settingName = r.settingName, message = r.message });
             Config.Log("bios harden: usbBoot vendor=" + vendor + " setting=" + r.settingName + " success=" + r.success + " msg=" + r.message);
+        }
+        if (wantBootMenuAuth)
+        {
+            var r = vendor == "lenovo" ? LenovoLockBootMenu() : HpLockBootMenu();
+            steps.Add(new { id = "bootMenuAuth", attempted = r.attempted, success = r.success, settingName = r.settingName, message = r.message });
+            Config.Log("bios harden: bootMenuAuth vendor=" + vendor + " setting=" + r.settingName + " success=" + r.success + " msg=" + r.message);
         }
         return new { vendor, manufacturer = raw, model, steps };
     }
@@ -191,19 +202,45 @@ public static class BiosHardening
         return (hasUsb && hasBoot) || (hasExternal && hasBoot);
     }
 
+    /// <summary>
+    /// הגדרה שדורשת סיסמת מנהל כדי בכלל להיכנס לתפריט האתחול (F9/F12 וכו') - נמצאה בפועל על HP EliתeBook
+    /// 840 G8 בשם "Prompt for Admin authentication on F9 (Boot Menu)". חסימה חזקה יותר מחסימת USB בלבד:
+    /// סוגרת גישה לכל תפריט האתחול, לא רק ל-USB. שם ההגדרה משתנה בין דגמים, אז חיפוש גמיש גם כאן.
+    /// </summary>
+    private static readonly string[] BootMenuAuthPhrases =
+    {
+        "admin authentication on f9", "admin authentication on f12", "boot menu authentication",
+        "require password for boot menu", "password for f9", "password for f12",
+    };
+
+    private static bool LooksLikeBootMenuAuthSetting(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        string n = name.ToLowerInvariant();
+        if (BootMenuAuthPhrases.Any(n.Contains)) return true;
+        bool hasBootMenu = n.Contains("boot menu") || n.Contains("f9") || n.Contains("f12");
+        bool hasAuth = n.Contains("admin") || n.Contains("authentication") || n.Contains("password");
+        return hasBootMenu && hasAuth;
+    }
+
     /// <summary>מערך הערכים האפשריים לערך "חסום/כבוי" (disable/off/no/...); null אם לא ברור</summary>
     private static readonly string[] DisableWords = { "disable", "disabled", "off", "no", "block", "blocked" };
+    /// <summary>מערך הערכים האפשריים לערך "מופעל" (enable/on/yes/require/...); null אם לא ברור</summary>
+    private static readonly string[] EnableWords = { "enable", "enabled", "on", "yes", "require", "prompt" };
 
-    private static string PickDisableValue(string[] possible)
+    private static string PickValue(string[] possible, string[] words)
     {
         if (possible == null) return null;
         foreach (string p in possible)
         {
             string low = (p ?? "").ToLowerInvariant();
-            if (DisableWords.Any(low.Contains)) return p;
+            if (words.Any(low.Contains)) return p;
         }
         return null;
     }
+
+    private static string PickDisableValue(string[] possible) => PickValue(possible, DisableWords);
+    private static string PickEnableValue(string[] possible) => PickValue(possible, EnableWords);
 
     // ---------- Lenovo: root\wmi ----------
 
@@ -288,18 +325,30 @@ public static class BiosHardening
         }
     }
 
-    private static (bool attempted, bool success, string settingName, string message) LenovoBlockUsbBoot()
+    private static (bool attempted, bool success, string settingName, string message) LenovoBlockUsbBoot() =>
+        LenovoApplySetting(LooksLikeUsbBootSetting, PickDisableValue,
+            "לא נמצאה במחשב זה הגדרת BIOS שקשורה לאתחול מהתקן USB/חיצוני. ייתכן שהדגם קורא לה בשם אחר, " +
+                "או שאין הגדרה כזו בדגם הזה — יש לבדוק ידנית בתפריט ה-BIOS",
+            "חוסם אתחול");
+
+    private static (bool attempted, bool success, string settingName, string message) LenovoLockBootMenu() =>
+        LenovoApplySetting(LooksLikeBootMenuAuthSetting, PickEnableValue,
+            "לא נמצאה במחשב זה הגדרת BIOS שדורשת סיסמת מנהל לכניסה לתפריט האתחול (F9/F12). ייתכן שהדגם קורא לה בשם אחר, " +
+                "או שאין הגדרה כזו בדגם הזה — יש לבדוק ידנית בתפריט ה-BIOS",
+            "דורש סיסמה לתפריט אתחול");
+
+    /// <summary>הלוגיקה המשותפת: מוצא הגדרה לפי matcher, בוחר ערך לפי valuePicker, כותב ושומר (Lenovo דורש שלב שמירה נפרד)</summary>
+    private static (bool attempted, bool success, string settingName, string message) LenovoApplySetting(
+        Func<string, bool> matcher, Func<string[], string> valuePicker, string notFoundMsg, string kindLabel)
     {
         var settings = LenovoSettings(out string err);
         if (err != null) return (false, false, null, "קריאת הגדרות ה-BIOS נכשלה: " + err);
-        var usb = settings.FirstOrDefault(s => LooksLikeUsbBootSetting(s.name));
-        if (usb.name == null)
-            return (false, false, null, "לא נמצאה במחשב זה הגדרת BIOS שקשורה לאתחול מהתקן USB/חיצוני. ייתכן שהדגם קורא לה בשם אחר, " +
-                "או שאין הגדרה כזו בדגם הזה — יש לבדוק ידנית בתפריט ה-BIOS");
-        string disableValue = PickDisableValue(usb.possible);
-        if (disableValue == null)
-            return (false, false, usb.name, "נמצאה הגדרה \"" + usb.name + "\" אך לא ניתן לזהות אוטומטית איזה מהערכים האפשריים (" +
-                string.Join(", ", usb.possible ?? Array.Empty<string>()) + ") חוסם אתחול — יש להגדיר ידנית בתפריט ה-BIOS");
+        var setting = settings.FirstOrDefault(s => matcher(s.name));
+        if (setting.name == null) return (false, false, null, notFoundMsg);
+        string newValue = valuePicker(setting.possible);
+        if (newValue == null)
+            return (false, false, setting.name, "נמצאה הגדרה \"" + setting.name + "\" אך לא ניתן לזהות אוטומטית איזה מהערכים האפשריים (" +
+                string.Join(", ", setting.possible ?? Array.Empty<string>()) + ") " + kindLabel + " — יש להגדיר ידנית בתפריט ה-BIOS");
 
         try
         {
@@ -307,12 +356,12 @@ public static class BiosHardening
             using (var setCls = new ManagementClass(@"root\wmi:Lenovo_SetBiosSetting"))
                 foreach (ManagementObject o in setCls.GetInstances())
                 {
-                    using (o) { setText = o.InvokeMethod("SetBiosSetting", new object[] { usb.name + "," + disableValue }) as string ?? ""; }
+                    using (o) { setText = o.InvokeMethod("SetBiosSetting", new object[] { setting.name + "," + newValue }) as string ?? ""; }
                     break;
                 }
             bool setOk = setText.Equals("Success", StringComparison.OrdinalIgnoreCase);
             if (!setOk)
-                return (true, false, usb.name, "שינוי ההגדרה \"" + usb.name + "\" נכשל: " + (string.IsNullOrEmpty(setText) ? "תשובה לא ידועה" : setText) +
+                return (true, false, setting.name, "שינוי ההגדרה \"" + setting.name + "\" נכשל: " + (string.IsNullOrEmpty(setText) ? "תשובה לא ידועה" : setText) +
                     " — בדגמי Lenovo רבים נדרשת סיסמת Supervisor מוגדרת מראש לפני שינוי הגדרות דרך WMI");
 
             string saveText = "";
@@ -323,14 +372,14 @@ public static class BiosHardening
                     break;
                 }
             bool saveOk = saveText.Equals("Success", StringComparison.OrdinalIgnoreCase);
-            return (true, saveOk, usb.name, saveOk
-                ? "ההגדרה \"" + usb.name + "\" הוגדרה ל-\"" + disableValue + "\" ונשמרה. השינוי ייכנס לתוקף מההפעלה הבאה"
+            return (true, saveOk, setting.name, saveOk
+                ? "ההגדרה \"" + setting.name + "\" הוגדרה ל-\"" + newValue + "\" ונשמרה. השינוי ייכנס לתוקף מההפעלה הבאה"
                 : "ההגדרה שונתה אבל השמירה (SaveBiosSettings) נכשלה: " + saveText);
         }
         catch (Exception ex)
         {
-            Config.Log("bios lenovo block-usb-boot: " + ex.Message);
-            return (true, false, usb.name, "שינוי ההגדרה נכשל: " + ex.Message);
+            Config.Log("bios lenovo apply-setting: " + ex.Message);
+            return (true, false, setting.name, "שינוי ההגדרה נכשל: " + ex.Message);
         }
     }
 
@@ -429,18 +478,30 @@ public static class BiosHardening
         }
     }
 
-    private static (bool attempted, bool success, string settingName, string message) HpBlockUsbBoot()
+    private static (bool attempted, bool success, string settingName, string message) HpBlockUsbBoot() =>
+        HpApplySetting(LooksLikeUsbBootSetting, PickDisableValue,
+            "לא נמצאה במחשב זה הגדרת BIOS שקשורה לאתחול מהתקן USB/חיצוני. ייתכן שהדגם קורא לה בשם אחר, " +
+                "או שהיא אינה חשופה ב-WMI בדגם הזה — יש לבדוק ידנית בתפריט ה-BIOS (F10 באתחול)",
+            "חוסם אתחול");
+
+    private static (bool attempted, bool success, string settingName, string message) HpLockBootMenu() =>
+        HpApplySetting(LooksLikeBootMenuAuthSetting, PickEnableValue,
+            "לא נמצאה במחשב זה הגדרת BIOS שדורשת סיסמת מנהל לכניסה לתפריט האתחול (F9/F12). ייתכן שהדגם קורא לה בשם אחר, " +
+                "או שהיא אינה חשופה ב-WMI בדגם הזה — יש לבדוק ידנית בתפריט ה-BIOS (F10 באתחול). " +
+                "אומת בפועל ש-HP EliteBook 840 G8 חושפת הגדרה כזו תחת השם \"Prompt for Admin authentication on F9 (Boot Menu)\".",
+            "דורש סיסמה לתפריט אתחול");
+
+    private static (bool attempted, bool success, string settingName, string message) HpApplySetting(
+        Func<string, bool> matcher, Func<string[], string> valuePicker, string notFoundMsg, string kindLabel)
     {
         var settings = HpSettings(out string err);
         if (err != null) return (false, false, null, "קריאת הגדרות ה-BIOS נכשלה: " + err);
-        var usb = settings.FirstOrDefault(s => LooksLikeUsbBootSetting(s.name));
-        if (usb.name == null)
-            return (false, false, null, "לא נמצאה במחשב זה הגדרת BIOS שקשורה לאתחול מהתקן USB/חיצוני. ייתכן שהדגם קורא לה בשם אחר, " +
-                "או שהיא אינה חשופה ב-WMI בדגם הזה — יש לבדוק ידנית בתפריט ה-BIOS (F10 באתחול)");
-        string disableValue = PickDisableValue(usb.possible);
-        if (disableValue == null)
-            return (false, false, usb.name, "נמצאה הגדרה \"" + usb.name + "\" אך לא ניתן לזהות אוטומטית איזה מהערכים האפשריים (" +
-                string.Join(", ", usb.possible ?? Array.Empty<string>()) + ") חוסם אתחול — יש להגדיר ידנית בתפריט ה-BIOS");
+        var setting = settings.FirstOrDefault(s => matcher(s.name));
+        if (setting.name == null) return (false, false, null, notFoundMsg);
+        string newValue = valuePicker(setting.possible);
+        if (newValue == null)
+            return (false, false, setting.name, "נמצאה הגדרה \"" + setting.name + "\" אך לא ניתן לזהות אוטומטית איזה מהערכים האפשריים (" +
+                string.Join(", ", setting.possible ?? Array.Empty<string>()) + ") " + kindLabel + " — יש להגדיר ידנית בתפריט ה-BIOS");
 
         try
         {
@@ -450,21 +511,21 @@ public static class BiosHardening
                 using (o)
                 {
                     // סדר הפרמטרים האמיתי הוא (Name, Password-נוכחית, Value-חדש) - ר' הערה ב-HpSetPassword
-                    object[] args = { usb.name, "", disableValue };
+                    object[] args = { setting.name, "", newValue };
                     object res = o.InvokeMethod("SetBIOSSetting", args);
                     uint code = Convert.ToUInt32(res);
                     bool ok = code == 0;
-                    return (true, ok, usb.name, ok
-                        ? "ההגדרה \"" + usb.name + "\" שונתה ל-\"" + disableValue + "\". השינוי ייכנס לתוקף מההפעלה הבאה"
+                    return (true, ok, setting.name, ok
+                        ? "ההגדרה \"" + setting.name + "\" שונתה ל-\"" + newValue + "\". השינוי ייכנס לתוקף מההפעלה הבאה"
                         : "שינוי ההגדרה נכשל (קוד " + code + "): " + HpErrorText(code));
                 }
             }
-            return (false, false, usb.name, "לא נמצא ממשק HP_BIOSSettingInterface במחשב זה");
+            return (false, false, setting.name, "לא נמצא ממשק HP_BIOSSettingInterface במחשב זה");
         }
         catch (Exception ex)
         {
-            Config.Log("bios hp block-usb-boot: " + ex.Message);
-            return (true, false, usb.name, "שינוי ההגדרה נכשל: " + ex.Message);
+            Config.Log("bios hp apply-setting: " + ex.Message);
+            return (true, false, setting.name, "שינוי ההגדרה נכשל: " + ex.Message);
         }
     }
 }
