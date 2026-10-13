@@ -23,6 +23,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # מספור ה-Release: שני המקטעים הראשונים (major.minor) נשלטים ע"י RELEASE_VERSION.txt (לעדכן:
+      # לערוך ולדחוף); המקטע השלישי (patch) הוא github.run_number - מתקדם אוטומטית בכל push. מחושב
+      # מוקדם כי גם קובץ ההתקנה (שם הקובץ + AppVersion) משתמש באותו מספר, לא בגרסת הגשר הפנימית.
+      - name: גרסה לתגית ה-Release
+        id: ver
+        shell: pwsh
+        run: |
+          $base = (Get-Content RELEASE_VERSION.txt -Raw).Trim()
+          $parts = $base -split '\.'
+          $majorMinor = "$($parts[0]).$($parts[1])"
+          $full = "$majorMinor.${{ github.run_number }}"
+          "version=$full" >> $env:GITHUB_OUTPUT
+          "tag=v$full" >> $env:GITHUB_OUTPUT
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
@@ -44,12 +58,14 @@ jobs:
         shell: powershell
         run: choco install innosetup --no-progress --yes
 
+      # AppVersion של קובץ ההתקנה (וגם שם הקובץ עצמו, OtzariaBridge-Setup-{AppVersion}.exe) הוא מספר
+      # ה-Release (steps.ver.outputs.version) - לא Program.Version הפנימי - כדי שמה שרואים בשם הקובץ
+      # יתאים תמיד למה שרואים בעמוד ה-Releases בגיטהאב.
       - name: בניית קובץ ההתקנה (Inno Setup)
         shell: pwsh
         run: |
-          $ver = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-            "/DAppVersion=$ver" `
+            "/DAppVersion=${{ steps.ver.outputs.version }}" `
             "/DExePath=$PWD\out\OtzariaBridge.exe" `
             "installer\OtzariaBridge.iss"
           Get-ChildItem installer\Output
@@ -63,8 +79,8 @@ jobs:
           $lines | Set-Content SHA256SUMS.txt -Encoding ascii
           Get-Content SHA256SUMS.txt
 
-      # נפרד ממספור ה-Release (RELEASE_VERSION.txt, מספור עצמאי של המשתמש) - UpdateApi.cs בגשר
-      # משווה מול הקובץ הזה כדי לדעת אם יש עדכון אמיתי לגשר, לא מול תגית ה-Release.
+      # נפרד ממספר ה-Release - UpdateApi.cs בגשר משווה מול הקובץ הזה (גרסת הגשר הפנימית בפועל,
+      # OtzariaBridge.csproj) כדי לדעת אם יש עדכון אמיתי לגשר, לא מול מספר ה-Release.
       - name: גרסת הגשר לבדיקת עדכון עצמי
         shell: pwsh
         run: |
@@ -81,18 +97,6 @@ jobs:
             SHA256SUMS.txt
             BRIDGE_VERSION.txt
           if-no-files-found: error
-
-      # מספור ה-Release בפורק הזה עצמאי מגרסת הגשר הפנימית (OtzariaBridge.csproj). שני המקטעים
-      # הראשונים (major.minor) נשלטים ע"י RELEASE_VERSION.txt (לעדכן: לערוך ולדחוף); המקטע השלישי
-      # (patch) הוא github.run_number - מתקדם אוטומטית בכל push, בלי צורך לגעת בקובץ בעצמכם.
-      - name: גרסה לתגית ה-Release
-        id: ver
-        shell: pwsh
-        run: |
-          $base = (Get-Content RELEASE_VERSION.txt -Raw).Trim()
-          $parts = $base -split '\.'
-          $majorMinor = "$($parts[0]).$($parts[1])"
-          "tag=v$majorMinor.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
 
       # Release חדש בכל push (תגית ייחודית, מספר הגרסה עולה כל פעם - make_latest מסמן תמיד את האחרון
       # כ"Latest" כך שקישור ה-/releases/latest עדיין מצביע על הבנייה העדכנית ביותר).
