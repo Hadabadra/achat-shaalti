@@ -460,18 +460,39 @@ internal sealed class RestScreen : Form
         return items;
     }
 
-    /// <summary>עמודת זמנים עם רקע עדין; הגופן קטן עד שהכול נכנס בגובה הזמין (לעולם לא גולש למטה)</summary>
+    /// <summary>עמודת זמנים עם רקע עדין. הגופן קטן עד שכל השורות נכנסות בגובה וברוחב; אם גם בגופן
+    /// המינימלי לא נכנס — מתחלקים לשתי תת-עמודות. כך לא נחתך אף זמן (באג #59: "לא רואים את כל הזמנים").</summary>
     private static void DrawZmanimColumn(Graphics g, List<string> items, float x, float y, float w, float maxH, float s, Color gold)
     {
-        float size = 18f; float lineH; int blank = items.Count(i => i.Length == 0); // #1: גופן ברור יותר
-        Font f;
-        while (true)
+        float pad = 14 * s, gap = 10 * s, lineH = 0; int cols = 1;
+        Font f = null;
+        float Need(int c, float lh)
         {
+            // גובה העמודה הגבוהה מבין c תת-עמודות (שורה ריקה = חצי שורה)
+            float best = 0; int per = (int)Math.Ceiling(items.Count / (double)c);
+            for (int k = 0; k < c; k++)
+            {
+                float h = 0;
+                foreach (var it in items.Skip(k * per).Take(per)) h += it.Length == 0 ? lh * 0.5f : lh;
+                best = Math.Max(best, h);
+            }
+            return 24 * s + best;
+        }
+        for (float size = 18f; ; size -= 1f) // #1: גופן ברור ככל האפשר
+        {
+            f?.Dispose();
             f = new Font("Segoe UI Semibold", size, GraphicsUnit.Point);
-            lineH = f.GetHeight(g) * 1.25f;
-            float need = 24 * s + lineH * (items.Count - blank) + lineH * 0.5f * blank;
-            if (need <= maxH || size <= 11f) { maxH = Math.Min(maxH, need); break; }
-            f.Dispose(); size -= 1f;
+            lineH = f.GetHeight(g) * 1.2f;
+            float widest = 0;
+            foreach (var it in items) if (it.Length > 0) widest = Math.Max(widest, g.MeasureString(it, f).Width);
+            bool fit = false;
+            for (cols = 1; cols <= 2 && !fit; cols++)
+            {
+                float colInner = (w - 2 * pad - gap * (cols - 1)) / cols;
+                fit = widest <= colInner && Need(cols, lineH) <= maxH;
+                if (fit) break;
+            }
+            if (fit || size <= 9f) { if (!fit) cols = 2; maxH = Math.Min(maxH, Need(cols, lineH)); break; }
         }
         using (f)
         using (var bg = new SolidBrush(Color.FromArgb(70, 10, 12, 22)))
@@ -482,13 +503,19 @@ internal sealed class RestScreen : Form
             g.FillPath(bg, path);
             g.DrawPath(border, path);
             var fmt = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Near, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.DirectionRightToLeft | StringFormatFlags.NoWrap };
-            float yy = y + 12 * s, bottom = y + maxH - 10 * s;
-            foreach (var it in items)
+            int per = (int)Math.Ceiling(items.Count / (double)cols);
+            float colW = (w - 2 * pad - gap * (cols - 1)) / cols;
+            for (int k = 0; k < cols; k++)
             {
-                if (it.Length == 0) { yy += lineH * 0.5f; continue; }
-                if (yy + lineH > bottom + 1) break;
-                g.DrawString(it, f, goldB, new RectangleF(x + 14 * s, yy, w - 28 * s, lineH), fmt);
-                yy += lineH;
+                // RTL: תת-העמודה הראשונה בצד ימין
+                float cx0 = x + w - pad - (k + 1) * colW - k * gap;
+                float yy = y + 12 * s;
+                foreach (var it in items.Skip(k * per).Take(per))
+                {
+                    if (it.Length == 0) { yy += lineH * 0.5f; continue; }
+                    g.DrawString(it, f, goldB, new RectangleF(cx0, yy, colW, lineH), fmt);
+                    yy += lineH;
+                }
             }
         }
     }
