@@ -113,6 +113,12 @@
       html += '<div class="card"><div class="card-title">סיסמה והגדרות</div>' +
         '<div class="setting-row"><div class="setting-text"><b>שינוי סיסמה</b><span class="muted">החלפת סיסמת הנעילה (נדרשת הסיסמה הנוכחית)</span></div>' +
         '<button class="btn btn-tonal" data-act="chpw">' + ui.icon('edit') + 'שינוי</button></div>' +
+        '<div class="setting-row"><div class="setting-text"><b>פרופיל נעילה מוכן</b><span class="muted">תלמיד / בית מדרש / מנהל — מחיל סט הגדרות בלחיצה (אפשר לשנות אחר כך)</span></div>' +
+        '<button class="btn btn-tonal" data-act="profile">' + ui.icon('lock') + 'בחירה</button></div>' +
+        '<div class="setting-row"><div class="setting-text"><b>יומן פעולות מנהל</b><span class="muted">הפעלה וביטול נעילה, שינויי סיסמה והגדרות, יבוא וייצוא</span></div>' +
+        '<button class="btn btn-tonal" data-act="adminlog">' + ui.icon('info') + 'הצגה</button></div>' +
+        '<div class="setting-row"><div class="setting-text"><b>ייצוא ויבוא הגדרות</b><span class="muted">העברת הגדרות הנעילה, הסייר ושומר המסך למחשב אחר (בלי סיסמאות וקודים)</span></div>' +
+        '<button class="btn btn-tonal" data-act="export">ייצוא</button> <button class="btn btn-tonal" data-act="import">יבוא</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>מה פתוח בזמן נעילה</b><span class="muted">' +
         ui.esc((st.openSections || []).map(function (id) { return SECTION_NAMES[id] || id; }).join(', ') || 'רק תוכנות לימוד ואודות') +
         (st.readOnly ? ' · קבצים לקריאה בלבד' : '') + (st.allowExcelDocs ? ' · Excel מותר בסייר' : '') + (st.clock !== false ? ' · שעון צף' : '') + '</span></div>' +
@@ -182,6 +188,10 @@
     on('temp-unlock', function () { tempUnlock(body, st); });
     on('temp-end', function () { tempEnd(body); });
     on('chpw', function () { changePw(body); });
+    on('profile', function () { applyProfile(body); });
+    on('adminlog', function () { showAdminLog(); });
+    on('export', function () { exportSettings(); });
+    on('import', function () { importSettings(body); });
     editSettings(body, st); /* הגדרות הנעילה מוצגות ישירות בעמוד, לא מאחורי כפתור */
     on('settings3', function () { SS.show('screensaver'); });
     on('prog-manage', function () { SS.show('programs'); });
@@ -342,6 +352,71 @@
       ui.toast('הסיסמה עודכנה', 'success');
       load(body);
     }
+  }
+
+  /* ---------- #57: פרופילי נעילה, יומן פעולות מנהל, ייצוא/יבוא ---------- */
+  var PROFILES = {
+    student: { label: 'תלמיד', desc: 'קבצים לקריאה בלבד, אוצריא במסך מלא, רק שמע ומסך פתוחים', p: { readOnly: true, fullscreenOtzaria: true, sideBar: true, clock: true, allowExcelDocs: false, openSections: ['audio', 'display'] } },
+    beitmidrash: { label: 'בית מדרש', desc: 'גישה רחבה יותר: שמע, מסך, מדפסות, שעה; קבצים פתוחים לעריכה', p: { readOnly: false, fullscreenOtzaria: true, sideBar: true, clock: true, allowExcelDocs: true, openSections: ['audio', 'display', 'printer', 'time'] } },
+    admin: { label: 'מנהל', desc: 'כמעט הכל פתוח, בלי מסך מלא', p: { readOnly: false, fullscreenOtzaria: false, sideBar: true, clock: true, allowExcelDocs: true, openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth'] } }
+  };
+  async function applyProfile(body) {
+    var ok = await ui.dialog({
+      title: 'פרופיל נעילה מוכן', icon: 'lock',
+      fields: [
+        { name: 'prof', type: 'select', label: 'פרופיל', value: 'student', options: Object.keys(PROFILES).map(function (k) { return { value: k, label: PROFILES[k].label + ' — ' + PROFILES[k].desc }; }) },
+        { name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }
+      ],
+      actions: [{ label: 'ביטול', value: false }, { label: 'החלה', value: true, kind: 'primary' }],
+      validate: function (x) { return x.pw ? '' : 'יש להקליד את סיסמת הנעילה'; },
+      onSubmit: async function (x) {
+        var pr = PROFILES[x.prof]; if (!pr) return false;
+        await SS.bridge.call('/kiosk/settings', Object.assign({ password: x.pw }, pr.p));
+        return pr.label;
+      }
+    });
+    if (ok) { ui.toast('הוחל פרופיל: ' + ok, 'success'); load(body); }
+  }
+  async function showAdminLog() {
+    var r = await ui.dialog({
+      title: 'יומן פעולות מנהל', icon: 'info',
+      fields: [{ name: 'pw', label: 'סיסמת נעילה או קוד שחזור', type: 'password', dir: 'ltr' }],
+      actions: [{ label: 'ביטול', value: false }, { label: 'הצגה', value: true, kind: 'primary' }],
+      validate: function (x) { return x.pw ? '' : 'יש להקליד סיסמה'; },
+      onSubmit: async function (x) { return await SS.bridge.call('/admin-log', { password: x.pw }); }
+    });
+    if (!r) return;
+    var rows = (r.entries || []).map(function (e) { return '<tr><td dir="ltr">' + ui.esc(e.time) + '</td><td>' + ui.esc(e.action) + '</td></tr>'; }).join('');
+    await ui.dialog({ title: 'יומן פעולות מנהל', icon: 'info',
+      body: rows ? '<div style="max-height:50vh;overflow:auto"><table class="tbl"><tbody>' + rows + '</tbody></table></div>' : '<p class="muted">היומן ריק.</p>',
+      actions: [{ label: 'סגירה', value: true, kind: 'primary' }] });
+  }
+  async function exportSettings() {
+    var r = await ui.dialog({
+      title: 'ייצוא הגדרות', icon: 'info', body: '<p>נשמר קובץ בשולחן העבודה. סיסמאות, קודים ונתיבים לא נכללים.</p>',
+      fields: [{ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }],
+      actions: [{ label: 'ביטול', value: false }, { label: 'ייצוא', value: true, kind: 'primary' }],
+      validate: function (x) { return x.pw ? '' : 'יש להקליד סיסמה'; },
+      onSubmit: async function (x) { return await SS.bridge.call('/settings/export', { password: x.pw }); }
+    });
+    if (r) ui.toast(r.file ? 'נשמר: ' + ui.isolateLtr(r.file) : 'הייצוא הצליח (' + r.count + ' הגדרות)', 'success');
+  }
+  async function importSettings(body) {
+    var r = await ui.dialog({
+      title: 'יבוא הגדרות', icon: 'info',
+      body: '<p>בחרו קובץ הגדרות שיוצא ממחשב אחר. סיסמאות וקודים של המחשב הזה לא משתנים.</p><input type="file" accept=".json,application/json" data-slot="file">',
+      fields: [{ name: 'pw', label: 'סיסמת נעילה של המחשב הזה', type: 'password', dir: 'ltr' }],
+      actions: [{ label: 'ביטול', value: false }, { label: 'יבוא', value: true, kind: 'primary' }],
+      validate: function (x) { return x.pw ? '' : 'יש להקליד סיסמה'; },
+      onSubmit: async function (x) {
+        var inp = document.querySelector('[data-slot=file]');
+        var f = inp && inp.files && inp.files[0];
+        if (!f) throw new Error('לא נבחר קובץ');
+        var text = await f.text();
+        return await SS.bridge.call('/settings/import', { password: x.pw, text: text });
+      }
+    });
+    if (r) { ui.toast('יובאו ' + r.applied + ' הגדרות', 'success'); load(body); }
   }
 
   /* ---------- נעילה מוקשחת (3.0.0, בעיה #1) ---------- */

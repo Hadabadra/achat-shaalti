@@ -169,6 +169,15 @@ public static class Config
         lock (Gate) { Data[key] = value; }
     }
 
+    public static string[] Keys()
+    {
+        lock (Gate) { return Data.Select(kv => kv.Key).ToArray(); }
+    }
+    public static JsonNode Raw(string key)
+    {
+        lock (Gate) { return Data[key]?.DeepClone(); }
+    }
+
     public static void Remove(string key)
     {
         lock (Gate) { Data.Remove(key); }

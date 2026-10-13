@@ -264,7 +264,7 @@ internal sealed class ClockBar : Form
         try { _logo ??= new Icon(AppIcon(), 64, 64).ToBitmap(); g.DrawImage(_logo, r.Right - pad - logo, (h - logo) / 2, logo, logo); } catch { }
         float right = r.Right - pad - logo - ScaleX(8);
         var brand = new RectangleF(right - ScaleX(320), 0, ScaleX(320), h);
-        g.DrawString(Lang.T("כלי מערכת לאוצריא · לימוד ללא הפרעות", "Otzaria System Tools · Learning without distractions"), mf, fore, brand, rtl);
+        g.DrawString(Lang.T(Program.AppName + " · לימוד ללא הפרעות", Program.AppNameEn + " · Learning without distractions"), mf, fore, brand, rtl);
         g.DrawString("לעילוי נשמת אסתר גיטה דינר ע\"ה", small, accent, new RectangleF(r.Width / 2f - ScaleX(220), 0, ScaleX(440), h), mid);
         string left = _time + "   " + _heb + "   " + _date + (_bat.Length > 0 ? "   " + _bat : "");
         var sz = g.MeasureString(left, mf);

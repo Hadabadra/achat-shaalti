@@ -31,6 +31,7 @@ public static class Theme
         mode = mode == "light" ? "light" : "dark";
         if (Config.Get("theme.mode", "") != mode) Config.Set("theme.mode", mode);
         if (Config.Get("theme.primary", "") != prim) Config.Set("theme.primary", prim);
+        Config.Save();
         return new { ok = true };
     }
 }
