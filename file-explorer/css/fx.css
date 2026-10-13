@@ -267,21 +267,65 @@ a.btn { text-decoration: none; display: inline-flex; }
 .fx-pv-text { margin: 0.75em 0 0; padding: 0.5em; max-height: 60vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 0.8125em; background: var(--color-surface-container-lowest); border-radius: var(--radius-sm); }
 .fx-pv-doc { margin: 0.75em 0 0; padding: 0.75em 1em; font-size: 0.8125em; max-height: 60vh; overflow: auto; }
 .fx-pv-note { margin-top: 0.5em; }
-#fx-mode-btn.on, #fx-preview-btn.on { background: var(--color-primary-subtle); color: var(--color-primary); }
+#fx-mode-btn.on, #fx-preview-btn.on, #fx-details-btn.on { background: var(--color-primary-subtle); color: var(--color-primary); }
 
-/* רשימה: שמות בלבד, בכמה טורים */
-.fx-main.m-list .fx-head, .fx-main.m-icons .fx-head { display: none; }
-.fx-list.m-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(15em, 1fr)); align-content: start; gap: 0.125em; padding: 0.5em; }
-.fx-list.m-list .fx-row { grid-template-columns: 1fr; margin: 0; }
+/* ראש הרשימה (כותרות העמודות למיון) רלוונטי רק לתצוגת "פרטים" */
+.fx-main:not(.m-details) .fx-head { display: none; }
+
+/* שורת מטא-דאטה משנית (סוג · גודל · תאריך) שבתוך כל שורה: מוצגת רק באריחים/תוכן (ר' למטה) */
+.fx-sub-meta { display: none; }
+
+/* רשימה: שמות בלבד, ממלאים טור-טור (מלמעלה למטה ואז לטור הבא), כמו ב-Windows */
+.fx-list.m-list { columns: 15em; column-gap: 0.75em; padding: 0.5em; }
+.fx-list.m-list .fx-row { display: flex; align-items: center; margin: 0 0 0.125em; break-inside: avoid-column; }
 .fx-list.m-list .fx-cell:not(.fx-cell-name) { display: none; }
-/* סמלים: אריחים */
-.fx-list.m-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5em, 1fr)); align-content: start; gap: 0.375em; padding: 0.5em; }
-.fx-list.m-icons .fx-row { display: flex; flex-direction: column; height: auto; margin: 0; padding: 0.75em 0.375em; text-align: center; }
-.fx-list.m-icons .fx-cell:not(.fx-cell-name) { display: none; }
-.fx-list.m-icons .fx-cell-name { flex-direction: column; gap: 0.375em; white-space: normal; }
-.fx-list.m-icons .fx-ic .ic { width: 2.75em; height: 2.75em; }
-.fx-list.m-icons .fx-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; word-break: break-word; font-size: 0.875em; }
-.fx-list.m-list .fx-empty, .fx-list.m-icons .fx-empty { grid-column: 1 / -1; }
+
+/* סמלים: ארבעה גדלים (גדולים מאוד / גדולים / בינוניים / קטנים), רשת שמתמלאת שורה-שורה */
+.fx-list.m-xlicons, .fx-list.m-licons, .fx-list.m-micons {
+  display: grid; align-content: start; gap: 0.5em; padding: 0.625em;
+}
+.fx-list.m-xlicons { grid-template-columns: repeat(auto-fill, minmax(9.5em, 1fr)); }
+.fx-list.m-licons { grid-template-columns: repeat(auto-fill, minmax(7.5em, 1fr)); }
+.fx-list.m-micons { grid-template-columns: repeat(auto-fill, minmax(6em, 1fr)); gap: 0.375em; }
+.fx-list.m-xlicons .fx-row, .fx-list.m-licons .fx-row, .fx-list.m-micons .fx-row {
+  display: flex; flex-direction: column; height: auto; margin: 0; padding: 0.75em 0.375em; text-align: center;
+}
+.fx-list.m-xlicons .fx-cell:not(.fx-cell-name), .fx-list.m-licons .fx-cell:not(.fx-cell-name), .fx-list.m-micons .fx-cell:not(.fx-cell-name) { display: none; }
+.fx-list.m-xlicons .fx-cell-name, .fx-list.m-licons .fx-cell-name, .fx-list.m-micons .fx-cell-name { flex-direction: column; gap: 0.375em; white-space: normal; }
+.fx-list.m-xlicons .fx-ic .ic { width: 5em; height: 5em; }
+.fx-list.m-licons .fx-ic .ic { width: 3.5em; height: 3.5em; }
+.fx-list.m-micons .fx-ic .ic { width: 2.75em; height: 2.75em; }
+.fx-list.m-xlicons .fx-name, .fx-list.m-licons .fx-name, .fx-list.m-micons .fx-name {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; word-break: break-word; font-size: 0.875em;
+}
+/* סמלים קטנים: שורה אופקית (סמל קטן + שם), רשת שמתמלאת שורה-שורה (בשונה מ"רשימה" שממלאת טור-טור) */
+.fx-list.m-sicons { display: grid; grid-template-columns: repeat(auto-fill, minmax(11em, 1fr)); align-content: start; gap: 0.0625em; padding: 0.5em; }
+.fx-list.m-sicons .fx-row { display: flex; align-items: center; margin: 0; }
+.fx-list.m-sicons .fx-cell:not(.fx-cell-name) { display: none; }
+.fx-list.m-sicons .fx-ic .ic { width: 1.125em; height: 1.125em; }
+
+/* אריחים: סמל + שתי שורות טקסט (שם, ומתחתיו סוג/גודל) */
+.fx-list.m-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(16em, 1fr)); align-content: start; gap: 0.375em; padding: 0.625em; }
+.fx-list.m-tiles .fx-row { height: auto; margin: 0; padding: 0.5em 0.625em; }
+.fx-list.m-tiles .fx-cell:not(.fx-cell-name) { display: none; }
+.fx-list.m-tiles .fx-cell-name { align-items: flex-start; }
+.fx-list.m-tiles .fx-ic .ic { width: 2.25em; height: 2.25em; }
+.fx-list.m-tiles .fx-name-wrap { gap: 0.125em; }
+.fx-list.m-tiles .fx-name { white-space: normal; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+.fx-list.m-tiles .fx-sub-meta { display: block; font-size: 0.75em; color: var(--fx-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-list.m-tiles .fx-row.sel .fx-sub-meta { color: inherit; opacity: 0.85; }
+
+/* תוכן: שורה רחבה אחת, סמל גדול יותר, ושורת מטא-דאטה מתחת לשם (תחליף טקסטואלי לתצוגה המקדימה המורחבת של Windows) */
+.fx-list.m-content { padding: 0.375em 0.5em; }
+.fx-list.m-content .fx-row { height: auto; padding: 0.5em 0.75em; }
+.fx-list.m-content .fx-cell:not(.fx-cell-name) { display: none; }
+.fx-list.m-content .fx-ic .ic { width: 2.5em; height: 2.5em; }
+.fx-list.m-content .fx-sub-meta { display: block; font-size: 0.8125em; color: var(--fx-muted); }
+.fx-list.m-content .fx-row.sel .fx-sub-meta { color: inherit; opacity: 0.85; }
+
+.fx-list.m-list .fx-empty { column-span: all; }
+.fx-list.m-xlicons .fx-empty, .fx-list.m-licons .fx-empty, .fx-list.m-micons .fx-empty,
+.fx-list.m-sicons .fx-empty, .fx-list.m-tiles .fx-empty, .fx-list.m-content .fx-empty { grid-column: 1 / -1; }
 
 /* מאפיינים */
 .dlg.fx-props { text-align: start; }

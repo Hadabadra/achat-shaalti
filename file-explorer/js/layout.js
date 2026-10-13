@@ -3,12 +3,26 @@
   'use strict';
   var FX = window.FX = window.FX || {};
   var KEY = 'fx.layout';
-  var L = { side: 14, prev: 22, preview: false, mode: 'details', zoom: 0.9 };
+  var L = { side: 14, prev: 22, preview: false, details: false, mode: 'details', zoom: 0.9 };
   var ZOOMS = [0.8, 0.85, 0.9, 1, 1.1, 1.2, 1.35];
+  /* סדר מצבי התצוגה: כמו בתפריט "תצוגה" של סייר הקבצים של Windows */
+  var MODES = ['xlicons', 'licons', 'micons', 'sicons', 'list', 'details', 'tiles', 'content'];
+  var MODE_META = {
+    xlicons: { icon: 'grid', label: 'סמלים גדולים מאוד' },
+    licons: { icon: 'grid', label: 'סמלים גדולים' },
+    micons: { icon: 'grid', label: 'סמלים בינוניים' },
+    sicons: { icon: 'grid', label: 'סמלים קטנים' },
+    list: { icon: 'list', label: 'רשימה' },
+    details: { icon: 'list', label: 'פרטים' },
+    tiles: { icon: 'grid', label: 'אריחים' },
+    content: { icon: 'list', label: 'תוכן' }
+  };
   var $ = function (id) { return document.getElementById(id); };
 
   function load() {
     try { var v = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; Object.keys(v).forEach(function (k) { L[k] = v[k]; }); } catch (e) { /* כלום */ }
+    if (L.mode === 'icons') L.mode = 'micons';   /* תאימות לאחור: שם המצב הישן "סמלים" (לפני גרסה עם 8 מצבי תצוגה) */
+    if (MODES.indexOf(L.mode) < 0) L.mode = 'details';
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(L)); } catch (e) { /* כלום */ } }
   function rtl() { return document.documentElement.dir !== 'ltr'; }
@@ -19,16 +33,23 @@
     root.style.setProperty('--fx-zoom', String(L.zoom));
     root.style.setProperty('--fx-side-w', L.side + 'em');
     root.style.setProperty('--fx-prev-w', L.prev + 'em');
-    $('fx-preview').hidden = !L.preview;
-    $('fx-split-prev').hidden = !L.preview;
+    /* חלונית תצוגה מקדימה וחלונית פרטים חולקות אותו אזור בצד (בדיוק כמו בסייר הקבצים של Windows) */
+    var paneOn = !!(L.preview || L.details);
+    var pane = $('fx-preview');
+    pane.hidden = !paneOn;
+    pane.setAttribute('aria-label', L.details && !L.preview ? 'חלונית פרטים' : 'תצוגה מקדימה');
+    $('fx-split-prev').hidden = !paneOn;
     var b = $('fx-preview-btn');
     if (b) { b.classList.toggle('on', !!L.preview); b.setAttribute('aria-pressed', L.preview ? 'true' : 'false'); }
+    var db = $('fx-details-btn');
+    if (db) { db.classList.toggle('on', !!L.details); db.setAttribute('aria-pressed', L.details ? 'true' : 'false'); }
     var list = $('fx-list'), main = $('fx-main');
-    ['details', 'list', 'icons'].forEach(function (m) { list.classList.toggle('m-' + m, L.mode === m); main.classList.toggle('m-' + m, L.mode === m); });
+    MODES.forEach(function (m) { list.classList.toggle('m-' + m, L.mode === m); main.classList.toggle('m-' + m, L.mode === m); });
     var mb = $('fx-mode-btn');
     if (mb) {
-      mb.innerHTML = FX.icon(L.mode === 'icons' ? 'grid' : 'list');
-      var t = { details: 'תצוגה: פרטים', list: 'תצוגה: רשימה', icons: 'תצוגה: סמלים' }[L.mode];
+      var mm = MODE_META[L.mode] || MODE_META.details;
+      mb.innerHTML = FX.icon(mm.icon);
+      var t = 'תצוגה: ' + mm.label;
       mb.title = t; mb.setAttribute('aria-label', t);
     }
   }
@@ -136,31 +157,47 @@
     }
   }
   FX.onSelection = function () {
-    if (!L.preview || !FX.app || !FX.app.selected) return;
+    if (!(L.preview || L.details) || !FX.app || !FX.app.selected) return;
     var sel = FX.app.selected();
     var e = sel.length === 1 ? sel[0] : null;
-    var k = e ? e.path + '|' + (e.modified || '') : 'n' + sel.length;
+    var k = (L.details && !L.preview ? 'd:' : 'p:') + (e ? e.path + '|' + (e.modified || '') : 'n' + sel.length);
     if (k === lastKey) return;
     lastKey = k;
     clearTimeout(timer);
     var my = ++seq;
     if (!e) {
-      previewBox('<div class="fx-empty">' + FX.icon('preview') + '<span>' + (sel.length ? FX.formatNumber(sel.length) + ' פריטים נבחרו' : 'בחרו קובץ כדי לראות תצוגה מקדימה') + '</span></div>');
+      previewBox('<div class="fx-empty">' + FX.icon('preview') + '<span>' + (sel.length ? FX.formatNumber(sel.length) + ' פריטים נבחרו' : (L.details && !L.preview ? 'בחרו פריט כדי לראות את פרטיו' : 'בחרו קובץ כדי לראות תצוגה מקדימה')) + '</span></div>');
       return;
     }
+    /* חלונית פרטים בלבד (בלי תצוגה מקדימה פעילה): מידע קל בלבד, בלי לטעון את תוכן הקובץ */
+    if (L.details && !L.preview) { previewBox(infoHtml(e)); return; }
     timer = setTimeout(function () { render(e, my); }, 180);
   };
 
   /* ---------- פעולות חיצוניות ---------- */
   FX.layout = {
-    togglePreview: function () { L.preview = !L.preview; lastKey = ''; apply(); save(); if (L.preview) FX.onSelection(); },
+    togglePreview: function () {
+      L.preview = !L.preview;
+      if (L.preview) L.details = false;   /* שתי החלוניות חולקות אותו אזור בצד: מפעילים אחת מכבים את השנייה */
+      lastKey = ''; apply(); save();
+      if (L.preview) FX.onSelection();
+    },
+    toggleDetailsPane: function () {
+      L.details = !L.details;
+      if (L.details) L.preview = false;
+      lastKey = ''; apply(); save();
+      if (L.details || L.preview) FX.onSelection();
+    },
+    setPanes: function (preview, details) { L.preview = !!preview; L.details = !!details; lastKey = ''; apply(); save(); },
+    isPreview: function () { return !!L.preview; },
+    isDetailsPane: function () { return !!L.details; },
     cycleMode: function () {
-      var order = ['details', 'list', 'icons'];
-      L.mode = order[(order.indexOf(L.mode) + 1) % order.length];
+      L.mode = MODES[(MODES.indexOf(L.mode) + 1) % MODES.length];
       apply(); save();
     },
-    setMode: function (m) { L.mode = m; apply(); save(); },
+    setMode: function (m) { L.mode = MODES.indexOf(m) >= 0 ? m : L.mode; apply(); save(); },
     mode: function () { return L.mode; },
+    modes: MODES,
     zoom: function () { return L.zoom; },
     setZoom: function (z) { L.zoom = Math.max(0.7, Math.min(1.5, Math.round(z * 100) / 100)); apply(); save(); },
     zoomStep: function (d) {
@@ -174,8 +211,10 @@
       splitter($('fx-split-side'), 'side', 9, 30, 'start');
       splitter($('fx-split-prev'), 'prev', 14, 48, 'end');
       $('fx-preview-btn').addEventListener('click', FX.layout.togglePreview);
+      $('fx-details-btn').addEventListener('click', FX.layout.toggleDetailsPane);
       $('fx-mode-btn').addEventListener('click', FX.layout.cycleMode);
       $('fx-preview-btn').innerHTML = FX.icon('preview');
+      $('fx-details-btn').innerHTML = FX.icon('info');
       document.addEventListener('keydown', function (e) {
         if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
         if (e.key === '+' || e.key === '=') { e.preventDefault(); FX.layout.zoomStep(1); }
