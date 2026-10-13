@@ -15,7 +15,7 @@ internal sealed class SideBar : Form
 {
     private sealed class Item
     {
-        public string Name; public bool Running; public Programs.Entry Entry; public Bitmap Icon;
+        public string Name; public bool Running; public Programs.Entry Entry; public Bitmap Icon; public Action UiAction; // #60: טאב של הגשר
         public List<(IntPtr Handle, string Title)> Windows = new();
     }
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 150 };
@@ -68,6 +68,12 @@ internal sealed class SideBar : Form
     {
         var list = new List<Item> { new Item { Name = Lang.T("אוצריא", "Otzaria"), Running = true, Icon = IconOf(Kiosk.OtzariaPath()) } };
         try { foreach (var e in Programs.Load()) list.Add(new Item { Name = e.Name, Entry = e, Icon = IconOf(e.Path) }); } catch { }
+        // #60 (גרסה מינימלית): גישה לחלונות הגשר בנעילה, מתוך הסרגל הקיים
+        Bitmap bi = null; try { bi = Icon.ExtractAssociatedIcon(Environment.ProcessPath!)?.ToBitmap(); } catch { }
+        list.Add(new Item { Name = Lang.T("אודות", "About"), Icon = bi, UiAction = () => AboutForm.Open() });
+        list.Add(new Item { Name = Lang.T("דיווחים", "Reports"), Icon = bi, UiAction = () => ReportsForm.Open() });
+        list.Add(new Item { Name = Lang.T("מה חדש", "Changelog"), Icon = bi, UiAction = () => ChangelogForm.Open() });
+        list.Add(new Item { Name = Lang.T("צילום מסך", "Screenshot"), Icon = bi, UiAction = () => { Thread.Sleep(200); Screenshot.Capture(false); } });
         foreach (var old in _items) old.Icon?.Dispose();
         _items = list;
         if (_items.Count <= 1) { Hide(); return; }   // אין תוכנות מותרות — אין מה להציג
@@ -181,6 +187,7 @@ internal sealed class SideBar : Form
     {
         if (i < 0 || i >= _items.Count) return;
         var it = _items[i];
+        if (it.UiAction != null) { Tray.Invoke(it.UiAction); return; }
         Task.Run(() =>
         {
             try
