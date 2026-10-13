@@ -274,6 +274,8 @@ public static partial class Kiosk
         zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
         zmanimCity = Config.Get("kiosk.zmanimCity", ""),
         zmanimElevation = Config.Get("kiosk.zmanimElevation", 0.0),
+        zmanimAlert = Config.Get("kiosk.zmanimAlert", ""),
+        zmanimAlertMinutes = Config.Get("kiosk.zmanimAlertMinutes", 10),
         zmanimFallbackEngine = Config.Get("kiosk.zmanimFallbackEngine", "noaa"),
         zmanimShow = Config.HasList("kiosk.zmanimShow") ? Config.GetList("kiosk.zmanimShow") : null,
         zmanimDiaspora = Config.Get("kiosk.zmanimDiaspora", false),
@@ -799,6 +801,8 @@ public static partial class Kiosk
         // למעלה נשארות כאפשרות מתקדמת, וגם משמשות גיבוי כש-kiosk.zmanimCity ריק
         if (b.Has("zmanimCity")) Config.Set("kiosk.zmanimCity", (b.Str("zmanimCity") ?? "").Trim());
         // תיקון גובה לגיבוי (issue #33): מטרים מעל פני הים, רק למנוע kosherjava (הספרייה דורשת ≥ 0)
+        if (b.Has("zmanimAlert")) Config.Set("kiosk.zmanimAlert", b.Str("zmanimAlert") ?? "");
+        if (b.Has("zmanimAlertMinutes")) Config.Set("kiosk.zmanimAlertMinutes", (int)Math.Clamp(b.Num("zmanimAlertMinutes") ?? 10, 1, 180));
         if (b.Has("zmanimElevation")) Config.Set("kiosk.zmanimElevation", Math.Clamp(b.Num("zmanimElevation") ?? 0, 0, 5000));
         // מנוע חישוב הגיבוי: "noaa" (ברירת מחדל, ללא שינוי למתקינים קיימים) או "kosherjava" (חדש)
         if (b.Has("zmanimFallbackEngine"))

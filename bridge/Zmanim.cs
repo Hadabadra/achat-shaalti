@@ -60,6 +60,33 @@ internal static class Zmanim
     }
 
     /// <summary>שורות לשומר המסך: זמני היום, כניסת שבת/חג, ספירת העומר, יום השנה, פרשת השבוע ודף יומי — או מערך ריק</summary>
+    // #33: התראה לפני זמן נבחר (kiosk.zmanimAlert = מזהה זמן, kiosk.zmanimAlertMinutes = דקות לפני)
+    private static System.Threading.Timer _alertTimer;
+    private static string _alertedKey;
+    public static void StartAlerts() => _alertTimer ??= new System.Threading.Timer(_ => { try { CheckAlert(DateTime.Now); } catch (Exception ex) { Config.Log("zmanim alert: " + ex.Message); } }, null, 15_000, 60_000);
+
+    private static void CheckAlert(DateTime now)
+    {
+        string id = Config.Get("kiosk.zmanimAlert", "");
+        if (string.IsNullOrEmpty(id)) return;
+        int mins = Math.Clamp(Config.Get("kiosk.zmanimAlertMinutes", 10), 1, 180);
+        var z = KnownZmanim.FirstOrDefault(k => k.id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (z.id == null) return;
+        string val = null;
+        var cached = TryGetCache();
+        if (cached != null) TryPick(WithMissing(cached.Value.Item1, now), out val, z.keys);
+        if (val == null) { try { var loc = KosherJavaTimes(now); foreach (var k in z.keys) if (loc.TryGetValue(k, out val)) break; } catch { } }
+        if (val == null || !TimeSpan.TryParse(Hm(val), System.Globalization.CultureInfo.InvariantCulture, out var t)) return;
+        var at = now.Date + t;
+        string key = id + "|" + at.ToString("yyyy-MM-dd HH:mm");
+        if (now < at && now >= at.AddMinutes(-mins) && _alertedKey != key)
+        {
+            _alertedKey = key;
+            int left = (int)Math.Ceiling((at - now).TotalMinutes);
+            Tray.Notify(Lang.T("זמני היום", "Zmanim"), Lang.T($"{z.he} בעוד {left} דקות ({Hm(val)})", $"{z.en} in {left} minutes ({Hm(val)})"), ToolTipIcon.Info);
+        }
+    }
+
     public static string[] Sections(DateTime now)
     {
         var list = new List<string>();
