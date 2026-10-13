@@ -479,3 +479,18 @@ html[dir=ltr] body { direction: ltr; }
   outline: none;
   box-shadow: 0 0 0 0.1875em var(--color-surface), 0 0 0 0.3125em var(--color-primary);
 }
+
+/* מתג גלולה בסגנון אוצריא (13.10.2026) + תיקון קפיצת גלילה/מסך לבן: הקלט המוסתר ממוקם יחסית לשורה */
+.check-row { position: relative; }
+.check-row input { left: 0; top: 0; pointer-events: none; }
+.check-row .check-box {
+  width: 2.6em; height: 1.5em; border-radius: 999px; position: relative; background: var(--color-surface-variant, #ddd);
+  border: 0.125em solid var(--color-outline); color: transparent !important; transition: background .15s, border-color .15s;
+}
+.check-row .check-box .ic { display: none; }
+.check-row .check-box::after {
+  content: ''; position: absolute; top: 50%; inset-inline-start: 0.2em; width: 0.9em; height: 0.9em; border-radius: 50%;
+  background: var(--color-outline); transform: translateY(-50%); transition: inset-inline-start .15s, width .15s, height .15s, background .15s;
+}
+.check-row input:checked + .check-box { background: var(--color-primary); border-color: var(--color-primary); }
+.check-row input:checked + .check-box::after { inset-inline-start: calc(100% - 1.3em); width: 1.1em; height: 1.1em; background: var(--color-on-primary, #fff); }
