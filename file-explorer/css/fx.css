@@ -25,6 +25,11 @@
   border-radius: 0.75em;
 }
 .fx-banner[hidden] { display: none; }
+/* פתיחה זמנית של המחשב: חיווי קטן בכותרת, גלוי גם כשמסך הנעילה של הסייר מוצג */
+.topbar-chip.temp { background: var(--color-tertiary-container); color: var(--color-on-tertiary-container); }
+.topbar-chip.temp[hidden] { display: none; }
+.topbar-chip.temp .ic { width: 1em; height: 1em; }
+.topbar-chip.temp bdi { font-variant-numeric: tabular-nums; font-weight: 700; }
 .fx-banner-ic .ic { width: 1.5em; height: 1.5em; }
 .fx-banner-text { flex: 1 1 20em; line-height: 1.45; }
 .fx-banner-actions { display: flex; gap: 0.375em; flex-wrap: wrap; }

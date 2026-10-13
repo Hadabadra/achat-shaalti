@@ -32,7 +32,9 @@
 - `enable`
 - `disable` – גם עם קוד שחזור.
 - `set-password`
-- `settings {blockUsbStorage}`
+- `settings {blockUsbStorage}` (וגם `tempUnlockEnabled`, `tempUnlockMinutes`, `tempUnlockHash`+`tempUnlockSalt` — הגיבוב מחושב בגשר)
+- `temp-unlock {password}` – פתיחה זמנית בסיסמה הנפרדת. דורש אימות דו-שלבי פעיל בשירות; בלי Hello בעצמו (זו הסיסמה שנמסרת למי שאין לו את זהות המנהל). השירות שומר `tempUnlockUntil`, ו-`status` מחזיר `active=false` (אכיפה) לצד `lockOn=true` עד תום הזמן.
+- `temp-unlock-end` – סיום מוקדם, בלי סיסמה (רק מחזיר את האכיפה).
 - `uninstall`
 
 אחרי 5 ניסיונות שגויים נחסמים ניסיונות נוספים לדקה.

@@ -146,7 +146,8 @@
         return '<label class="fx-pol-mode"><input type="radio" name="fx-pol-mode" value="' + v + '"' + (s.mode === v ? ' checked' : '') + '>' +
           '<span><b>' + title + '</b><span class="muted small">' + hint + '</span></span></label>';
       }
-      var status = s.effective === 'locked' ? 'מצב נוכחי: נעול' : s.effective === 'restricted' ? 'מצב נוכחי: מוגבל לתיקיות שנבחרו' : 'מצב נוכחי: פתוח';
+      var status = s.effective === 'locked' ? 'מצב נוכחי: נעול' : s.effective === 'restricted' ? 'מצב נוכחי: מוגבל לתיקיות שנבחרו' :
+        (s.tempUnlockSeconds > 0 && s.mode !== 'off' ? 'מצב נוכחי: פתוח (המחשב פתוח זמנית)' : 'מצב נוכחי: פתוח');
       var warn = (s.invalidRoots || []).length
         ? '<div class="form-msg">תיקיות שאינן קיימות עוד מדולגות: ' + esc(s.invalidRoots.join(', ')) + (s.fallback ? '. אין תיקיות תקפות, ולכן הסייר נעול.' : '') + '</div>' : '';
       return '<div class="fx-set-card fx-pol"><div class="fx-set-title">' + ic('lock') + 'נעילה והגבלה של הסייר</div>' +

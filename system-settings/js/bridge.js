@@ -168,7 +168,11 @@
       restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
       zmanimElevation: 0, zmanimFallbackEngine: 'noaa',
       candleLightingMinutes: 18, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
+      sideBar: true, sideBarIconsOnly: false, resetOnShutdown: false,
       activatedBy: 'manual',
+      /* פתיחה זמנית (תואם ל-Kiosk.TempUnlockStatus בגשר); active/secondsLeft/until מחושבים ב-/kiosk/status */
+      tempUnlock: { enabled: false, configured: false, minutes: 30, maxMinutes: 60, twoFactorOn: false, usable: false,
+        active: false, secondsLeft: 0, until: '', service: false, serviceOutdated: false },
       schedule: { enabled: false, start: '20:00', end: '02:00', warn: true },
       openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer'],
       allSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth', 'airplane', 'usb']
@@ -177,11 +181,25 @@
     autoTorah: false,
     password: null,
     recovery: null,
+    tempPassword: null,   /* סיסמת הפתיחה הזמנית בדמה */
+    tempUntil: 0,         /* זמן הסיום (ms), 0 = אין פתיחה ממתינה */
     fails: 0,
     lockedUntil: 0
   };
 
   function mockErr(code, message) { return BridgeError(code, message, 400); }
+
+  /* דמה: מחשב את שדות הפתיחה הזמנית, ובתום הזמן (או כשהפכה לרדומה) מחזיר את הנעילה — כמו TempTick בגשר */
+  function tempSync() {
+    var tu = M.kiosk.tempUnlock;
+    tu.twoFactorOn = !!M.kiosk.twoFactor;
+    tu.usable = tu.enabled && tu.configured && tu.twoFactorOn;
+    var left = M.tempUntil ? Math.max(0, Math.ceil((M.tempUntil - Date.now()) / 1000)) : 0;
+    if (M.tempUntil && (left === 0 || !tu.usable)) { M.tempUntil = 0; M.kiosk.active = true; left = 0; }
+    tu.secondsLeft = left;
+    tu.active = left > 0;
+    tu.until = left > 0 ? new Date(M.tempUntil).toISOString() : '';
+  }
 
   function checkPw(pw, allowRecovery) {
     if (Date.now() < M.lockedUntil) {
@@ -265,7 +283,24 @@
       if (M.kiosk.active && b.action !== 'lock') throw mockErr('locked', 'הפעולה חסומה במצב נעילה');
       return { ok: true };
     },
-    '/kiosk/status': function () { return Object.assign(clone(M.kiosk), { hard: clone(M.hard) }); },
+    '/kiosk/status': function () { tempSync(); return Object.assign(clone(M.kiosk), { hard: clone(M.hard) }); },
+    '/kiosk/temp-unlock': function (b) {
+      tempSync();
+      var tu = M.kiosk.tempUnlock;
+      if (!M.kiosk.twoFactor) throw mockErr('forbidden', 'פתיחה זמנית פועלת רק כשהאימות הדו-שלבי (Windows Hello) מופעל');
+      if (!tu.enabled || !tu.configured) throw mockErr('bad_request', 'הפתיחה הזמנית כבויה או שלא הוגדרה לה סיסמה. אפשר להפעיל אותה בהגדרות הנעילה');
+      if (!b.password || b.password !== M.tempPassword) throw mockErr('wrong_password', 'סיסמת הפתיחה הזמנית שגויה');
+      if (!M.kiosk.active) throw mockErr('bad_request', 'המחשב אינו נעול כרגע');
+      M.tempUntil = Date.now() + tu.minutes * 60000;
+      M.kiosk.active = false;
+      tempSync();
+      return Object.assign(clone(M.kiosk), { hard: clone(M.hard) });
+    },
+    '/kiosk/temp-unlock/end': function () {
+      if (M.tempUntil) { M.tempUntil = 0; M.kiosk.active = true; }
+      tempSync();
+      return Object.assign(clone(M.kiosk), { hard: clone(M.hard) });
+    },
     '/kiosk/set-password': function (b) {
       if (!b.newPassword || b.newPassword.length < 6) throw mockErr('bad_request', 'הסיסמה חייבת להכיל לפחות 6 תווים');
       if (M.kiosk.hasPassword) {
@@ -300,6 +335,20 @@
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
       ['readOnly', 'allowExcelDocs', 'twoFactor', 'clock', 'restScreen', 'fullscreenOtzaria', 'sideBar', 'sideBarIconsOnly', 'resetOnShutdown'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
+      /* פתיחה זמנית: אותם כללים כמו בגשר (Kiosk.ApplyTempUnlockSettings) */
+      var tu = M.kiosk.tempUnlock;
+      if (typeof b.tempUnlockPassword === 'string' && b.tempUnlockPassword) {
+        if (b.tempUnlockPassword.length < 6) throw mockErr('bad_request', 'סיסמת הפתיחה הזמנית חייבת להכיל לפחות 6 תווים');
+        if (b.tempUnlockPassword === M.password || (M.recovery && b.tempUnlockPassword.toUpperCase() === M.recovery))
+          throw mockErr('bad_request', 'סיסמת הפתיחה הזמנית חייבת להיות שונה מסיסמת הנעילה ומקוד השחזור');
+      }
+      if (b.tempUnlockEnabled === true && !tu.enabled) {
+        if (!M.kiosk.twoFactor) throw mockErr('bad_request', 'פתיחה זמנית דורשת אימות דו-שלבי (Windows Hello) פעיל. הפעילו קודם את האימות הדו-שלבי ונסו שוב.');
+        if (!tu.configured && !b.tempUnlockPassword) throw mockErr('bad_request', 'יש לבחור סיסמת פתיחה זמנית לפני ההפעלה');
+      }
+      if (typeof b.tempUnlockPassword === 'string' && b.tempUnlockPassword) { M.tempPassword = b.tempUnlockPassword; tu.configured = true; }
+      if (typeof b.tempUnlockEnabled === 'boolean') tu.enabled = b.tempUnlockEnabled;
+      if (typeof b.tempUnlockMinutes === 'number') tu.minutes = Math.max(1, Math.min(60, b.tempUnlockMinutes | 0));
       if (typeof b.restIdleMinutes === 'number') M.kiosk.restIdleMinutes = Math.max(0, Math.min(240, b.restIdleMinutes | 0));
       if (typeof b.zmanimLocation === 'string') M.kiosk.zmanimLocation = b.zmanimLocation;
       if (typeof b.zmanimCity === 'string') M.kiosk.zmanimCity = b.zmanimCity;
@@ -320,6 +369,7 @@
         if (/^\d{1,2}:\d{2}$/.test(b.schedule.start || '')) M.kiosk.schedule.start = b.schedule.start;
         if (/^\d{1,2}:\d{2}$/.test(b.schedule.end || '')) M.kiosk.schedule.end = b.schedule.end;
       }
+      tempSync();
       return clone(M.kiosk);
     },
     '/kiosk/zmanim-cache': function () { return { ok: true }; },
@@ -359,9 +409,11 @@
   M.fx = { mode: 'off', roots: [], minutes: 15, until: 0 };
   function fxState() {
     var left = Math.max(0, Math.ceil((M.fx.until - Date.now()) / 1000));
-    var eff = M.fx.mode === 'off' ? 'open' : M.fx.mode === 'locked' ? (left > 0 ? 'open' : 'locked') : (M.fx.roots.length ? 'restricted' : (left > 0 ? 'open' : 'locked'));
+    tempSync();
+    var tleft = M.kiosk.tempUnlock.secondsLeft;   /* פתיחה זמנית של המחשב: גם הסייר פתוח לגמרי */
+    var eff = M.fx.mode !== 'off' && tleft > 0 ? 'open' : M.fx.mode === 'off' ? 'open' : M.fx.mode === 'locked' ? (left > 0 ? 'open' : 'locked') : (M.fx.roots.length ? 'restricted' : (left > 0 ? 'open' : 'locked'));
     return { mode: M.fx.mode, effective: eff, locked: eff === 'locked', fallback: M.fx.mode === 'restricted' && !M.fx.roots.length,
-      roots: M.fx.roots.slice(), activeRoots: M.fx.roots.slice(), invalidRoots: [], unlockMinutes: M.fx.minutes, unlockedSeconds: left,
+      roots: M.fx.roots.slice(), activeRoots: M.fx.roots.slice(), invalidRoots: [], unlockMinutes: M.fx.minutes, unlockedSeconds: left, tempUnlockSeconds: tleft,
       passwordConfigured: !!M.password, defaults: [{ id: 'desktop', name: 'שולחן העבודה', path: 'C:\\Users\\talmid\\Desktop' }] };
   }
   mockRoutes['/fs/policy/get'] = function () { return fxState(); };

@@ -121,6 +121,20 @@
 | `/kiosk/enable` | `{ password, strict?: false, blockTaskManager?: true }` | `{ active: true }` |
 | `/kiosk/disable` | `{ password }` (או קוד שחזור) | `{ active: false }` |
 | `/kiosk/settings` | `{ password, allowOpenExtensions?, otzariaPath? }` | סטטוס |
+| `/kiosk/temp-unlock` | `{ password }` — **סיסמת הפתיחה הזמנית** (לא סיסמת הנעילה ולא קוד השחזור) | סטטוס. פותח את כל הנעילה (וגם את מדיניות סייר הקבצים) ל-`kiosk.tempUnlockMinutes` דקות. שגיאות: `forbidden` (האימות הדו-שלבי כבוי), `bad_request` (כבויה/לא מוגדרת/המחשב לא נעול/כבר פתוח), `wrong_password` (כולל השהיה אחרי 5 ניסיונות, משותפת עם סיסמת הנעילה), `unsupported` (רכיב הקשחה ישן) |
+| `/kiosk/temp-unlock/end` | `{}` | סטטוס. סיום מוקדם — מחזיר את הנעילה מיד. בלי סיסמה (הכיוון הבטוח בלבד) |
+
+### פתיחה זמנית בסיסמה נפרדת
+שדות ב-`/kiosk/settings` (אחרי סיסמת הנעילה ו-Windows Hello, כמו כל הגדרה):
+`tempUnlockEnabled` (bool), `tempUnlockMinutes` (1–60, ברירת מחדל 30), `tempUnlockPassword` (לפחות 6 תווים; ריק = ללא שינוי; חייבת להיות שונה מסיסמת הנעילה ומקוד השחזור).
+הפעלה (מכבוי לדולק) נדחית כשהאימות הדו-שלבי כבוי. אם האימות הדו-שלבי מכובה אחר כך — הפתיחה "רדומה": אי אפשר להשתמש בה, פתיחה שרצה מסתיימת והנעילה חוזרת; הסיסמה, המשך והמתג נשמרים.
+
+`/kiosk/status` כולל `tempUnlock: { enabled, configured, minutes, maxMinutes, twoFactorOn, usable, active, secondsLeft, until, service, serviceOutdated }`.
+בזמן פתיחה זמנית `active` של הנעילה הוא `false` (והנעילה חוזרת מעצמה בתום הזמן), ו-`/fs/policy/get` מחזיר `effective: "open"` ו-`tempUnlockSeconds`.
+
+אחסון: `kiosk.tempUnlockHash`/`kiosk.tempUnlockSalt` (PBKDF2 כמו סיסמת הנעילה), `kiosk.tempUnlockEnabled`, `kiosk.tempUnlockMinutes`, ובלי רכיב הקשחה גם `kiosk.tempUnlockUntil`.
+כשרכיב ההקשחה מותקן הוא מקור האמת: הגיבוב, המתג, המשך וזמן הסיום (`tempUnlockUntil`) נשמרים ב-`hardlock.json`, והשירות הוא שמחזיר את האכיפה בתום הזמן.
+**בלי רכיב הקשחה** הגשר מחזיר את הנעילה בעצמו, וזו נקודת תורפה ידועה: `config.json` כתיב למשתמש, ומי שהמחשב פתוח לפניו יכול לערוך אותו.
 
 ### תוכנות מותרות לפתיחה ממצב נעילה — /kiosk/programs/*
 הרשימה נשמרת ב-`kiosk.programs` ומוגדרת בסיסמה בלבד. הפתיחה היא תמיד לפי `id` מהרשימה, לא לפי נתיב חופשי.

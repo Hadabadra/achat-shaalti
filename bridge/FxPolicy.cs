@@ -35,6 +35,7 @@ public static class FxPolicy
         public bool Fallback;        // מוגבל בלי תיקיות תקפות -> נעול
         public int Minutes;
         public int UnlockedSeconds;
+        public int TempUnlockSeconds;  // פתיחה זמנית של כל המחשב (Kiosk) — גם הסייר פתוח לגמרי עד סופה
     }
 
     private static int UnlockSeconds()
@@ -73,8 +74,11 @@ public static class FxPolicy
         string mode = (RawMode(sp) ?? "off").ToLowerInvariant();
         if (mode is not ("off" or "restricted" or "locked")) mode = "locked";   // ערך פגום: כשל סגור
         int minutes = Math.Clamp(RawMinutes(sp), 1, MaxMinutes);
-        var st = new State { Mode = mode, Minutes = minutes, UnlockedSeconds = UnlockSeconds() };
+        var st = new State { Mode = mode, Minutes = minutes, UnlockedSeconds = UnlockSeconds(), TempUnlockSeconds = Kiosk.TempUnlockSecondsLeft() };
         if (mode == "off") { st.Effective = "open"; return st; }
+        // "הכול נפתח יחד": בזמן פתיחה זמנית של המחשב (בסיסמת הפתיחה הזמנית) גם הסייר פתוח לגמרי — בלי נעילה
+        // ובלי הגבלת תיקיות — עד סוף אותו זמן. מקור הזמן הוא רכיב ההקשחה כשהוא מותקן (ראו Kiosk.TempUnlockSecondsLeft)
+        if (st.TempUnlockSeconds > 0) { st.Effective = "open"; return st; }
         if (mode == "locked") { st.Effective = st.UnlockedSeconds > 0 ? "open" : "locked"; return st; }
 
         var ok = new List<string>();
@@ -167,6 +171,7 @@ public static class FxPolicy
             invalidRoots = st.Invalid,
             unlockMinutes = st.Minutes,
             unlockedSeconds = st.UnlockedSeconds,
+            tempUnlockSeconds = st.TempUnlockSeconds,
             passwordConfigured = Kiosk.PasswordConfigured,
             defaults = FsApi.KnownFolders().Where(k => k.id != "home").Select(k => new { k.id, k.name, k.path }).ToArray(),
         };

@@ -164,8 +164,9 @@
   };
 
   /* ---------- dialogs ---------- */
-  /* options: title, body (html), icon, tone (danger|primary), actions [{label, value, kind}], fields [{name,label,type,placeholder,value}],
-     onSubmit(values) -> may throw to keep dialog open (shows message), dismissible */
+  /* options: title, body (html), icon, tone (danger|primary), actions [{label, value, kind}], fields [{name,label,type,placeholder,value,disabled}],
+     onSubmit(values) -> may throw to keep dialog open (shows message), dismissible.
+     disabled: השדה מושבת (data-locked) ונשאר מושבת גם אחרי מצב "שומר…"; onOpen יכול לשנות זאת עם ui.lockField */
   ui.dialog = function (opt) {
     return new Promise(function (resolve) {
       var host = document.getElementById('dialogs');
@@ -176,7 +177,7 @@
           return '<div class="field-note muted small">' + f.label + '</div>';
         }
         if (f.type === 'checkbox') {
-          return '<label class="check-row"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + '>' +
+          return '<label class="check-row' + (f.disabled ? ' is-disabled' : '') + '"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + (f.disabled ? ' disabled data-locked' : '') + '>' +
             '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label +
             (f.hint ? '<small>' + f.hint + '</small>' : '') + '</span></label>';
         }
@@ -192,7 +193,7 @@
           '<input class="input" name="' + f.name + '" type="' + (f.type || 'text') + '"' +
           (f.placeholder ? ' placeholder="' + ui.esc(f.placeholder) + '"' : '') +
           (f.value ? ' value="' + ui.esc(f.value) + '"' : '') +
-          (f.dir ? ' dir="' + f.dir + '"' : '') + ' autocomplete="off"></label>';
+          (f.dir ? ' dir="' + f.dir + '"' : '') + (f.disabled ? ' disabled data-locked' : '') + ' autocomplete="off"></label>';
       }).join('');
       var actions = opt.actions || [{ label: 'ביטול', value: false }, { label: 'אישור', value: true, kind: 'primary' }];
       var d = ui.el(
@@ -231,7 +232,7 @@
         resolve(result);
       }
       function setBusy(b) {
-        form.querySelectorAll('button,input').forEach(function (x) { x.disabled = b; });
+        form.querySelectorAll('button,input').forEach(function (x) { x.disabled = b || x.hasAttribute('data-locked'); });
         form.classList.toggle('busy', b);
       }
       async function act(a) {
@@ -258,7 +259,8 @@
           setBusy(false);
           msg.textContent = ui.errText(e);
           msg.hidden = false;
-          var pw = form.querySelector('input[type=password]');
+          /* סיסמת האימות של הדיאלוג (name=pw) קודמת לשדות סיסמה אחרים בטופס */
+          var pw = form.querySelector('input[type=password][name=pw]') || form.querySelector('input[type=password]');
           if (pw) { pw.select(); pw.focus(); }
         }
       }
@@ -278,6 +280,15 @@
       d.addEventListener('mousedown', function (e) { if (e.target === d && opt.dismissible !== false) close(null); });
       if (opt.onOpen) opt.onOpen(form);
     });
+  };
+
+  /* השבתה/הפעלה של שדה בדיאלוג פתוח (שדה תלוי בשדה אחר). מושבת נשאר מושבת גם אחרי מצב "שומר…" */
+  ui.lockField = function (inp, locked) {
+    if (!inp) return;
+    inp.disabled = !!locked;
+    if (locked) inp.setAttribute('data-locked', ''); else inp.removeAttribute('data-locked');
+    var row = inp.closest('.check-row, .field');
+    if (row) row.classList.toggle('is-disabled', !!locked);
   };
 
   ui.confirm = function (title, body, okLabel, tone) {
