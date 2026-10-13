@@ -12,7 +12,7 @@
 
 [Setup]
 AppId={{6F1C2B7E-4D0A-4B8E-9C53-0E2A7B5D91A4}
-AppName=תורת אסתר - גשר אוצריא
+AppName=אחת שאלתי - גמח תורת אסתר
 AppVersion={#AppVersion}
 AppPublisher=תורת אסתר
 DefaultDirName={localappdata}\OtzariaBridge
@@ -27,7 +27,7 @@ SolidCompression=yes
 OutputBaseFilename=OtzariaBridge-Setup-{#AppVersion}
 OutputDir=Output
 UninstallDisplayIcon={app}\OtzariaBridge.exe
-UninstallDisplayName=תורת אסתר - גשר אוצריא
+UninstallDisplayName=אחת שאלתי
 
 WizardStyle=modern
 CloseApplications=no
@@ -80,7 +80,7 @@ begin
     Form.ClientWidth := ScaleX(380);
     Form.ClientHeight := ScaleY(150);
   try
-    Form.Caption := 'הסרת תורת אסתר';
+    Form.Caption := 'הסרת אחת שאלתי';
     Lbl := TNewStaticText.Create(Form);
     Lbl.Parent := Form;
     Lbl.Caption := 'הקלידו את סיסמת הנעילה (או קוד שחזור) כדי להסיר:';

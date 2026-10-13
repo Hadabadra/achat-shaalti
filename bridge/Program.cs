@@ -10,10 +10,10 @@ public static class Program
     public const string Version = "3.4.0";
     public static int Port { get; set; }
 
-    // שם המוצר: הוחלף מ"תורת אסתר" לשם שמתאר בעברית פשוטה את מה שהתוכנה עושה, כי "קיוסק" ואפילו
+    // שם המוצר (13.10.2026): "אחת שאלתי". קודם: "תוכנת חסימת אוצריא". הוחלף מ"תורת אסתר" לשם שמתאר בעברית פשוטה את מה שהתוכנה עושה, כי "קיוסק" ואפילו
     // "תורת אסתר" לבדו לא היו ברורים למשתמשים בלי רקע טכני. "תורת אסתר" נשאר כשם ההנצחה (הגמ"ח).
-    public const string AppName = "תוכנת חסימת אוצריא";
-    public const string AppNameEn = "Otzaria Blocking Software";
+    public const string AppName = "אחת שאלתי";
+    public const string AppNameEn = "Achat Sha'alti";
     public const string GemachName = "גמח תורת אסתר";
     public const string GemachNameEn = "Torat Esther Gemach";
     public const string AppFullName = AppName + " - " + GemachName;

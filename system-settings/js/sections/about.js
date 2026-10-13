@@ -60,7 +60,7 @@
         '<h3>הגדרות מערכת</h3><p class="muted">גרסה ' + ui.esc(SS.VERSION) + ' · מאת גמח תורת אסתר</p>' +
         '<p>כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה ותאריך, מקלדת, עכבר, מדפסות, USB, בלוטות׳ ורשת — ומצב נעילה שהופך את המחשב לעמדת לימוד באוצריא ובתוכנות הלימוד בלבד.</p></div></div>' +
         '<div class="card about-memorial"><p>לעילוי נשמת הנערה הצדקנית</p><h3>אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א</h3><p>תהא נשמתה צרורה בצרור החיים. תנצב"ה</p></div>' +
-        '<div class="card"><div class="card-title">תוכנת חסימת אוצריא</div><div data-slot="bridge">' + ui.loading() + '</div>' +
+        '<div class="card"><div class="card-title">אחת שאלתי</div><div data-slot="bridge">' + ui.loading() + '</div>' +
         '<div data-slot="update"></div></div>' +
         '<div class="card"><div class="card-title">התקנת הגשר</div><ol class="steps">' +
         '<li>מורידים את <b dir="ltr">OtzariaBridge.exe</b> מהקישור.</li>' +

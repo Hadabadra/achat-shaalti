@@ -132,7 +132,7 @@ jobs:
             "## קבצים"
             "| קובץ | מה זה |"
             "|---|---|"
-            "| ``OtzariaBridge.exe`` | תוכנת חסימת אוצריא — תוכנת הרקע ל-Windows |"
+            "| ``OtzariaBridge.exe`` | אחת שאלתי — תוכנת הרקע ל-Windows |"
             "| ``file-explorer.otzplugin`` | תוסף סייר קבצים |"
             "| ``system-settings.otzplugin`` | תוסף הגדרות מערכת |"
             "| ``SHA256SUMS.txt`` | טביעות SHA256 לאימות הקבצים (גם העדכון האוטומטי בודק אותן) |"
