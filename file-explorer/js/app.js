@@ -676,6 +676,7 @@
     { id: 'openNewTab', icon: 'open', label: 'פתיחה בכרטיסייה חדשה', menuOnly: true },
     { id: 'openLocation', icon: 'folderOpen', label: 'פתיחת מיקום הקובץ', menuOnly: true },
     { id: 'copyPath', icon: 'copy', label: 'העתקה כנתיב', key: 'Ctrl+Shift+C', menuOnly: true },
+    { id: 'eject', icon: 'usb', label: 'הוצאה בבטחה (USB)', menuOnly: true }, /* #20 */
     { id: 'props', icon: 'info', label: 'מאפיינים', cap: 'properties', key: 'Alt+Enter' },
     { id: 'zip', icon: 'copy', label: 'דחיסה ל-ZIP', menuOnly: true },
     { id: 'unzip', icon: 'folderOpen', label: 'חילוץ כאן', menuOnly: true },
@@ -711,6 +712,7 @@
       case 'openNewTab': return { on: n === 1 && (sel[0].type === 'dir' || sel[0].type === 'drive') };
       case 'openLocation': return { on: n === 1 && !S.recycle && !!S.search };
       case 'copyPath': return { on: n >= 1 };
+      case 'eject': return { on: n === 1 && p.kind === 'bridge' && (sel[0].type === 'drive' || FX.win.isDriveRoot(sel[0].path)) && sel[0].driveType === 'removable' };
       default: if (FX.packb && FX.packb.state) return FX.packb.state(id, sel, inFolder());
     }
     return { on: false };
@@ -732,6 +734,17 @@
       return '<button class="btn btn-text fx-cmd" data-cmd="' + c.id + '" title="' + FX.esc(tip) + '"' + (st.on ? '' : ' disabled') + '>' +
         ic(c.icon) + '<span>' + (S.recycle && c.id === 'delete' ? 'מחיקה לצמיתות' : c.label) + '</span></button>';
     }).join('');
+  }
+  /* #20 (13.10.2026): הוצאת כונן USB בבטחה מתפריט הלחצן הימני — אותה קריאה כמו בתוסף ההגדרות */
+  async function ejectDrive(e) {
+    var letter = String(e.path || '').charAt(0).toUpperCase();
+    busy(true, 'מוציא את הכונן…');
+    try {
+      var r = await FX.Bridge.call('/sys/usb/eject', { letter: letter }, { timeoutMs: 30000 });
+      ui.toast((r && r.poweredOff ? 'ההתקן כובה. ' : '') + 'אפשר לנתק את הכונן ' + letter + ' בבטחה', 'success');
+    } catch (err) { opError(err, 'הוצאת הכונן נכשלה'); }
+    busy(false);
+    if (S.isRoot) go(S.path);
   }
   function run(id, ev) {
     var st = cmdState(id);
@@ -757,6 +770,7 @@
       case 'openNewTab': return newTab(selected()[0].path);
       case 'openLocation': return openLocation(selected()[0]);
       case 'zip': case 'unzip': case 'sendTo': case 'eject': return FX.packb[id](selected(), S.path);
+      case 'eject': return ejectDrive(selected()[0]);
       case 'copyPath': return copyText(selected().map(function (x) { return S.prov.displayPath(x.path); }).join('\n')).then(function () { ui.toast('הנתיב הועתק', 'success'); });
     }
   }
