@@ -90,6 +90,7 @@
   var Bridge = FX.Bridge = {
     port: null,
     info: null,
+    policy: null,
 
     /* סריקת הפורטים ב-GET /health; מחזיר מידע או null */
     probe: async function () {
@@ -104,12 +105,27 @@
         if (results[i]) {
           Bridge.port = results[i].port;
           Bridge.info = results[i].info;
+          Bridge.policy = null; /* חיבור חדש: מדיניות המנהל (אם השתנתה) תיטען מחדש בפעם הבאה שתידרש */
           return results[i].info;
         }
       }
       Bridge.port = null;
       Bridge.info = null;
+      Bridge.policy = null;
       return null;
+    },
+
+    /* מדיניות מסמכי Office שהמנהל קבע (kiosk.allowExcelDocs). נטענת פעם אחת ונשמרת במטמון עד חיבור מחדש.
+       כשאין גשר, או כשהבקשה נכשלת, ברירת המחדל היא חסימה (Word בלבד) - כמו בגשר עצמו */
+    loadPolicy: async function () {
+      if (Bridge.policy) return Bridge.policy;
+      try {
+        var st = await Bridge.call('/kiosk/status', {});
+        Bridge.policy = { allowExcelDocs: !!(st && st.allowExcelDocs) };
+      } catch (e) {
+        Bridge.policy = { allowExcelDocs: false };
+      }
+      return Bridge.policy;
     },
 
     /* בקשת צימוד: הגשר מציג חלון אישור במחשב (עד 2 דקות) */

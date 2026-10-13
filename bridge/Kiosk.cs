@@ -33,6 +33,13 @@ public static class Kiosk
     /// <summary>במצב readOnly (ברירת מחדל כבוי) שינוי קבצים חסום בזמן נעילה</summary>
     public static bool ReadOnly => Config.Get("kiosk.readOnly", false);
 
+    /// <summary>
+    /// מדיניות מסמכי Office בסייר הקבצים: ברירת מחדל - רק Word (docx/doc) ניתן לצפייה/פתיחה.
+    /// גיליונות Excel (xlsx) מותרים רק כשהמנהל מפעיל כאן; מצגות PowerPoint (pptx) חסומות תמיד, בלי אפשרות הפעלה.
+    /// האכיפה מתבצעת בתוסף סייר הקבצים עצמו (file-explorer/js/app.js), שקורא את הערך הזה מ-Status().
+    /// </summary>
+    public static bool AllowExcelDocs => Config.Get("kiosk.allowExcelDocs", false);
+
     /// <summary>חוסם שינוי קבצים בזמן נעילה רק כאשר הופעל מצב readOnly</summary>
     public static void EnsureFileWriteAllowed()
     {
@@ -241,6 +248,7 @@ public static class Kiosk
         blockTaskManager = Config.Get("kiosk.blockTaskManager", true),
         allowOpenExtensions = AllowedExtensions,
         readOnly = ReadOnly,
+        allowExcelDocs = AllowExcelDocs,
         clock = Config.Get("kiosk.clock", true),
         clockPosition = Config.Get("kiosk.clockPosition", "bottom-left"),
         restScreen = Config.Get("kiosk.restScreen", true),
@@ -754,7 +762,7 @@ public static class Kiosk
         // אחרי האימות הדו-שלבי: הפתיחה הזמנית תלויה במצבו החדש
         ApplyTempUnlockSettings(b);
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
-        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown" })
+        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restIdleMinutes")) Config.Set("kiosk.restIdleMinutes", (int)Math.Clamp(b.Long("restIdleMinutes", 0), 0, 240));
         if (b.Has("zmanimLocation"))
