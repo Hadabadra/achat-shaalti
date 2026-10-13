@@ -384,6 +384,10 @@
     if (window.Otzaria) {
       window.Otzaria.on('plugin.boot', boot);
       window.Otzaria.on('theme.changed', ui.applyTheme);
+      window.Otzaria.on('plugin.page_opened', function (ev) { /* #56: נפתח מהסייר — {section} */
+        var pr = ev && (ev.param || (ev.data && ev.data.param));
+        if (pr && pr.section) { try { location.hash = pr.section; } catch (e) { /* כלום */ } if (state.connected) show(pr.section); }
+      });
       window.Otzaria.on('calendar.city_changed', function () { pushZmanimCache(); });
       window.Otzaria.on('plugin.suspended', function () { state.suspended = true; clearTimeout(state.probeTimer); clearTimeout(zmanimTimer); });
       window.Otzaria.on('plugin.resumed', function () {

@@ -1064,7 +1064,8 @@
       setRow('שליחת הערה או דיווח על תקלה', '', '<button type="button" class="btn btn-tonal" data-act="fb">שליחת הערה</button>') +
       setRow('איפוס הגדרות הסייר', 'מחזיר את כל ההגדרות שבמסך הזה לברירת המחדל', '<button type="button" class="btn btn-tonal" data-act="reset">איפוס</button>') +
       '</div>';
-    if (id === 'security') return '<div id="fx-pol-host">' + ui.loading('טוען…') + '</div>';
+    if (id === 'security') return '<div class="fx-set-card"><button type="button" class="fx-btn" data-act="open-ss-lock">' + ic('lock') + 'הגדרות הנעילה המלאות בהגדרות מערכת</button></div>' +
+      '<div id="fx-pol-host">' + ui.loading('טוען…') + '</div>';
     var b = FX.Bridge && FX.Bridge.info;
     return '<div class="fx-set-card fx-set-hero"><div class="fx-set-logo">' + ic('folder') + '</div><div>' +
       '<h3>סייר קבצים</h3><p class="muted">גרסה ' + FX.esc(FX.VERSION) + ' · גמח תורת אסתר</p>' +
@@ -1094,6 +1095,10 @@
       content.innerHTML = setCat(id);
       content.scrollTop = 0;
       if (id === 'security') {
+        var ssb = content.querySelector('[data-act=open-ss-lock]');
+        if (ssb) ssb.addEventListener('click', function () {
+          openInPlugin(SS_PLUGIN, { section: 'fxpolicy' }).catch(function (er) { ui.toast((er && er.message) || 'תוסף הגדרות מערכת לא מותקן', 'error'); });
+        });
         var host = content.querySelector('#fx-pol-host');
         FX.Policy.refresh().then(function () {
           if (!host.isConnected) return;
@@ -1172,6 +1177,7 @@
 
   /* פתיחה בתוסף אחר (plugin.openOther, אוצריא 0.9.97) */
   var PDF_PLUGIN = 'com.chadbedera.pdfviewer';
+  var SS_PLUGIN = 'com.chadbedera.systemsettings'; /* #56: מעבר ישיר להגדרות הנעילה ולהפך */
   var WORD_PLUGIN = 'com.otzaria_word_editor.superdoc';
   async function openInPlugin(pluginId, param) {
     var r = await window.Otzaria.call('plugin.openOther', { pluginId: pluginId, param: param || null });
@@ -1767,6 +1773,10 @@
     if (window.Otzaria) {
       window.Otzaria.on('plugin.boot', boot);
       window.Otzaria.on('theme.changed', ui.applyTheme);
+      window.Otzaria.on('plugin.page_opened', function (ev) { /* #56: נפתח מתוסף אחר — {view:'settings', cat} */
+        var pr = ev && (ev.param || (ev.data && ev.data.param));
+        if (pr && pr.view === 'settings') settingsDialog(pr.cat || 'security');
+      });
       window.Otzaria.on('reader.toolbar_item_clicked', onToolbarItem);
       sdkExtras();
       window.Otzaria.on('plugin.suspended', function () { S.suspended = true; clearTimeout(S.probeTimer); clearTimeout(TU.poll); cancelSearch(); });

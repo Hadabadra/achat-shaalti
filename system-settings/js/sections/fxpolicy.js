@@ -31,7 +31,12 @@
     fields.push({ name: 'min', label: 'דקות פתיחה בסיסמה', value: String(st.unlockMinutes || 15), dir: 'ltr' });
     fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
     body.innerHTML = '<div class="card"><div class="card-title">נעילת סייר הקבצים</div>' +
-      '<p class="muted">אותן הגדרות שבסייר הקבצים: מה מותר לגלוש בסייר. מצב נוכחי: <b>' + ui.esc(st.effective || st.mode || '') + '</b></p><div data-slot="f"></div></div>';
+      '<p class="muted">אותן הגדרות שבסייר הקבצים: מה מותר לגלוש בסייר. מצב נוכחי: <b>' + ui.esc(st.effective || st.mode || '') + '</b></p>' +
+      '<p><button class="btn" type="button" data-act="open-fx">' + ui.icon('lock') + 'פתיחת הגדרות הנעילה בסייר הקבצים</button></p><div data-slot="f"></div></div>';
+    var ofx = body.querySelector('[data-act=open-fx]');
+    if (ofx) ofx.addEventListener('click', function () {
+      try { window.Otzaria.call('plugin.openOther', { pluginId: 'com.chadbedera.fileexplorer', param: { view: 'settings', cat: 'security' } }); } catch (e) { /* כלום */ }
+    });
     await ui.inlineForm(body.querySelector('[data-slot=f]'), {
       fields: fields,
       validate: function (x) {
