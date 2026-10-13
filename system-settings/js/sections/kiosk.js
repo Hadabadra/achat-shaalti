@@ -730,6 +730,15 @@
     });
     var sc = st.schedule || {};
     fields.push({ name: 'sched', type: 'checkbox', label: 'תזמון נעילה לפי שעות', value: !!sc.enabled, hint: 'נעילה אוטומטית בכל יום בין שעה לשעה (למשל 20:00 עד 02:00, כולל אחרי חצות). מחוץ לטווח המחשב פועל רגיל. ביטול ידני בתוך הטווח יחזור לנעילה' });
+    /* #56/#57: זמנים מוכנים (סדרים) — בחירה ממלאת שעת התחלה וסיום. סדרים שנשמרו כאן נזכרים (ss.sedarim) */
+    var SEDARIM = [
+      { label: "סדר א'", start: '09:00', end: '13:30' }, { label: "סדר ב'", start: '15:30', end: '19:00' },
+      { label: "סדר ג'", start: '20:00', end: '22:00' }, { label: 'לילה', start: '22:00', end: '06:00' }
+    ];
+    try { (JSON.parse(localStorage.getItem('ss.sedarim') || '[]') || []).forEach(function (s) { if (s && s.start && s.end) SEDARIM.push(s); }); } catch (e) { /* כלום */ }
+    fields.push({ name: 'schedPreset', type: 'select', label: 'זמנים מוכנים', value: '',
+      options: [{ value: '', label: '— בחירה —' }].concat(SEDARIM.map(function (s, i) { return { value: String(i), label: s.label + ' (' + s.start + '–' + s.end + ')' }; })),
+      hint: 'ממלא את שעות ההתחלה והסיום. אפשר לשנות אחר כך' });
     fields.push({ name: 'schedStart', label: 'שעת התחלה', type: 'time', value: sc.start || '20:00', dir: 'ltr' });
     fields.push({ name: 'schedEnd', label: 'שעת סיום', type: 'time', value: sc.end || '02:00', dir: 'ltr' });
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
@@ -749,6 +758,14 @@
     fields.push({ name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
     fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
     var slot = body.querySelector('[data-slot=kset]'); if (!slot) return;
+    setTimeout(function () {
+      var ps = slot.querySelector('[name=schedPreset]'); if (!ps) return;
+      ps.addEventListener('change', function () {
+        var s = SEDARIM[+ps.value]; if (!s || ps.value === '') return;
+        var a = slot.querySelector('[name=schedStart]'), b = slot.querySelector('[name=schedEnd]'), c = slot.querySelector('[name=sched]');
+        if (a) a.value = s.start; if (b) b.value = s.end; if (c) c.checked = true;
+      });
+    }, 0);
     var ok = await ui.inlineForm(slot, {
       title: 'הגדרות נעילה', icon: 'edit',
       body: '<p class="muted">מה פתוח לתלמיד בזמן נעילה, ואיך נראה המסך. הגדרות שלא סומנו מוסתרות ונחסמות גם בגשר.</p>',
@@ -781,6 +798,9 @@
         if (tfa && tuCb) { tfa.addEventListener('change', syncTu); syncTu(); }
       },
       onSubmit: async function (x) {
+        if (x.sched && !SEDARIM.some(function (s) { return s.start === x.schedStart && s.end === x.schedEnd; })) {
+          try { var mine = JSON.parse(localStorage.getItem('ss.sedarim') || '[]') || []; mine.push({ label: 'שמור', start: x.schedStart, end: x.schedEnd }); localStorage.setItem('ss.sedarim', JSON.stringify(mine.slice(-6))); } catch (e) { /* כלום */ }
+        }
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
           readOnly: !!x.ro, allowExcelDocs: !!x.xls, twoFactor: !!x.tfa, clock: !!x.clock, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos,
