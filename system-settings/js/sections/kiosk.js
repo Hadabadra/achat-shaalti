@@ -95,7 +95,7 @@
         '<button class="btn btn-tonal" data-act="chpw">' + ui.icon('edit') + 'שינוי</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>מה פתוח בזמן נעילה</b><span class="muted">' +
         ui.esc((st.openSections || []).map(function (id) { return SECTION_NAMES[id] || id; }).join(', ') || 'רק תוכנות לימוד ואודות') +
-        (st.readOnly ? ' · קבצים לקריאה בלבד' : '') + (st.clock !== false ? ' · שעון צף' : '') + '</span></div>' +
+        (st.readOnly ? ' · קבצים לקריאה בלבד' : '') + (st.allowExcelDocs ? ' · Excel מותר בסייר' : '') + (st.clock !== false ? ' · שעון צף' : '') + '</span></div>' +
         '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>קבצים שמותר לפתוח בזמן נעילה</b><span class="muted"><bdi dir="ltr">' +
         ui.esc((st.allowOpenExtensions || []).length ? st.allowOpenExtensions.map(function (x) { return '.' + x; }).join(', ') : '—') + '</bdi></span></div>' +
@@ -358,7 +358,8 @@
       { name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' },
       { name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' },
       { name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' },
-      { name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' }
+      { name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' },
+      { name: 'xls', type: 'checkbox', label: 'אפשור צפייה בקובצי Excel (xlsx) בסייר הקבצים', value: !!st.allowExcelDocs, hint: 'ברירת מחדל: בסייר הקבצים אפשר לצפות ולפתוח רק מסמכי Word. מצגות PowerPoint חסומות תמיד ואין אפשרות להתיר אותן; סימון כאן מתיר גם גיליונות Excel' }
     ];
     all.forEach(function (id) {
       fields.push({ name: 'sec_' + id, type: 'checkbox', label: 'פתוח בנעילה: ' + (SECTION_NAMES[id] || id), value: open.indexOf(id) >= 0 });
@@ -381,7 +382,7 @@
       onSubmit: async function (x) {
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
-          readOnly: !!x.ro, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, resetOnShutdown: !!x.reset, clockPosition: x.pos.trim(),
+          readOnly: !!x.ro, allowExcelDocs: !!x.xls, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, resetOnShutdown: !!x.reset, clockPosition: x.pos.trim(),
           restIdleMinutes: +String(x.idle).trim() || 0, zmanimLocation: x.zloc.trim(),
           openSections: all.filter(function (id) { return x['sec_' + id]; })
         });

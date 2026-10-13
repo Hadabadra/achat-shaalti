@@ -1115,6 +1115,20 @@
   function openExternal(e) {
     S.prov.open(e.path).catch(function (err) { opError(err, 'הפתיחה נכשלה'); });
   }
+  /* מדיניות מסמכי Office שנקבעת על ידי המנהל (kiosk.allowExcelDocs בגשר): מסמכי Word מותרים תמיד,
+     גיליונות Excel מותרים רק כשהמנהל אישר, ומצגות PowerPoint חסומות תמיד בלי אפשרות הפעלה */
+  function officeBlockedMessage(bk) {
+    var what = bk === 'sheet' ? 'קובצי Excel' : 'מצגות PowerPoint';
+    var extra = bk === 'sheet' ? ' אפשר לבקש מהמנהל להתיר צפייה בקובצי Excel בהגדרות הנעילה.' : '';
+    ui.toast('סוג קובץ זה חסום על ידי המנהל: ' + what + ' אינם זמינים בסייר הקבצים. מותר לצפות ולפתוח רק מסמכי Word.' + extra, 'error');
+  }
+  async function officeDocAllowed(bk) {
+    if (bk !== 'sheet' && bk !== 'slides') return true;
+    if (bk === 'slides') return false; /* PowerPoint חסום תמיד, בלי מתג הפעלה */
+    if (!S.prov || S.prov.kind !== 'bridge') return false; /* בלי גשר אין מנהל שיכול לאשר — ברירת המחדל חסומה */
+    try { return !!(await FX.Bridge.loadPolicy()).allowExcelDocs; }
+    catch (e) { return false; }
+  }
   async function openEntry(e, find) {
     if (!e) return;
     if (S.recycle) { ui.toast('כדי לפתוח פריט יש לשחזר אותו קודם', 'info'); return; }
@@ -1124,6 +1138,7 @@
     var canExt = !!S.prov.caps.open;
     if (find === undefined && S.search && $('fx-content').checked) find = S.search.query;   /* חיפוש בתוכן: פותחים במקום ההתאמה */
     var bk = FX.kindOf(e);
+    if (!(await officeDocAllowed(bk))) { officeBlockedMessage(bk); return; }
     var kind = ext === 'pdf' ? 'pdf' : (ext === 'docx' || ext === 'doc') ? 'word' : FX.isTextExt(ext) ? 'text' : FX.isImageExt(ext) ? 'image' : '';
     if (kind && o[kind] === 'external' && canExt) { openExternal(e); return; }
     if (kind === 'pdf' && o.pdf === 'ocr') { openInPdfPlugin(e); return; }
