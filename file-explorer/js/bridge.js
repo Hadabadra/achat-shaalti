@@ -295,7 +295,7 @@
       else if (d.encoding === 'base64') { out.dataUrl = 'data:' + (d.mime || 'application/octet-stream') + ';base64,' + d.content; }
       return out;
     },
-    open: function (path) { return Bridge.call('/fs/open', { path: path }); },
+    open: function (path, o) { return Bridge.call('/fs/open', { path: path, openWith: !!(o && o.openWith) }); },
     reveal: function (path) { return Bridge.call('/fs/reveal', { path: path }); },
     clipboardGet: function () { return Bridge.call('/fs/clipboard-get', {}); },
     clipboardSet: function (paths, cut) { return Bridge.call('/fs/clipboard-set', { paths: paths, cut: !!cut }); },

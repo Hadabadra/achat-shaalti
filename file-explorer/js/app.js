@@ -999,7 +999,7 @@
 
   /* ---------- הגדרות פתיחה (לכל צופה, נשמרות בדפדפן) ---------- */
   var OPT_KEY = 'fx.options';
-  var OPT_DEF = { pdf: 'internal', word: 'two', text: 'internal', image: 'internal', singleClickOpen: false };
+  var OPT_DEF = { pdf: 'internal', word: 'two', text: 'internal', image: 'internal', singleClickOpen: false, askApp: true };
   function opts() {
     var o = {};
     try { o = JSON.parse(localStorage.getItem(OPT_KEY) || '{}') || {}; } catch (e) { o = {}; }
@@ -1045,6 +1045,7 @@
       setRow('מסמכי Word', 'שני טורים נוחים לקריאה, טור אחד, או תוסף וורד לאוצריא', seg('word', o.word, [['two', 'שני טורים'], ['one', 'טור אחד'], ['wordplugin', 'וורד לאוצריא']].concat(ext))) +
       setRow('קובצי טקסט', '', seg('text', o.text, [['internal', 'צופה פנימי']].concat(ext))) +
       setRow('תמונות', '', seg('image', o.image, [['internal', 'תצוגה מקדימה']].concat(ext))) +
+      setRow('לשאול באיזו תוכנה לפתוח', 'בכל פתיחה ביישום חיצוני מוצג חלון הבחירה של Windows, במקום לפתוח תמיד באותה תוכנה. בנעילה — תמיד תוכנת ברירת המחדל.', setSwitch('askApp', o.askApp !== false)) +
       '<p class="muted small">פתיחה ביישום חיצוני דורשת את אחת שאלתי; בלעדיו הקובץ נפתח בצופה הפנימי.</p></div>';
     if (id === 'view') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('grid') + 'תצוגת הקבצים</div>' +
       setRow('פריסה', 'כמו בתפריט "תצוגה" של סייר הקבצים של Windows', seg('mode', FX.layout.mode(), [
@@ -1119,6 +1120,10 @@
         saveOpts(Object.assign({}, OPT_DEF)); FX.layout.setZoom(0.9); FX.layout.setMode('details'); FX.layout.setPanes(false, false);
         S.showHidden = false; savePrefs(); refresh(); if (window.I18N) window.I18N.set('auto');
         showCat('general'); ui.toast('ההגדרות אופסו', 'success'); return;
+      }
+      if (t.dataset.sw === 'askApp') {
+        var oa = Object.assign({}, opts()); oa.askApp = oa.askApp === false;
+        saveOpts(oa); t.classList.toggle('on', oa.askApp); t.setAttribute('aria-checked', oa.askApp ? 'true' : 'false'); return;
       }
       if (t.dataset.sw === 'stripes') {
         S.stripes = !S.stripes; t.classList.toggle('on', S.stripes); t.setAttribute('aria-checked', S.stripes ? 'true' : 'false');
@@ -1212,7 +1217,8 @@
   function openInWordPlugin(e) { return sendToPlugin(e, WORD_PLUGIN, 'וורד לאוצריא'); }
 
   function openExternal(e) {
-    S.prov.open(e.path).catch(function (err) { opError(err, 'הפתיחה נכשלה'); });
+    /* #59: בכל פתיחה ביישום חיצוני — חלון "פתח באמצעות" של Windows (אם לא כובה בהגדרות), במקום לזכור תוכנה */
+    S.prov.open(e.path, { openWith: opts().askApp !== false }).catch(function (err) { opError(err, 'הפתיחה נכשלה'); });
   }
   /* מדיניות מסמכי Office שנקבעת על ידי המנהל (kiosk.allowExcelDocs בגשר): מסמכי Word מותרים תמיד,
      גיליונות Excel מותרים רק כשהמנהל אישר, ומצגות PowerPoint חסומות תמיד בלי אפשרות הפעלה */

@@ -574,6 +574,13 @@ public static class FsApi
                 x.TrimStart('.').Equals(ext, StringComparison.OrdinalIgnoreCase));
             if (!allowed) throw BridgeException.Locked();
         }
+        // #59: "לשאול כל פעם באיזו תוכנה לפתוח" — חלון "פתח באמצעות" של Windows. לא בנעילה/מצב מוגבל:
+        // החלון מאפשר לדפדף לכל תוכנה במחשב, ולכן שם נשארת הפתיחה בתוכנת ברירת המחדל בלבד.
+        if (b.Has("openWith") && b.Bool("openWith") && File.Exists(path) && !Kiosk.IsActive && !FxPolicy.IsRestricted)
+        {
+            Process.Start(new ProcessStartInfo("rundll32.exe", "shell32.dll,OpenAs_RunDLL " + path) { UseShellExecute = false });
+            return new { opened = true, chooser = true };
+        }
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
         return new { opened = true };
     }

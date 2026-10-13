@@ -36,7 +36,7 @@
 | `/fs/delete` | `{ paths: [path], permanent?: false }` | `{ deleted, failed }` — ברירת מחדל לסל המיחזור |
 | `/fs/read` | `{ path, maxBytes?: 5242880 }` | `{ name, size, mime, encoding: "utf8"\|"base64", content, truncated }` — טקסט (txt, md, json, csv, xml, html, js, css, log, ini) כ-utf8, תמונות ו-pdf כ-base64 |
 | `/fs/write-text` | `{ path, content, overwrite?: false }` | `{ path, size }` |
-| `/fs/open` | `{ path }` | `{ opened: true }` — פתיחה ביישום ברירת המחדל של Windows. **חסום (`locked`) במצב נעילה**, אלא אם הסיומת ב-`kiosk.allowOpenExtensions` |
+| `/fs/open` | `{ path, openWith? }` | `{ opened: true, chooser? }` — פתיחה ביישום ברירת המחדל של Windows; `openWith: true` מציג את חלון "פתח באמצעות" (לא בנעילה/מצב מוגבל). **חסום (`locked`) במצב נעילה**, אלא אם הסיומת ב-`kiosk.allowOpenExtensions` |
 | `/fs/reveal` | `{ path }` | פתיחת סייר Windows על הקובץ. חסום במצב נעילה |
 | `/fs/clipboard-get` | `{}` | `{ paths: [path], cut: bool }` — רשימת קבצים מלוח Windows (FileDropList) |
 | `/fs/clipboard-set` | `{ paths, cut }` | `{ ok: true }` — כדי שהעתקה בתוסף תהיה זמינה גם בסייר Windows ולהפך |
