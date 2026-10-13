@@ -690,6 +690,7 @@
 
   async function editSettings(body, st) {
     var all = st.allSections || Object.keys(SECTION_NAMES);
+    if (SS.isOfflineMode && SS.isOfflineMode()) all = all.filter(function (id) { return ['wifi', 'bluetooth', 'airplane'].indexOf(id) < 0; }); /* מצב מנותק: בלי רשת */
     var open = st.openSections || [];
 
 

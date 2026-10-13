@@ -39,6 +39,7 @@
 
   /* שינוי שפה/ערכת נושא חי (events.subscribe:settings.changed) */
   on('settings.changed', function (p) {
+    if (window.SS && SS.syncOffline) SS.syncOffline(); /* מצב מנותק השתנה באוצריא — מסתירים/מחזירים רשת מיד */
     var lang = p && (p.locale || p.language || (p.settings && p.settings.locale));
     if (lang && window.I18N && window.I18N.set && (!window.I18N.pref || window.I18N.pref() === 'auto')) {
       window.I18N.set(/^en/i.test(lang) ? 'en' : 'he');

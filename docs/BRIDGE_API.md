@@ -231,6 +231,7 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 - `POST /diag/markSent {ids}` — העברה לארכיון "נשלחו" (במקום `/diag/ack` שמוחק; התוסף נופל ל-ack בגשר ישן).
 - `POST /diag/logTail` → `{text}` — 60 שורות אחרונות של bridge.log בלי שורות שנראות כסוד ובלי שם המשתמש.
 - `POST /diag/note {text}` — תיאור ידני לתור.
+- `POST /sys/offline {report?: bool}` → `{offline}` — התוסף מדווח את מצב המנותק של אוצריא (`app.getConnectivity`); נשמר ב-config (`otzariaOfflineMode`). בלי report: קריאה בלבד.
 ### הקשחת BIOS/UEFI מתוך תוכנה — /bios/*
 
 ניסיון להגדיר סיסמת BIOS ולחסום אתחול מהתקן USB/חיצוני דרך ממשקי WMI ספציפיים ליצרן (ר' `bridge/BiosHardening.cs`

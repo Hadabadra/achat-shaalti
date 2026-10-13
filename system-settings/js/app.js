@@ -124,8 +124,24 @@
   SS._offline = false;
   SS.isOfflineMode = function () { return !!SS._offline; };
   async function syncOffline() {
-    try { var r = await SS.bridge.call('/sys/offline', {}); var on = !!(r && r.offline); if (on !== SS._offline) { SS._offline = on; refreshNav(); } } catch (e) { }
+    /* מקור אמת: אוצריא עצמה (app.getConnectivity → isOfflineMode). מדווחים לגשר כדי שגם המגש וחלון "אודות"
+       יסתירו רשת ועדכונים; כשאין תשובה מאוצריא — נשארים עם מה שהגשר יודע. */
+    var rep = null;
+    try {
+      if (window.Otzaria) {
+        var c = unwrapOtzaria(await window.Otzaria.call('app.getConnectivity', {}));
+        if (c && typeof c.isOfflineMode === 'boolean') rep = c.isOfflineMode;
+      }
+    } catch (e) { }
+    var on = rep;
+    try {
+      var r = await SS.bridge.call('/sys/offline', rep === null ? {} : { report: rep });
+      if (on === null) on = !!(r && r.offline);
+    } catch (e) { }
+    on = !!on;
+    if (on !== SS._offline) { SS._offline = on; document.documentElement.classList.toggle('otz-offline', on); refreshNav(); }
   }
+  SS.syncOffline = syncOffline;
   SS.lockOpen = null; /* רשימת ההגדרות הפתוחות בנעילה, כשהנעילה פעילה */
 
   function visible(s) {
@@ -325,6 +341,7 @@
     reportsSent = false; /* מינימלי: מאפשר שליחה חוזרת בסבב הבא */
   }
   setInterval(function () { if (state.connected) sendPendingReports(); }, 30 * 60 * 1000);
+  setInterval(function () { if (state.connected) syncOffline(); }, 60 * 1000);
   SS.sendPendingReports = sendPendingReports;
 
   SS.bridge.onPairing = function (on) {
