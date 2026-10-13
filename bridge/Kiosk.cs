@@ -13,7 +13,7 @@ namespace OtzariaBridge;
 /// נעילה רכה: סגירת explorer, חסימת מקשים, מעקב שמחזיר את אוצריא לחזית, חסימת מנהל המשימות.
 /// נעילה קפדנית: כבויה כברירת מחדל; מופעלת רק כאשר הבקשה כוללת strict:true במפורש.
 /// </summary>
-public static class Kiosk
+public static partial class Kiosk
 {
     private const string PoliciesKey = @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
     private const string WinlogonKey = @"Software\Microsoft\Windows NT\CurrentVersion\Winlogon";
@@ -1038,7 +1038,7 @@ public static class Kiosk
             for (int i = 0; i < 30 && Volatile.Read(ref _watchBusy) == 1; i++) Thread.Sleep(100);
             Tray.Invoke(RemoveHook);
             Overlay.HideAll();
-            RestoreWindowFrame();
+            RestoreWindowFrame(); UnblockClose();
             ClearRegistry();
             StartExplorer();
             Tray.SetKioskState(false);
@@ -1295,6 +1295,7 @@ public static class Kiosk
             if (Overlay.RestVisible) return;
             if (Config.Get("kiosk.maximizeOtzaria", true)) FitToScreen(hwnd);
             if (Config.Get("kiosk.fullscreenOtzaria", true)) MakeFullscreen(hwnd);
+            BlockClose(hwnd);
 
             GetWindowThreadProcessId(GetForegroundWindow(), out uint fgPid);
             if (fgPid == otz.Id || fgPid == Environment.ProcessId) return;
