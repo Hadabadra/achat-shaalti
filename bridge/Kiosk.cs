@@ -785,6 +785,10 @@ public static partial class Kiosk
         foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restIdleMinutes")) Config.Set("kiosk.restIdleMinutes", (int)Math.Clamp(b.Long("restIdleMinutes", 0), 0, 240));
+        if ((b.Has("zmanimCity") && b.Str("zmanimCity", "") != Config.Get("kiosk.zmanimCity", ""))
+            || (b.Has("zmanimLocation") && (b.Str("zmanimLocation") ?? "").Trim() != Config.Get("kiosk.zmanimLocation", ""))
+            || (b.Has("zmanimDiaspora") && b.Bool("zmanimDiaspora") != Config.Get("kiosk.zmanimDiaspora", false)))
+            Zmanim.InvalidateCache();
         if (b.Has("zmanimLocation"))
         {
             string loc = (b.Str("zmanimLocation") ?? "").Trim();

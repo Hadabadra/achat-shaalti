@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Text.Json;
 
 namespace OtzariaBridge;
@@ -35,6 +36,10 @@ internal static class Zmanim
     public static void Register() => Server.Route("/kiosk/zmanim-cache", CacheSet);
 
     /// <summary>תוסף "הגדרות מערכת" דוחף לכאן את מה שקיבל מ-calendar.getDailyTimes/getJewishDate באוצריא</summary>
+    /// <summary>מבטל את מטמון הזמנים מאוצריא — אחרי שינוי עיר/מיקום/חו"ל, כדי שמסך המנוחה לא ימשיך
+    /// להציג את זמני המיקום הקודם עד שהמטמון יפוג (באג #59: "ההגדרות לא נשמרות")</summary>
+    public static void InvalidateCache() { lock (Gate) { _cacheJson = null; } }
+
     private static object CacheSet(JsonElement b)
     {
         lock (Gate) { _cacheJson = b.GetRawText(); _cacheUtc = DateTime.UtcNow; }
@@ -64,7 +69,7 @@ internal static class Zmanim
             var (dailyTimes, jdToday, jdTomorrow) = cached.Value;
             string cal = CalendarLine(jdToday);
             if (cal != null) list.Add(cal);
-            string zm = ZmanimLine(dailyTimes);
+            string zm = ZmanimLine(WithMissing(dailyTimes, now));
             if (zm != null) list.Add(zm);
             string ch = CandleHavdalaLine(now, dailyTimes, jdToday, jdTomorrow);
             if (ch != null) list.Add(ch);
@@ -243,6 +248,25 @@ internal static class Zmanim
         return parts.Count > 0 ? string.Join("   ·   ", parts) : null;
     }
 
+    /// <summary>זמנים שנבחרו בהגדרות אבל לא חזרו מלוח השנה של אוצריא — משלימים מחישוב מקומי (KosherJava)
+    /// כשיש מיקום, כדי שכל הזמנים שנבחרו יוצגו (באג #59)</summary>
+    private static JsonElement WithMissing(JsonElement dailyTimes, DateTime now)
+    {
+        if (dailyTimes.ValueKind != JsonValueKind.Object) return dailyTimes;
+        var show = Config.HasList("kiosk.zmanimShow") ? Config.GetList("kiosk.zmanimShow") : DefaultShow;
+        var missing = KnownZmanim.Where(z => show.Contains(z.id, StringComparer.OrdinalIgnoreCase) && !TryPick(dailyTimes, out _, z.keys)).ToList();
+        if (missing.Count == 0) return dailyTimes;
+        Dictionary<string, string> local;
+        try { local = KosherJavaTimes(now); } catch { return dailyTimes; }
+        if (local.Count == 0) return dailyTimes;
+        var merged = JsonNode.Parse(dailyTimes.GetRawText()) as JsonObject ?? new JsonObject();
+        foreach (var z in missing)
+            foreach (var k in z.keys)
+                if (local.TryGetValue(k, out var v)) { merged[k] = v; break; }
+        using var doc = JsonDocument.Parse(merged.ToJsonString());
+        return doc.RootElement.Clone();
+    }
+
     private static string ZmanimLine(JsonElement dailyTimes)
     {
         if (dailyTimes.ValueKind != JsonValueKind.Object) return null;
@@ -415,12 +439,14 @@ internal static class Zmanim
     /// זמנים הלכתיים מלאים (גר"א/מג"א) ותיקון גובה אמיתי, אבל קוד צד-שלישי — ייתכנו הבדלים קלים
     /// מהרגיל בזמנים גבוליים מסוימים לעומת מה שהמנהל מכיר.
     /// </summary>
-    private static string FallbackLineKosherJava(DateTime now)
+    /// <summary>זמני היום מחושבים מקומית (KosherJava) לפי kiosk.zmanimLocation; ריק כשאין מיקום</summary>
+    private static Dictionary<string, string> KosherJavaTimes(DateTime now)
     {
+        var dict = new Dictionary<string, string>();
         string loc = Config.Get("kiosk.zmanimLocation", "");
-        if (string.IsNullOrWhiteSpace(loc)) return null;
+        if (string.IsNullOrWhiteSpace(loc)) return dict;
         var p = ParseLocation(loc);
-        if (p == null) return null;
+        if (p == null) return dict;
         double lat = p.Value.lat, lon = p.Value.lon;
         // תיקון גובה (issue #33): מטרים מעל פני הים; 0 כברירת מחדל אם לא הוגדר. הספרייה דורשת ≥ 0
         double elevation = Math.Max(0, Config.Get("kiosk.zmanimElevation", 0.0));
@@ -432,10 +458,9 @@ internal static class Zmanim
             var geo = new global::Zmanim.Utilities.GeoLocation("kiosk", lat, lon, elevation, tz);
             cal = new global::Zmanim.ComplexZmanimCalendar(now.Date, geo);
         }
-        catch { return null; } // קואורדינטות לא תקינות לספרייה (לא אמור לקרות אחרי ParseLocation)
+        catch { return dict; } // קואורדינטות לא תקינות לספרייה (לא אמור לקרות אחרי ParseLocation)
 
         string H(DateTime? d) => d?.ToString("H:mm", System.Globalization.CultureInfo.InvariantCulture);
-        var dict = new Dictionary<string, string>();
         void Add(string key, DateTime? v) { string s = H(v); if (s != null) dict[key] = s; }
         try
         {
@@ -454,6 +479,12 @@ internal static class Zmanim
             Add("tzeit", cal.GetTzais());
         }
         catch { /* למשל קו רוחב קיצוני עם יום/לילה מתמשכים חלקית — מה שכבר חושב מוצג */ }
+        return dict;
+    }
+
+    private static string FallbackLineKosherJava(DateTime now)
+    {
+        var dict = KosherJavaTimes(now);
         if (dict.Count == 0) return null;
 
         using var doc = JsonDocument.Parse(JsonSerializer.Serialize(dict));

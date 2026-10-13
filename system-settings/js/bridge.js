@@ -348,6 +348,7 @@
       if (typeof b.tempUnlockEnabled === 'boolean') tu.enabled = b.tempUnlockEnabled;
       if (typeof b.tempUnlockMinutes === 'number') tu.minutes = Math.max(1, Math.min(60, b.tempUnlockMinutes | 0));
       if (typeof b.restIdleMinutes === 'number') M.kiosk.restIdleMinutes = Math.max(0, Math.min(240, b.restIdleMinutes | 0));
+      if (b.restZmanimSide === 'left' || b.restZmanimSide === 'right') M.kiosk.restZmanimSide = b.restZmanimSide;
       if (typeof b.zmanimLocation === 'string') M.kiosk.zmanimLocation = b.zmanimLocation;
       if (typeof b.zmanimCity === 'string') M.kiosk.zmanimCity = b.zmanimCity;
       if (typeof b.zmanimDiaspora === 'boolean') M.kiosk.zmanimDiaspora = b.zmanimDiaspora;
