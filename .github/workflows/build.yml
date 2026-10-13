@@ -1,52 +1,26 @@
-name: כלי מערכת — בנייה, שחרור ופרסום
+name: בנייה — גשר + תוספים + קובץ התקנה (Inno Setup)
 
-# דחיפה לענף: בניית הגשר + ולידציה של שני התוספים + צילומי מסך (artifacts בלבד).
-# שינוי <Version> ב-bridge/OtzariaBridge.csproj לגרסה שאין לה עדיין Release = Release (ניסיון) עם ה-exe ושני קובצי .otzplugin.
-# פרסום לחנות אוצריא — ידני בלבד, אחרי בדיקה על Windows אמיתי: Actions → Run workflow → store = true.
+# פורק אישי: אין כאן שער "חובה לפני אריזה" ואין פרסום אוטומטי לחנות אוצריא/Release רשמי —
+# רק בנייה + אריזת installer כ-artifact להורדה. רץ על כל push לכל ענף, ועל workflow_dispatch ידני.
 
 on:
   push:
-    branches: ["main"]
-    tags: ["bridge-v*"]
     paths:
       - "bridge/**"
       - "system-settings/**"
       - "file-explorer/**"
-      - "system-settings-screenshots/**"
-      - "tools/screens/**"
-      - "CHANGELOG.md"
+      - "installer/**"
       - ".github/workflows/build.yml"
-  # בדיקת בנייה בלבד ל-PR-ים (ל-main ול-next): בלי שחרור/פרסום, שתלויים ב-github.ref == refs/heads/main
-  # שלעולם אינו מתקיים באירוע pull_request (שם ה-ref הוא refs/pull/<n>/merge).
-  pull_request:
-    branches: ["main", "next"]
-    paths:
-      - "bridge/**"
-      - "system-settings/**"
-      - "file-explorer/**"
-      - "system-settings-screenshots/**"
-      - "tools/screens/**"
-      - "CHANGELOG.md"
-      - ".github/workflows/build.yml"
-  workflow_dispatch:
-    inputs:
-      store:
-        description: "לפרסם את שני התוספים לחנות אוצריא"
-        type: boolean
-        default: false
+  workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: שער אריזה — כל סעיפי 'חובה לפני אריזה' בוצעו
-        shell: pwsh
-        run: python tools/check-prerelease.py
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -65,172 +39,35 @@ jobs:
       - name: Publish
         run: dotnet publish bridge/OtzariaBridge.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o out
 
+      - name: התקנת Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress --yes
+
+      - name: בניית קובץ ההתקנה (Inno Setup)
+        shell: pwsh
+        run: |
+          $ver = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=$ver" `
+            "/DExePath=$PWD\out\OtzariaBridge.exe" `
+            "installer\OtzariaBridge.iss"
+          Get-ChildItem installer\Output
+
       - name: SHA256 לאימות ההורדה
         shell: pwsh
         run: |
-          $files = @("out/OtzariaBridge.exe", "bridge/plugins/system-settings.otzplugin", "bridge/plugins/file-explorer.otzplugin")
+          $setup = Get-ChildItem installer\Output\*.exe | Select-Object -First 1 -ExpandProperty FullName
+          $files = @($setup, "out/OtzariaBridge.exe", "bridge/plugins/system-settings.otzplugin", "bridge/plugins/file-explorer.otzplugin")
           $lines = foreach ($f in $files) { "{0}  {1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) }
           $lines | Set-Content SHA256SUMS.txt -Encoding ascii
           Get-Content SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: OtzariaBridge
+          name: OtzariaBridge-Setup
           path: |
+            installer/Output/*.exe
             out/OtzariaBridge.exe
             bridge/plugins/*.otzplugin
             SHA256SUMS.txt
           if-no-files-found: error
-
-      - name: האם לשחרר גרסה?
-        id: rel
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ver = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-          $tag = "v$ver"
-          gh release view $tag -R ${{ github.repository }} *> $null
-          $exists = $LASTEXITCODE -eq 0
-          $global:LASTEXITCODE = 0
-          $do = ("${{ github.ref }}" -eq "refs/heads/main") -and (-not $exists)
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          "do=$($do.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-          Write-Host "version=$ver tag=$tag exists=$exists release=$do"
-
-      - name: הערות שחרור מתוך CHANGELOG.md
-        if: github.ref == 'refs/heads/main'
-        shell: pwsh
-        env:
-          TAG: ${{ steps.rel.outputs.tag }}
-        run: |
-          $ver = $env:TAG.TrimStart('v')
-          $lines = Get-Content CHANGELOG.md -Encoding UTF8
-          $start = [Array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -like "## $ver *" -or $l -eq "## $ver" })
-          $section = @()
-          if ($start -ge 0) {
-            for ($i = $start + 1; $i -lt $lines.Length; $i++) {
-              if ($lines[$i] -like '## *' -or $lines[$i] -like '# *' -or $lines[$i] -eq '---') { break }
-              $section += $lines[$i]
-            }
-          }
-          $notes = @(
-            "## מה חדש בגרסה $ver"
-            ($section -join "`n").Trim()
-            ""
-            "## התקנה"
-            "1. מורידים את **OtzariaBridge.exe** (למטה) ומפעילים פעם אחת: הגשר מותקן, עולה אוטומטית עם Windows, ופותח את תיקיית התוספים."
-            "2. באוצריא: התקנת תוסף מקובץ → **file-explorer.otzplugin** ו-**system-settings.otzplugin**."
-            ""
-            "> ⚠️ לפני הפעלת *נעילה קפדנית* — לרשום את קוד השחזור."
-            ""
-            "## אם Windows או האנטי-וירוס מזהירים"
-            "הגשר עדיין אינו חתום בחתימת קוד, ולכן SmartScreen עלול להציג 'Windows protected your PC'. לוחצים **More info / מידע נוסף** ← **Run anyway / הפעל בכל זאת**."
-            "הקוד פתוח כולו בריפו, והקובץ נבנה אוטומטית ב-GitHub Actions. לאימות: ב-PowerShell ``Get-FileHash OtzariaBridge.exe`` והשוואה ל-**SHA256SUMS.txt**."
-            "הגשר מאזין רק ל-127.0.0.1 (המחשב המקומי) ואינו נגיש מהרשת."
-            ""
-            "## קבצים"
-            "| קובץ | מה זה |"
-            "|---|---|"
-            "| ``OtzariaBridge.exe`` | תוכנת חסימת אוצריא — תוכנת הרקע ל-Windows |"
-            "| ``file-explorer.otzplugin`` | תוסף סייר קבצים |"
-            "| ``system-settings.otzplugin`` | תוסף הגדרות מערכת |"
-            "| ``SHA256SUMS.txt`` | טביעות SHA256 לאימות הקבצים (גם העדכון האוטומטי בודק אותן) |"
-            ""
-            "## שימושי"
-            "- אנגלית: תפריט המגש → English, או ``OtzariaBridge.exe --lang en``"
-            "- ביטול נעילה בחירום: ``OtzariaBridge.exe --unlock <קוד שחזור>``"
-            "- הסרה: ``OtzariaBridge.exe --uninstall``"
-            "- הערות ותקלות: כפתור **שליחת הערה** בשני התוספים"
-            "- כל הגרסאות: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)"
-          )
-          $notes -join "`n" | Set-Content release-notes.md -Encoding UTF8
-          Get-Content release-notes.md
-
-      # גרסה חדשה ב-OtzariaBridge.csproj (תג שעוד לא קיים) = Release אוטומטי
-      - name: Release
-        if: steps.rel.outputs.do == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.rel.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          name: כלי מערכת לאוצריא ${{ steps.rel.outputs.tag }}
-          prerelease: false
-          make_latest: true
-          body_path: release-notes.md
-          files: |
-            out/OtzariaBridge.exe
-            bridge/plugins/system-settings.otzplugin
-            bridge/plugins/file-explorer.otzplugin
-            SHA256SUMS.txt
-
-      - name: עדכון הערות של Release קיים
-        if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --notes-file release-notes.md
-
-      # Release שנשאר טיוטה (draft): מעדכנים את הקבצים לבנייה הנוכחית ומפרסמים
-      - name: השלמת Release שנשאר טיוטה
-        if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $draft = gh release view ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --json isDraft -q .isDraft
-          if ($draft -ne 'true') { Write-Host "not a draft"; exit 0 }
-          gh release upload ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --clobber out/OtzariaBridge.exe bridge/plugins/system-settings.otzplugin bridge/plugins/file-explorer.otzplugin SHA256SUMS.txt
-          gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --draft=false --latest --target ${{ github.sha }}
-
-  plugins:
-    name: ולידציה, צילומים ופרסום לחנות
-    runs-on: ubuntu-latest
-    needs: build
-    timeout-minutes: 20
-    env:
-      STORE: ${{ github.event.inputs.store == 'true' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: צילומי מסך לסייר הקבצים
-        run: |
-          set -e
-          mkdir -p file-explorer-screenshots /tmp/shot
-          cp -r file-explorer/. /tmp/shot/
-          cp tools/screens/fx-demo.js /tmp/shot/
-          sed -i '0,/<script src="js\/i18n.js"><\/script>/s//<script src="fx-demo.js"><\/script>\n  &/' /tmp/shot/index.html
-          grep -c fx-demo /tmp/shot/index.html
-          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
-          for L in he en; do
-            N=$([ "$L" = he ] && echo 01 || echo 02)
-            "$CHROME" --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
-              --window-size=1280,800 --virtual-time-budget=6000 --allow-file-access-from-files \
-              --screenshot="$PWD/file-explorer-screenshots/$N.png" "file:///tmp/shot/index.html?lang=$L"
-          done
-          ls -la file-explorer-screenshots
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: file-explorer-screenshots
-          path: file-explorer-screenshots/*.png
-
-      - name: הגדרות מערכת — ולידציה ופרסום
-        uses: Otzaria/otzaria-plugin-validator@v1
-        with:
-          path: system-settings
-          publish: ${{ env.STORE == 'true' && 'auto' || 'false' }}
-          otzaria-user: ${{ env.STORE == 'true' && secrets.OTZARIA_USER || '' }}
-          otzaria-password: ${{ env.STORE == 'true' && secrets.OTZARIA_PASSWORD || '' }}
-          screenshots: 'system-settings-screenshots/01.png,system-settings-screenshots/02.png'
-          reports-consent: 'true'
-
-      - name: סייר קבצים — ולידציה ופרסום
-        if: always()
-        uses: Otzaria/otzaria-plugin-validator@v1
-        with:
-          path: file-explorer
-          publish: ${{ env.STORE == 'true' && 'auto' || 'false' }}
-          otzaria-user: ${{ env.STORE == 'true' && secrets.OTZARIA_USER || '' }}
-          otzaria-password: ${{ env.STORE == 'true' && secrets.OTZARIA_PASSWORD || '' }}
-          screenshots: 'file-explorer-screenshots/01.png,file-explorer-screenshots/02.png'
-          reports-consent: 'true'
