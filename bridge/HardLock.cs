@@ -966,7 +966,7 @@ public class HardLockService : ServiceBase
                 {
                     _hello.Remove(nonce); // ניסיון עם חתימה פגומה שורף את האישור
                     HardLock.SvcLog("service: נדחתה פקודה רגישה עם חתימה לא תקינה (" + q["op"] + ")");
-                    return Err("two_factor", "אישור Windows Hello אינו חתום כראוי — נסו שוב");
+                    return Err("two_factor", Lang.T("אישור Windows Hello אינו חתום כראוי — נסו שוב", "The Windows Hello approval is not properly signed — please try again"));
                 }
                 if (consume) _hello.Remove(nonce); // חד-פעמי
                 return null;
