@@ -1019,7 +1019,7 @@
   }
   function setCat(id) {
     var o = opts();
-    var ext = [['external', 'יישום חיצוני']];
+    var ext = [['external', 'יישום חיצוני'], ['ask', 'לשאול כל פעם']]; /* #16 */
     var pref = window.I18N ? window.I18N.pref() : 'auto';
     if (id === 'open') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('open') + 'באיזה צופה לפתוח</div>' +
       setRow('קובצי PDF', 'הצופה הפנימי, צופה PDF+OCR (תוסף), או התוכנה שמוגדרת ב-Windows', seg('pdf', o.pdf, [['internal', 'צופה פנימי'], ['ocr', 'PDF+OCR']].concat(ext))) +
@@ -1218,6 +1218,14 @@
     var bk = FX.kindOf(e);
     if (!(await officeDocAllowed(bk))) { officeBlockedMessage(bk); return; }
     var kind = ext === 'pdf' ? 'pdf' : (ext === 'docx' || ext === 'doc') ? 'word' : FX.isTextExt(ext) ? 'text' : FX.isImageExt(ext) ? 'image' : '';
+    if (kind && o[kind] === 'ask') { /* #16 (13.10.2026): לשאול בכל פתיחה במה לפתוח */
+      var CH = { pdf: [['internal', 'צופה פנימי'], ['ocr', 'PDF+OCR']], word: [['two', 'שני טורים'], ['one', 'טור אחד'], ['wordplugin', 'וורד לאוצריא']],
+        text: [['internal', 'צופה פנימי']], image: [['internal', 'תצוגה מקדימה']] }[kind].concat(canExt ? [['external', 'יישום חיצוני']] : []);
+      var pick = await ui.dialog({ title: 'במה לפתוח?', icon: 'open', body: '<p>' + FX.esc(e.name) + '</p>',
+        actions: [{ label: 'ביטול', value: false }].concat(CH.map(function (c) { return { label: c[1], value: c[0] }; })) });
+      if (!pick) return;
+      o = Object.assign({}, o); o[kind] = pick;
+    }
     if (kind && o[kind] === 'external' && canExt) { openExternal(e); return; }
     if (kind === 'pdf' && o.pdf === 'ocr') { openInPdfPlugin(e); return; }
     if (kind === 'word' && o.word === 'wordplugin' && ext === 'docx') { openInWordPlugin(e); return; }
