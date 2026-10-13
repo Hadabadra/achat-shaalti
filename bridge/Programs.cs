@@ -340,6 +340,37 @@ public static class Programs
         }
     }
 
+    /// <summary>#4: כל הכוננים המוכנים (גם רשת/וירטואלי/תקליטור) — לבדיקת נתיבים ידועים בלבד (File.Exists, זול)</summary>
+    private static IEnumerable<string> AllDrives()
+    {
+        foreach (var d in DriveInfo.GetDrives())
+        {
+            bool ok = false;
+            try { ok = d.IsReady; } catch { }
+            if (ok) yield return d.RootDirectory.FullName;
+        }
+    }
+
+    /// <summary>#7: קובץ נייד לפי תבנית שם בתיקיות המשתמש הנפוצות ובשורש הכוננים (עומק 2)</summary>
+    private static IEnumerable<string> Portable(string pattern)
+    {
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var roots = new[] { "Desktop", "Downloads", "Documents", "" }.Select(x => System.IO.Path.Combine(home, x)).Concat(AllDrives());
+        foreach (var r in roots)
+        {
+            string[] hits;
+            try { hits = Directory.Exists(r) ? Directory.GetFiles(r, pattern) : Array.Empty<string>(); } catch { hits = Array.Empty<string>(); }
+            foreach (var h in hits) yield return h;
+            string[] subs;
+            try { subs = Directory.Exists(r) ? Directory.GetDirectories(r) : Array.Empty<string>(); } catch { subs = Array.Empty<string>(); }
+            foreach (var sd in subs)
+            {
+                try { hits = Directory.GetFiles(sd, pattern); } catch { continue; }
+                foreach (var h in hits) yield return h;
+            }
+        }
+    }
+
     private static IEnumerable<string> Under(string dir, string pattern, string tail)
     {
         string[] dirs;
@@ -361,11 +392,17 @@ public static class Programs
                 System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "KleiKodesh", "כתבי הקודש.exe"),
             }),
         new("אוצר החכמה", new[] { "otzar.exe", "אוצר החכמה.exe" }, new[] { "otzar", "אוצר החכמה", "OtzarLauncher" }, () =>
-            Drives().SelectMany(r => new[]
+            AllDrives().SelectMany(r => new[]
             {
                 System.IO.Path.Combine(r, "OtzarApp", "OtzarLocal", "launcher", "bin", "x64", "app", "otzar.exe"),
                 System.IO.Path.Combine(r, "אוצר החכמה.exe"),
-            })),
+                System.IO.Path.Combine(r, "OtzarApp", "OtzarLocal", "launcher", "otzar.exe"),
+            }).Concat(Portable("אוצר החכמה*.exe"))),
+        // #6: גשר חבורתא לאוצריא
+        new("חבורתא", new[] { "ChavrutaLauncher.exe" }, new[] { "ChavrutaLauncher", "Chavruta" }, () =>
+            new[] { System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Chavruta", "ChavrutaLauncher.exe") }),
+        // #7: הנקדן אופליין — תוכנה ניידת, איתור לפי שם הקובץ
+        new("הנקדן — אוצריא", new[] { "הנקדן - אוצריא - V1.0.exe" }, new[] { "הנקדן - אוצריא - V1.0" }, () => Portable("הנקדן*.exe")),
     };
 
     private static List<(string name, string path, string[] procs)> _knownCache;
