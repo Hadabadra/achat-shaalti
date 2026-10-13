@@ -18,7 +18,7 @@
     var slot = body.querySelector('[data-slot=ap]');
     var d;
     try { d = await SS.bridge.call('/sys/airplane/get'); }
-    catch (e) { slot.innerHTML = ui.errorBox(e); return; }
+    catch (e) { slot.innerHTML = ui.errorBox(e, function () { load(body); }); return; }
     if (!d.supported) {
       slot.innerHTML = '<div class="state-box">' + ui.icon('info') + '<div><b>אין משדרים במחשב זה</b><p class="muted">לא נמצאו Wi-Fi או בלוטות׳ שאפשר לכבות.</p></div></div>';
       return;

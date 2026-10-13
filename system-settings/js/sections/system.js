@@ -48,7 +48,10 @@
       var slot = body.querySelector('[data-slot=info]');
       var d;
       try { d = await SS.bridge.call('/sys/info'); }
-      catch (e) { slot.innerHTML = ui.errorBox(e); return; }
+      catch (e) {
+        slot.innerHTML = ui.errorBox(e, function () { SS.sections.find(function (s) { return s.id === 'system'; }).load(body); });
+        return;
+      }
       var bat = d.battery
         ? '<span class="battery"><span class="battery-shell"><i style="width:' + Math.max(4, Math.min(100, d.battery.percent)) + '%"></i></span>' +
           d.battery.percent + '%' + (d.battery.charging ? ' · בטעינה' : '') + '</span>'

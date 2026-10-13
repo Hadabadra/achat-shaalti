@@ -13,11 +13,12 @@ namespace OtzariaBridge;
 public static class Overlay
 {
     private static ClockBar _clock;
-    private static RestScreen _rest;
+    // בעיה #14 סעיף 3: חלון "RestScreen-like" אחד לכל מסך (Screen.AllScreens), כולם מוצגים/מוסתרים יחד
+    private static readonly List<RestScreen> _rest = new();
 
-    public static bool RestVisible => _rest is { Visible: true };
+    public static bool RestVisible => _rest.Count > 0 && _rest[0].Visible;
     /// <summary>מסך המנוחה מוצג בגלל חוסר פעילות (ולא בגלל מזעור) — לא להסתיר אותו כשאוצריא לא ממוזערת</summary>
-    public static bool RestIdle => _rest is { Visible: true, Idle: true };
+    public static bool RestIdle => _rest.Count > 0 && _rest[0] is { Visible: true, Idle: true };
 
     public static string HebrewDate(DateTime d)
     {
@@ -42,13 +43,33 @@ public static class Overlay
 
     public static void ShowRest(IntPtr otzaria, bool idle = false) => Tray.Invoke(() =>
     {
-        _rest ??= new RestScreen();
-        _rest.Target = otzaria;
-        if (!_rest.Visible) _rest.Idle = idle;
-        if (!_rest.Visible) { _rest.Bounds = Screen.PrimaryScreen!.Bounds; _rest.Show(); _rest.Activate(); }
+        var screens = Screen.AllScreens;
+        // התאמה למספר המסכים (גם אם השתנה: חיבור/ניתוק מסך בזמן ריצה)
+        while (_rest.Count < screens.Length) _rest.Add(new RestScreen());
+        while (_rest.Count > screens.Length)
+        {
+            var extra = _rest[^1];
+            _rest.RemoveAt(_rest.Count - 1);
+            extra.Dispose();
+        }
+        bool wasVisible = RestVisible;
+        foreach (var r in _rest)
+        {
+            r.Target = otzaria;
+            if (!wasVisible) r.Idle = idle;
+        }
+        if (!wasVisible)
+        {
+            for (int i = 0; i < _rest.Count; i++)
+            {
+                _rest[i].Bounds = screens[i].Bounds;
+                _rest[i].Show();
+            }
+            if (_rest.Count > 0) _rest[0].Activate();
+        }
     });
 
-    public static void HideRest() => Tray.Invoke(() => { if (_rest is { Visible: true }) _rest.Hide(); });
+    public static void HideRest() => Tray.Invoke(() => { foreach (var r in _rest) if (r.Visible) r.Hide(); });
 
     private static SideBar _side;
 
@@ -265,7 +286,8 @@ internal sealed class RestScreen : Form
 
     private void Back()
     {
-        Hide();
+        // לחיצה/מקש בכל אחד מהמסכים מחזירים לאוצריא ומסתירים את כל מסכי המנוחה יחד (ריבוי מסכים)
+        Overlay.HideRest();
         Overlay.BringOtzaria(Target);
     }
 
@@ -342,12 +364,17 @@ internal sealed class RestScreen : Form
             y += 34 * s;
             g.DrawString(Lang.T("אוצריא לא נמצאה במחשב. לביטול הנעילה: Ctrl+Alt+Shift+F12", "Otzaria was not found. To unlock: Ctrl+Alt+Shift+F12"), hintF, dim, Line(y, 30 * s), rtl);
         }
-        string zm = Zmanim.Line(now);
-        if (zm != null)
+        var zmSections = Zmanim.Sections(now);
+        if (zmSections.Length > 0)
         {
-            y += 34 * s;
             using var zmF = new Font("David", 16f, GraphicsUnit.Point);
-            g.DrawString(zm, zmF, goldB, Line(y, 64 * s), rtl);
+            foreach (var sec in zmSections)
+            {
+                y += 30 * s;
+                int lineCount = sec.Count(ch => ch == '\n') + 1;
+                g.DrawString(sec, zmF, goldB, Line(y, 26 * s * lineCount), rtl);
+                y += 26 * s * (lineCount - 1);
+            }
         }
 
         // נר הנצחה בתחתית, עם להבה מרצדת והילה חמה

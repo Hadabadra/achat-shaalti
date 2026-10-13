@@ -20,7 +20,7 @@
     var slot = body.querySelector('[data-slot=pr]');
     var d;
     try { d = await SS.bridge.call('/sys/printers/list', {}, { timeoutMs: 30000 }); }
-    catch (e) { slot.innerHTML = ui.errorBox(e); return; }
+    catch (e) { slot.innerHTML = ui.errorBox(e, function () { load(body); }); return; }
     var list = d.printers || [];
     if (!list.length) { slot.innerHTML = '<div class="empty">לא נמצאו מדפסות במחשב.</div>'; return; }
     list.sort(function (a, b) { return (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0); });
@@ -45,7 +45,7 @@
     slot.querySelectorAll('[data-test]').forEach(function (b) {
       b.addEventListener('click', async function () {
         var p = list[+b.dataset.test];
-        if (!(await ui.confirm('הדפסת דף ניסיון', '<p>לשלוח דף ניסיון אל <b>' + ui.esc(p.name) + '</b>?</p>', 'הדפסה'))) return;
+        if (!(await ui.confirm('הדפסת דף ניסיון', '<p>לשלוח דף ניסיון אל <b>' + ui.isolateLtr(ui.esc(p.name)) + '</b>?</p>', 'הדפסה'))) return;
         try { await SS.bridge.call('/sys/printers/test-page', { name: p.name }, { timeoutMs: 30000 }); ui.toast('דף הניסיון נשלח', 'success'); }
         catch (e) { ui.error(e, 'דף ניסיון'); }
       });

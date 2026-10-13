@@ -60,7 +60,7 @@
     try { console.warn('openUrl failed', lastErr); } catch (e) { /* אין קונסול */ }
     /* גיבוי: מעתיקים את הקישור ללוח, כדי שאפשר להדביק אותו בדפדפן */
     var ok = await copyText(url);
-    ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + url, 'error');
+    ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + ui.isolateLtr(url), 'error');
   }
   async function copyText(text) {
     try {
@@ -81,7 +81,7 @@
     var bridge = S.prov && S.prov.kind === 'bridge';
     c.className = 'topbar-chip ' + (bridge ? 'ok' : 'warn');
     c.innerHTML = '<i class="dot"></i>' + (bridge ? 'מחובר לגשר' : 'מצב מוגבל');
-    c.title = bridge ? 'גשר אוצריא פועל' : 'גשר אוצריא לא נמצא — עובדים על תיקיות שאושרו בלבד';
+    c.title = bridge ? 'תוכנת חסימת אוצריא פועל' : 'תוכנת חסימת אוצריא לא נמצא — עובדים על תיקיות שאושרו בלבד';
   }
 
   function showBanner(on) {
@@ -91,7 +91,7 @@
     b.dataset.built = '1';
     b.innerHTML =
       '<span class="fx-banner-ic">' + ic('plug') + '</span>' +
-      '<div class="fx-banner-text"><b>גשר אוצריא לא נמצא.</b> ' +
+      '<div class="fx-banner-text"><b>תוכנת חסימת אוצריא לא נמצא.</b> ' +
       '<span>בלעדיו אפשר לעבוד רק על תיקיות שאישרתם, בלי העתקה ויצירת קבצים. מורידים את <b>OtzariaBridge.exe</b>, מפעילים פעם אחת, והחיבור יזוהה מעצמו.</span></div>' +
       '<div class="fx-banner-actions">' +
       '<button class="btn btn-primary" id="fx-dl">' + ic('open') + 'פתח בדפדפן</button>' +
@@ -100,7 +100,7 @@
     $('fx-dl').addEventListener('click', function () { openUrl(FX.BRIDGE_URL); });
     $('fx-copy-link').addEventListener('click', async function () {
       var ok = await copyText(FX.BRIDGE_URL);
-      ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + FX.BRIDGE_URL, ok ? 'success' : 'error');
+      ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + ui.isolateLtr(FX.BRIDGE_URL), ok ? 'success' : 'error');
     });
     $('fx-retry').addEventListener('click', function () {
       var btn = this; btn.disabled = true;
@@ -159,7 +159,7 @@
       if (!S.prov || S.prov.kind !== 'bridge') {
         var switching = !!S.prov;
         await setProvider(FX.BridgeProvider);
-        if (switching) ui.toast('גשר אוצריא חובר — כל הפעולות זמינות', 'success');
+        if (switching) ui.toast('תוכנת חסימת אוצריא חובר — כל הפעולות זמינות', 'success');
       }
       return true;
     }
@@ -801,7 +801,7 @@
     if (clash.length) {
       var ans = await ui.dialog({
         title: 'פריטים בשם זהה', icon: 'warning',
-        body: '<p>' + FX.formatNumber(clash.length) + ' מהפריטים כבר קיימים בתיקייה הזו (למשל <b>' + FX.esc(S.prov.nameOf(clash[0])) + '</b>). מה לעשות?</p>',
+        body: '<p>' + FX.formatNumber(clash.length) + ' מהפריטים כבר קיימים בתיקייה הזו (למשל <b>' + ui.isolateLtr(FX.esc(S.prov.nameOf(clash[0]))) + '</b>). מה לעשות?</p>',
         actions: [{ label: 'ביטול', value: false }, { label: 'דילוג', value: 'skip' }, { label: 'החלפה', value: 'overwrite' }, { label: 'שמירת שניהם', value: 'rename', kind: 'primary' }]
       });
       if (!ans) return;
@@ -879,7 +879,7 @@
   }
   async function purgeSel() {
     var sel = selected();
-    var what = sel.length === 1 ? '<b>' + FX.esc(sel[0].name) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
+    var what = sel.length === 1 ? '<b>' + ui.isolateLtr(FX.esc(sel[0].name)) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
     var ok = await ui.confirm('מחיקה לצמיתות', '<p>' + what + ' יימחקו <b>לצמיתות</b> מסל המיחזור. לא ניתן לשחזר אותם.</p>', 'מחיקה לצמיתות', 'danger');
     if (!ok) return;
     busy(true, 'מוחק…');
@@ -907,7 +907,7 @@
     var sel = selected();
     var p = S.prov;
     var perm = !!permanent || !p.caps.recycle;
-    var what = sel.length === 1 ? '<b>' + FX.esc(sel[0].name) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
+    var what = sel.length === 1 ? '<b>' + ui.isolateLtr(FX.esc(sel[0].name)) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
     var body = perm
       ? '<p>' + what + ' יימחקו <b>לצמיתות</b>. לא ניתן לשחזר אותם.</p>' + (!p.caps.recycle && p.capReasons ? '<p class="muted small">' + FX.esc(p.capReasons.recycle) + '</p>' : '')
       : '<p>' + what + ' יועברו לסל המיחזור.</p><p class="muted small">Shift+Delete מוחק לצמיתות.</p>';
@@ -976,7 +976,7 @@
       setRow('מסמכי Word', 'שני טורים נוחים לקריאה, טור אחד, או תוסף וורד לאוצריא', seg('word', o.word, [['two', 'שני טורים'], ['one', 'טור אחד'], ['wordplugin', 'וורד לאוצריא']].concat(ext))) +
       setRow('קובצי טקסט', '', seg('text', o.text, [['internal', 'צופה פנימי']].concat(ext))) +
       setRow('תמונות', '', seg('image', o.image, [['internal', 'תצוגה מקדימה']].concat(ext))) +
-      '<p class="muted small">פתיחה ביישום חיצוני דורשת את גשר אוצריא; בלעדיו הקובץ נפתח בצופה הפנימי.</p></div>';
+      '<p class="muted small">פתיחה ביישום חיצוני דורשת את תוכנת חסימת אוצריא; בלעדיו הקובץ נפתח בצופה הפנימי.</p></div>';
     if (id === 'view') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('grid') + 'תצוגת הקבצים</div>' +
       setRow('פריסה', '', seg('mode', FX.layout.mode(), [['details', 'פרטים'], ['list', 'רשימה'], ['icons', 'סמלים']])) +
       setRow('גודל טקסט', 'גם ב-Ctrl+ / Ctrl- / Ctrl+0', seg('zoom', String(FX.layout.zoom()), [['0.8', 'קטן מאוד'], ['0.9', 'רגיל'], ['1', 'בינוני'], ['1.1', 'גדול'], ['1.2', 'גדול מאוד'], ['1.35', 'ענק']])) +
@@ -992,10 +992,10 @@
     if (id === 'security') return '<div id="fx-pol-host">' + ui.loading('טוען…') + '</div>';
     var b = FX.Bridge && FX.Bridge.info;
     return '<div class="fx-set-card fx-set-hero"><div class="fx-set-logo">' + ic('folder') + '</div><div>' +
-      '<h3>סייר קבצים</h3><p class="muted">גרסה ' + FX.esc(FX.VERSION) + ' · תורת אסתר</p>' +
-      '<p>עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, סל מיחזור, וצפייה ב-PDF, Word, טקסט ותמונות. עם גשר אוצריא — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.</p></div></div>' +
+      '<h3>סייר קבצים</h3><p class="muted">גרסה ' + FX.esc(FX.VERSION) + ' · גמח תורת אסתר</p>' +
+      '<p>עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, סל מיחזור, וצפייה ב-PDF, Word, טקסט ותמונות. עם תוכנת חסימת אוצריא — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.</p></div></div>' +
       '<div class="fx-set-card fx-set-memorial"><p>לעילוי נשמת</p><b>אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א</b><p>תנצב"ה</p></div>' +
-      '<div class="fx-set-card"><div class="fx-set-title">' + ic('info') + 'גשר אוצריא</div>' +
+      '<div class="fx-set-card"><div class="fx-set-title">' + ic('info') + 'תוכנת חסימת אוצריא</div>' +
       setRow(b ? 'מחובר · גרסה ' + FX.esc(b.version || '?') : 'הגשר אינו מחובר', b ? '' : 'בלי הגשר הסייר עובד על תיקיות שאישרתם בלבד',
         b ? '<button type="button" class="btn btn-tonal" data-act="upd">בדיקת עדכונים</button>' : '') +
       '<div class="fx-upd muted small" data-slot="upd"></div>' +
@@ -1565,7 +1565,7 @@
   var NEW_DOC_ID = 'chadbedera-fx-new-doc';
   async function newDocFromReader() {
     if (!S.prov || S.prov.kind !== 'bridge') {
-      ui.toast('יצירת מסמך חדש דורשת את גשר אוצריא', 'info');
+      ui.toast('יצירת מסמך חדש דורשת את תוכנת חסימת אוצריא', 'info');
       return;
     }
     var dir = '';

@@ -16,7 +16,10 @@
     load: async function (body) {
       var d;
       try { d = await SS.bridge.call('/sys/mouse/get'); }
-      catch (e) { body.querySelector('[data-slot=mouse]').innerHTML = ui.errorBox(e); return; }
+      catch (e) {
+        body.querySelector('[data-slot=mouse]').innerHTML = ui.errorBox(e, function () { SS.sections.find(function (s) { return s.id === 'mouse'; }).load(body); });
+        return;
+      }
       render(body, d);
     }
   });

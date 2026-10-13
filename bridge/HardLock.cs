@@ -55,7 +55,8 @@ public static class HardLock
             var r = new StreamReader(pipe, Encoding.UTF8);
             w.WriteLine(req.ToJsonString());
             var readTask = r.ReadLineAsync();
-            if (!readTask.Wait(Math.Max(timeoutMs, 15000))) return null;
+            // בעיה #14 סעיף 2: רצפת המתנה קשיחה, לא 15ש' שחוסמות חוט HTTP גם כשנדרש timeout קצר בהרבה
+            if (!readTask.Wait(Math.Max(timeoutMs, 3000))) return null;
             return JsonNode.Parse(readTask.Result ?? "") as JsonObject;
         }
         catch { return null; }
@@ -87,13 +88,116 @@ public static class HardLock
         if (!fresh && DateTime.UtcNow - _cacheAt < TimeSpan.FromSeconds(3)) return _cache;
         // בלי שירות מותקן לא ממתינים לחיבור (בדיקת ההתקנה נשמרת ל-30 שניות)
         if (DateTime.UtcNow - _installedAt > TimeSpan.FromSeconds(fresh ? 0 : 30)) { _installed = ServiceInstalled(); _installedAt = DateTime.UtcNow; }
-        _cache = _installed ? Call(new JsonObject { ["op"] = "status" }, 1000) : null;
+        var res = _installed ? Call(new JsonObject { ["op"] = "status" }, 1000) : null;
+        // תמונת המדיניות מפוענחת כאן, בחוט שקרא, ונשמרת כאובייקט שאינו משתנה — הקוראים (השומר, בקשות HTTP)
+        // לא נוגעים ב-JsonNode המשותף, שאינו בטוח לקריאה מקבילה
+        _policy = PolicySnapshot.From(res?["policy"] as JsonObject);
+        _cache = res;
         _cacheAt = DateTime.UtcNow;
         return _cache;
     }
 
     /// <summary>השירות מותקן, רץ ויש לו סיסמה — מקור האמת לסיסמה ולמצב הנעילה</summary>
     public static bool Available => ServiceStatus()?["configured"]?.GetValue<bool>() == true;
+
+    // ---------- מדיניות הנעילה שהשירות מחזיק ----------
+    // config.json נמצא בפרופיל של המשתמש המחובר וכתיב לו, ולכן הגדרות שהנעילה אוכפת (רשימת התוכנות
+    // המותרות, נתיב אוצריא, מדיניות סייר הקבצים) אינן יכולות להסתמך עליו בלבד. כשרכיב ההקשחה מותקן,
+    // העותק שלו (ב-%ProgramData%, כתיב רק ל-SYSTEM ולמנהלים) הוא מקור האמת — בדיוק כמו הסיסמה ומצב הנעילה.
+    // שדה null בתמונה = השירות עוד לא קיבל את ההגדרה (מצב מגרסה קודמת), ואז נשארים עם config.json
+    // עד הסנכרון הבא בסיסמה (עדכון רכיב ההקשחה או שמירת ההגדרה).
+
+    public sealed class PolicySnapshot
+    {
+        public string[] Programs { get; private init; }        // כל רשומה: אובייקט JSON כטקסט, כמו ב-kiosk.programs
+        public bool? AutoTorah { get; private init; }
+        public string[] AutoTorahKeywords { get; private init; }
+        public string OtzariaPath { get; private init; }        // "" = זיהוי אוטומטי (בלי נתיב מוגדר)
+        public string FxMode { get; private init; }
+        public string[] FxRoots { get; private init; }
+        public int? FxUnlockMinutes { get; private init; }
+
+        internal static PolicySnapshot From(JsonObject o)
+        {
+            if (o == null) return null;
+            static string[] Strs(JsonNode n, bool json) => n is JsonArray a
+                ? a.Where(x => x != null).Select(x => json ? x.ToJsonString() : x.ToString()).ToArray()
+                : null;
+            try
+            {
+                var fx = o["fxPolicy"] as JsonObject;
+                return new PolicySnapshot
+                {
+                    Programs = Strs(o["programs"], json: true),
+                    AutoTorah = o["autoTorahPrograms"] is JsonValue at ? at.GetValue<bool>() : null,
+                    AutoTorahKeywords = Strs(o["autoTorahKeywords"], json: false),
+                    OtzariaPath = o["otzariaPath"]?.ToString(),
+                    FxMode = fx?["mode"]?.ToString(),
+                    FxRoots = fx == null ? null : Strs(fx["roots"], json: false) ?? Array.Empty<string>(),
+                    FxUnlockMinutes = fx?["unlockMinutes"] is JsonValue fm ? fm.GetValue<int>() : null,
+                };
+            }
+            catch { return null; }
+        }
+    }
+
+    private static volatile PolicySnapshot _policy;
+
+    /// <summary>המדיניות שהשירות מחזיק, או null כשהשירות אינו זמין (ואז האכיפה לפי config.json, כמו בלי רכיב הקשחה)</summary>
+    public static PolicySnapshot Policy => Available ? _policy : null;
+
+    private static void PushSettings(string password, JsonObject fields)
+    {
+        fields["op"] = "settings";
+        fields["password"] = password ?? "";
+        // "settings" בשירות דורש Windows Hello כשהאימות הדו-שלבי פעיל — כמו SetSchedule/SetTwoFactor
+        Must(CallSensitive(fields, password));
+        _cacheAt = DateTime.MinValue;
+    }
+
+    /// <summary>רשימת התוכנות המותרות (הידנית) והגדרות הזיהוי האוטומטי → השירות</summary>
+    public static void SetPrograms(string password, JsonArray programs, bool autoTorah, IEnumerable<string> keywords) =>
+        PushSettings(password, new JsonObject
+        {
+            ["programs"] = programs,
+            ["autoTorahPrograms"] = autoTorah,
+            ["autoTorahKeywords"] = new JsonArray((keywords ?? Array.Empty<string>()).Select(k => (JsonNode)k).ToArray()),
+        });
+
+    /// <summary>נתיב אוצריא → השירות. מחרוזת ריקה = זיהוי אוטומטי</summary>
+    public static void SetOtzariaPath(string password, string path) =>
+        PushSettings(password, new JsonObject { ["otzariaPath"] = path ?? "" });
+
+    /// <summary>מדיניות סייר הקבצים → השירות</summary>
+    public static void SetFxPolicy(string password, string mode, IEnumerable<string> roots, int unlockMinutes) =>
+        PushSettings(password, new JsonObject
+        {
+            ["fxPolicy"] = new JsonObject
+            {
+                ["mode"] = mode ?? "off",
+                ["roots"] = new JsonArray((roots ?? Array.Empty<string>()).Select(r => (JsonNode)r).ToArray()),
+                ["unlockMinutes"] = unlockMinutes,
+            },
+        });
+
+    /// <summary>
+    /// מעביר לשירות את המדיניות הנוכחית (העותק של השירות אם כבר יש לו, אחרת config.json — הגירה חד-פעמית
+    /// ממצב ישן). נקרא בהתקנה/עדכון של רכיב ההקשחה, שבהם המנהל כבר הזין סיסמה.
+    /// </summary>
+    private static void SyncPolicy(string password)
+    {
+        try { OtzariaBridge.Programs.SyncToService(password); }
+        catch (Exception ex) { Config.Log("hardlock sync programs: " + ex.Message); }
+        try { FxPolicy.SyncToService(password); }
+        catch (Exception ex) { Config.Log("hardlock sync fx policy: " + ex.Message); }
+        try
+        {
+            var pol = Policy;
+            if (pol != null && pol.OtzariaPath == null)
+                SetOtzariaPath(password, Config.Get<string>("kiosk.otzariaPath", "") ?? "");
+        }
+        catch (Exception ex) { Config.Log("hardlock sync otzariaPath: " + ex.Message); }
+    }
 
     /// <summary>האם השירות אומר שהנעילה פעילה</summary>
     public static bool ServiceActive => ServiceStatus()?["active"]?.GetValue<bool>() == true;
@@ -180,13 +284,13 @@ public static class HardLock
 
     /// <summary>העברת חלון התזמון לשירות (הוא המתזמן כשהוא מותקן)</summary>
     public static void SetSchedule(string password, bool enabled, string start, string end) =>
-        Must(Call(new JsonObject
+        Must(CallSensitive(new JsonObject
         {
             ["op"] = "settings", ["password"] = password ?? "",
             ["scheduleEnabled"] = enabled, ["scheduleStart"] = start ?? "", ["scheduleEnd"] = end ?? "",
-        }));
+        }, password));
 
-    /// <summary>דילוג על הנעילה המתוזמנת הקרובה עד הזמן הנתון (מ"ביטול הנעילה" באזהרה)</summary>
+    /// <summary>דילוג על הנעילה המתוזמנת הקרובה עד הזמן הנתון (מ"ביטול הנעילה" באזהרה) — בלי 2FA, זו פעולת חירום מהבאנר</summary>
     public static void Skip(string password, string untilIso) =>
         Must(Call(new JsonObject { ["op"] = "skip", ["password"] = password ?? "", ["until"] = untilIso ?? "" }));
 
@@ -249,6 +353,8 @@ public static class HardLock
         if (Kiosk.ScheduleEnabled)
             try { SetSchedule(b.Str("password"), true, Kiosk.ScheduleStart, Kiosk.ScheduleEnd); }
             catch (Exception ex) { Config.Log("hardlock schedule: " + ex.Message); }
+        _cacheAt = DateTime.MinValue;
+        SyncPolicy(b.Str("password"));
         Config.Log("hardlock: רכיב ההקשחה הותקן/עודכן");
         return Status(fresh: true);
     }
@@ -283,7 +389,7 @@ public static class HardLock
             try
             {
                 var s = ServiceStatus(fresh: true);
-                if (s == null) return;
+                if (s == null) { RestoreOrphanedPolicies(); return; }
                 bool active = s["active"]?.GetValue<bool>() == true;
                 if (active)
                 {
@@ -298,6 +404,30 @@ public static class HardLock
             }
             catch (Exception ex) { Config.Log("hardlock sync: " + ex.Message); }
         }, null, 3000, 5000);
+    }
+
+    /// <summary>
+    /// בעיה #14 סעיף 1: אם השירות הוסר ישירות (למשל "sc delete" בלי לעבור דרך SelfUninstall), אף אחד לא
+    /// מריץ יותר את EnforcePolicies(false) על ה-SIDים שסומנו ב-touched, ומדיניות DisableTaskMgr/
+    /// DisableRegistryTools נשארת תקועה אצל המשתמש בלי שום נעילה פעילה בפועל.
+    /// הגשר (בהרשאות המשתמש הרגילות) לא יכול לגעת ב-HKEY_USERS של חשבונות אחרים, אבל HKEY_CURRENT_USER
+    /// של אותו משתמש הוא בדיוק אותה היברידה — ולכן מנקים כאן. חשבונות אחרים ינוקו ממילא אוטומטית אם
+    /// השירות יותקן מחדש: Tick הראשון קורא ל-EnforcePolicies(false) לפי touched ששמור ב-hardlock.json.
+    /// </summary>
+    private static void RestoreOrphanedPolicies()
+    {
+        try
+        {
+            if (ServiceInstalled()) return; // השירות קיים — הוא אחראי על הניקוי של עצמו
+            if (Kiosk.IsActive) return; // נעילה רכה פעילה מגדירה DisableTaskMgr בעצמה — לא נוגעים
+            using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System", true);
+            if (k == null) return;
+            bool cleared = false;
+            foreach (string name in new[] { "DisableTaskMgr", "DisableRegistryTools" })
+                if (k.GetValue(name) is int v && v == 1) { k.DeleteValue(name, false); cleared = true; }
+            if (cleared) Config.Log("hardlock: מדיניות נעילה יתומה (השירות הוסר בלי SelfUninstall) נוקתה בחשבון הנוכחי");
+        }
+        catch (Exception ex) { Config.Log("hardlock restore: " + ex.Message); }
     }
 
     // ================= התקנת השירות (רץ בהרשאות מנהל) =================
@@ -319,10 +449,10 @@ public static class HardLock
 
             string bin = "\"" + ServiceExe + "\" --service";
             if (!exists)
-                Sc($"create {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"תורת אסתר\"");
+                Sc($"create {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"{Program.AppFullName}\"");
             else
-                Sc($"config {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"תורת אסתר\"");
-            Sc($"description {ServiceName} \"תורת אסתר — על שם אסתר דינר ע״ה. נעילה מוקשחת לגשר אוצריא\"");
+                Sc($"config {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"{Program.AppFullName}\"");
+            Sc($"description {ServiceName} \"{Program.AppFullName} — רכיב הנעילה המוקשחת, לעילוי נשמת אסתר גיטה דינר ע״ה\"");
             Sc($"failure {ServiceName} reset= 86400 actions= restart/5000/restart/5000/restart/30000");
 
             using var sc = new ServiceController(ServiceName);
@@ -398,7 +528,6 @@ public static class HardLock
 /// <summary>השירות עצמו (LocalSystem). מופעל עם OtzariaBridge.exe --service</summary>
 public class HardLockService : ServiceBase
 {
-    private const int Iterations = 200_000;
     private const string PoliciesSub = @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
     private const string UsbStorKey = @"SYSTEM\CurrentControlSet\Services\USBSTOR";
     private static readonly Regex UserSid = new(@"^S-1-5-21-[\d-]+$", RegexOptions.Compiled);
@@ -460,23 +589,10 @@ public class HardLockService : ServiceBase
         File.Move(tmp, StateFile, true);
     }
 
-    private static string Hash(string secret, byte[] salt) =>
-        Convert.ToBase64String(Rfc2898DeriveBytes.Pbkdf2(secret, salt, Iterations, HashAlgorithmName.SHA256, 32));
+    // החישוב הקריפטוגרפי הטהור (Hash/Matches/נורמליזציה) משותף עם Kiosk דרך Secret.cs
 
-    private bool Matches(string secret, string hashKey, string saltKey)
-    {
-        string hash = _state[hashKey]?.ToString();
-        string salt = _state[saltKey]?.ToString();
-        if (string.IsNullOrEmpty(hash) || string.IsNullOrEmpty(salt) || string.IsNullOrEmpty(secret)) return false;
-        try
-        {
-            return CryptographicOperations.FixedTimeEquals(Convert.FromBase64String(hash),
-                Convert.FromBase64String(Hash(secret, Convert.FromBase64String(salt))));
-        }
-        catch { return false; }
-    }
-
-    private static string NormalizeRecovery(string s) => (s ?? "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
+    private bool Matches(string secret, string hashKey, string saltKey) =>
+        Secret.Matches(secret, _state[hashKey]?.ToString(), _state[saltKey]?.ToString());
 
     /// <summary>null = תקין; אחרת תשובת שגיאה</summary>
     private JsonObject Check(string password, bool allowRecovery)
@@ -485,7 +601,7 @@ public class HardLockService : ServiceBase
         if (DateTime.UtcNow < _lockoutUntil)
             return Err("too_many", $"יותר מדי ניסיונות שגויים. נסו שוב בעוד {(int)Math.Ceiling((_lockoutUntil - DateTime.UtcNow).TotalSeconds)} שניות");
         bool ok = Matches(password, "passwordHash", "salt") ||
-                  (allowRecovery && Matches(NormalizeRecovery(password), "recoveryHash", "recoverySalt"));
+                  (allowRecovery && Matches(Secret.NormalizeRecovery(password), "recoveryHash", "recoverySalt"));
         if (ok) { _failures = 0; return null; }
         if (++_failures >= 5) { _failures = 0; _lockoutUntil = DateTime.UtcNow.AddSeconds(60); }
         return Err("wrong_password", "סיסמה שגויה");
@@ -493,6 +609,93 @@ public class HardLockService : ServiceBase
 
     private static JsonObject Err(string code, string message) => new() { ["ok"] = false, ["code"] = code, ["message"] = message };
     private static JsonObject Ok() => new() { ["ok"] = true };
+
+    // ---------- מדיניות הנעילה (מקור האמת כשהשירות מותקן) ----------
+
+    private static readonly string[] PolicyKeys = { "programs", "autoTorahPrograms", "autoTorahKeywords", "otzariaPath", "fxPolicy" };
+
+    /// <summary>המדיניות השמורה, לתשובת "status". רק מפתחות שהוגדרו — מפתח חסר = עוד לא סונכרן</summary>
+    private JsonObject PolicyNode()
+    {
+        var o = new JsonObject();
+        foreach (string k in PolicyKeys)
+            if (_state[k] is JsonNode n) o[k] = n.DeepClone();
+        return o;
+    }
+
+    /// <summary>
+    /// מאמת את שדות המדיניות שבבקשת "settings" ומחזיר אותם בצורה נקייה. אותן מגבלות כמו בגשר:
+    /// עד 20 תוכנות, נתיב exe מלא, בלי מעטפות/מארחי סקריפטים/מנהלי מערכת (גם לא כ"אוצריא").
+    /// </summary>
+    private static JsonObject ParsePolicy(JsonObject q, out Dictionary<string, JsonNode> res)
+    {
+        res = new Dictionary<string, JsonNode>();
+        static bool ExePath(string p) =>
+            Path.IsPathFullyQualified(p) && p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+            !Programs.IsBlockedName(Path.GetFileNameWithoutExtension(p));
+
+        if (q["programs"] is JsonNode pn)
+        {
+            if (pn is not JsonArray pa || pa.Count > Programs.MaxPrograms) return Err("bad_request", "רשימת התוכנות אינה תקינה");
+            var clean = new JsonArray();
+            foreach (var item in pa)
+            {
+                if (item is not JsonObject o) return Err("bad_request", "רשומת תוכנה אינה תקינה");
+                string id = o["id"]?.ToString() ?? "", name = o["name"]?.ToString() ?? "", path = (o["path"]?.ToString() ?? "").Trim();
+                if (id.Length is 0 or > 40 || name.Length > 60 || !ExePath(path))
+                    return Err("bad_request", "רשומת תוכנה אינה תקינה: " + (name.Length > 0 ? name : id));
+                var procs = new JsonArray();
+                if (o["procs"] is JsonArray pr)
+                    foreach (var x in pr)
+                    {
+                        string n = x?.ToString() ?? "";
+                        if (!Programs.IsValidProcName(n)) return Err("bad_request", "שם תהליך אינו תקין: " + n);
+                        procs.Add(n);
+                    }
+                clean.Add(new JsonObject { ["id"] = id, ["name"] = name.Length > 0 ? name : id, ["path"] = path, ["procs"] = procs });
+            }
+            res["programs"] = clean;
+        }
+        if (q["autoTorahPrograms"] is JsonValue at) res["autoTorahPrograms"] = at.GetValue<bool>();
+        if (q["autoTorahKeywords"] is JsonNode kn)
+        {
+            if (kn is not JsonArray ka || ka.Count > 50) return Err("bad_request", "רשימת מילות המפתח אינה תקינה");
+            var clean = new JsonArray();
+            foreach (var x in ka)
+            {
+                string k = (x?.ToString() ?? "").Trim();
+                if (k.Length > 60) return Err("bad_request", "מילת מפתח ארוכה מדי");
+                if (k.Length > 0) clean.Add(k);
+            }
+            res["autoTorahKeywords"] = clean;
+        }
+        if (q.ContainsKey("otzariaPath"))
+        {
+            string op = (q["otzariaPath"]?.ToString() ?? "").Trim();
+            if (op.Length > 0 && !ExePath(op)) return Err("bad_request", "נתיב אוצריא אינו תקין (נדרש נתיב מלא לקובץ exe)");
+            res["otzariaPath"] = op;
+        }
+        if (q["fxPolicy"] is JsonNode fn)
+        {
+            if (fn is not JsonObject fo) return Err("bad_request", "מדיניות סייר הקבצים אינה תקינה");
+            string mode = (fo["mode"]?.ToString() ?? "").ToLowerInvariant();
+            if (mode is not ("off" or "restricted" or "locked")) return Err("bad_request", "mode חייב להיות off, restricted או locked");
+            var roots = new JsonArray();
+            if (fo["roots"] is JsonArray ra)
+            {
+                if (ra.Count > 32) return Err("bad_request", "יותר מדי תיקיות");
+                foreach (var x in ra)
+                {
+                    string r = x?.ToString() ?? "";
+                    if (!Path.IsPathFullyQualified(r)) return Err("bad_request", "תיקייה אינה תקינה: " + r);
+                    roots.Add(r);
+                }
+            }
+            int minutes = fo["unlockMinutes"] is JsonValue mv && mv.TryGetValue<int>(out int m) ? Math.Clamp(m, 1, 1440) : 15;
+            res["fxPolicy"] = new JsonObject { ["mode"] = mode, ["roots"] = roots, ["unlockMinutes"] = minutes };
+        }
+        return null;
+    }
 
     // ---------- Named Pipe ----------
 
@@ -551,7 +754,7 @@ public class HardLockService : ServiceBase
     {
         if (!TwoFactorOn && !force) return null;
         if (!force && !string.IsNullOrEmpty(supplied) && !Matches(supplied, "passwordHash", "salt")
-            && Matches(NormalizeRecovery(supplied), "recoveryHash", "recoverySalt"))
+            && Matches(Secret.NormalizeRecovery(supplied), "recoveryHash", "recoverySalt"))
             return null;
         string nonce = q["hello"]?.ToString();
         lock (_helloGate)
@@ -635,11 +838,12 @@ public class HardLockService : ServiceBase
                     {
                         ["ok"] = true, ["version"] = Program.Version, ["configured"] = Configured, ["active"] = Active,
                         ["blockUsbStorage"] = _state["blockUsbStorage"]?.GetValue<bool>() == true,
-                        ["twoFactor"] = TwoFactorOn,
                         ["scheduleEnabled"] = _state["scheduleEnabled"]?.GetValue<bool>() == true,
                         ["scheduleStart"] = _state["scheduleStart"]?.ToString() ?? "",
                         ["scheduleEnd"] = _state["scheduleEnd"]?.ToString() ?? "",
+                        ["twoFactor"] = TwoFactorOn,
                         ["otzariaPath"] = _state["otzariaPath"]?.ToString() ?? "", ["sessions"] = _sessions,
+                        ["policy"] = PolicyNode(),
                     };
 
                 case "setup":
@@ -687,7 +891,7 @@ public class HardLockService : ServiceBase
                     if (np.Length < 6) return Err("bad_request", "הסיסמה חייבת להכיל לפחות 6 תווים");
                     byte[] salt = RandomNumberGenerator.GetBytes(16);
                     _state["salt"] = Convert.ToBase64String(salt);
-                    _state["passwordHash"] = Hash(np, salt);
+                    _state["passwordHash"] = Secret.Hash(np, salt);
                     Save();
                     return Ok();
 
@@ -697,12 +901,16 @@ public class HardLockService : ServiceBase
                     bool? wantTf = q["twoFactor"] is JsonValue tfv ? tfv.GetValue<bool>() : null;
                     // הפעלה ראשונה דורשת Hello מוצלח בפועל (force), כדי לוודא שהמנגנון עובד לפני שנועלים את המנהל בעזרתו
                     if ((e = Need2fa(q, pw, force: wantTf == true && !TwoFactorOn)) != null) return e;
+                    // קודם מאמתים את כל השדות, ורק אז כותבים — בקשה פגומה לא משאירה מצב חלקי
+                    if ((e = ParsePolicy(q, out var policy)) != null) return e;
                     if (wantTf != null) _state["twoFactor"] = wantTf.Value;
                     if (q["blockUsbStorage"] is JsonValue bu) _state["blockUsbStorage"] = bu.GetValue<bool>();
                     if (q["scheduleEnabled"] is JsonValue se) _state["scheduleEnabled"] = se.GetValue<bool>();
                     if (q["scheduleStart"]?.ToString() is string ss && Sched.IsValid(ss)) _state["scheduleStart"] = ss;
                     if (q["scheduleEnd"]?.ToString() is string ee && Sched.IsValid(ee)) _state["scheduleEnd"] = ee;
+                    foreach (var kv in policy) _state[kv.Key] = kv.Value;
                     Save();
+                    if (policy.Count > 0) HardLock.SvcLog("service: עודכנה מדיניות הנעילה (" + string.Join(", ", policy.Keys) + ")");
                     Task.Run(Tick);
                     return Ok();
                 }

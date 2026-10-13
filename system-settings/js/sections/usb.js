@@ -31,7 +31,7 @@
     if (!slot || busy) return;
     var d;
     try { d = await SS.bridge.call('/sys/usb/list'); }
-    catch (e) { if (!quiet) slot.innerHTML = ui.errorBox(e); return; }
+    catch (e) { if (!quiet) slot.innerHTML = ui.errorBox(e, function () { load(body); }); return; }
     var drives = d.drives || [];
     var sig = JSON.stringify(drives);
     if (quiet && sig === lastSig) return;

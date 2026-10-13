@@ -31,7 +31,8 @@
     var d;
     try { d = await SS.bridge.call('/sys/keyboard/get'); }
     catch (e) {
-      ['lay', 'speed', 'keys'].forEach(function (k) { body.querySelector('[data-slot=' + k + ']').innerHTML = ui.errorBox(e); });
+      var retry = function () { loadMain(body); };
+      ['lay', 'speed', 'keys'].forEach(function (k) { body.querySelector('[data-slot=' + k + ']').innerHTML = ui.errorBox(e, retry); });
       return;
     }
     render(body, d);
@@ -106,7 +107,7 @@
     var slot = body.querySelector('[data-slot=def]');
     var d;
     try { d = await SS.bridge.call('/sys/keyboard/default-language/get', {}, { timeoutMs: 25000 }); }
-    catch (e) { slot.innerHTML = ui.errorBox(e); return; }
+    catch (e) { slot.innerHTML = ui.errorBox(e, function () { loadDefault(body); }); return; }
     var list = d.methods || [];
     if (!list.length) { slot.innerHTML = '<div class="empty">לא נמצאו שפות מותקנות.</div>'; return; }
     var cur = (d.current || '').toUpperCase();
@@ -129,7 +130,7 @@
     var slot = body.querySelector('[data-slot=bl]');
     var d;
     try { d = await SS.bridge.call('/sys/keyboard/backlight/get'); }
-    catch (e) { slot.innerHTML = ui.errorBox(e); return; }
+    catch (e) { slot.innerHTML = ui.errorBox(e, function () { loadBacklight(body); }); return; }
     if (!d.supported) {
       var who = [d.vendor, d.model].filter(Boolean).join(' ');
       slot.innerHTML = '<div class="state-box">' + ui.icon('info') + '<div><b>לא נתמך במחשב זה</b>' +

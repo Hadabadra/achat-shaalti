@@ -184,18 +184,23 @@ public static class Printers
     {
         var res = new List<object>();
         using var s = new ManagementObjectSearcher("SELECT Name, Default, WorkOffline, Network, PrinterStatus, DriverName, PortName FROM Win32_Printer");
-        foreach (ManagementObject o in s.Get())
+        // בעיה #14 סעיף 5: גם האוסף שמוחזר מ-Get וגם כל ManagementObject בתוכו הם IDisposable — דליפה אם לא משחררים
+        using var results = s.Get();
+        foreach (ManagementObject o in results)
         {
-            res.Add(new
+            using (o)
             {
-                name = o["Name"] as string ?? "",
-                isDefault = o["Default"] is bool d && d,
-                offline = o["WorkOffline"] is bool w && w,
-                network = o["Network"] is bool n && n,
-                driver = o["DriverName"] as string ?? "",
-                port = o["PortName"] as string ?? "",
-                status = Convert.ToInt32(o["PrinterStatus"] ?? 2), // 3 = מוכנה, 4 = מדפיסה, 7 = לא מחוברת
-            });
+                res.Add(new
+                {
+                    name = o["Name"] as string ?? "",
+                    isDefault = o["Default"] is bool d && d,
+                    offline = o["WorkOffline"] is bool w && w,
+                    network = o["Network"] is bool n && n,
+                    driver = o["DriverName"] as string ?? "",
+                    port = o["PortName"] as string ?? "",
+                    status = Convert.ToInt32(o["PrinterStatus"] ?? 2), // 3 = מוכנה, 4 = מדפיסה, 7 = לא מחוברת
+                });
+            }
         }
         bool managed = false;
         try
@@ -210,8 +215,12 @@ public static class Printers
     private static ManagementObject Find(string name)
     {
         using var s = new ManagementObjectSearcher("SELECT * FROM Win32_Printer");
-        foreach (ManagementObject o in s.Get())
+        using var results = s.Get();
+        foreach (ManagementObject o in results)
+        {
             if (string.Equals(o["Name"] as string, name, StringComparison.OrdinalIgnoreCase)) return o;
+            o.Dispose(); // לא זה שחיפשנו — משחררים מיד ולא ממתינים ל-GC
+        }
         throw BridgeException.NotFound("המדפסת לא נמצאה: " + name);
     }
 

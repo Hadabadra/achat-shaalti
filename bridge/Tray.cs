@@ -30,7 +30,7 @@ public static class Tray
         _icon = new NotifyIcon
         {
             Icon = LoadIcon(),
-            Text = Lang.T("תורת אסתר", "Torat Esther"),
+            Text = Lang.T(Program.AppName, Program.AppNameEn),
             ContextMenuStrip = menu,
             Visible = true,
         };
@@ -42,8 +42,25 @@ public static class Tray
             try
             {
                 var i = await UpdateApi.Check(false);
-                if (i.Newer) Invoke(() => _icon.ShowBalloonTip(8000, Lang.T("תורת אסתר", "Torat Esther"),
+                if (i.Newer) Invoke(() => _icon.ShowBalloonTip(8000, Lang.T(Program.AppName, Program.AppNameEn),
                     Lang.T("גרסה " + i.Latest + " זמינה. לחצו לעדכון.", "Version " + i.Latest + " is available. Click to update."), ToolTipIcon.Info));
+            }
+            catch { }
+        });
+        // בדיקה (מוזזת מבדיקת העדכון, כדי לא להתנגש בבועה) שעותק רכיב ההקשחה המותקן תואם לגרסת הגשר.
+        // אחרי עדכון עצמי הגשר מתעדכן, אבל עותק השירות ב-Program Files לא — צריך עדכון ידני (עם סיסמה)
+        // דרך "הגדרות מערכת → נעילה" (לא ניגשים לשירות אוטומטית בלי הסיסמה — זו גבול האבטחה שלו).
+        Task.Delay(TimeSpan.FromMinutes(2)).ContinueWith(_ =>
+        {
+            try
+            {
+                if (!HardLock.ServiceInstalled()) return;
+                var st = (dynamic)HardLock.Status(fresh: true);
+                if (st.needsUpdate == true)
+                    Invoke(() => _icon.ShowBalloonTip(8000, Lang.T("תורת אסתר", "Torat Esther"),
+                        Lang.T("רכיב ההקשחה בגרסה ישנה מהגשר. עדכנו ב\"הגדרות מערכת → נעילה\" (נדרשת סיסמת הנעילה).",
+                               "The hardening component is on an older version than the bridge. Update it in “System Settings → Lock” (lock password required)."),
+                        ToolTipIcon.Warning));
             }
             catch { }
         });
@@ -99,7 +116,7 @@ public static class Tray
     private static void UpdateStatus()
     {
         if (_status == null) return;
-        string text = Lang.T("גשר אוצריא ", "Otzaria Bridge ") + Program.Version + Lang.T(" — פורט ", " — port ") + Program.Port;
+        string text = Lang.T(Program.AppName + " ", Program.AppNameEn + " ") + Program.Version + Lang.T(" — פורט ", " — port ") + Program.Port;
         if (Kiosk.IsActive) text += Lang.T(" (נעילה פעילה)", " (lock mode on)");
         _status.Text = text;
         if (_icon != null) _icon.Text = text.Length > 63 ? text[..63] : text;
@@ -123,7 +140,7 @@ internal sealed class AboutForm : Form
 
     private AboutForm()
     {
-        Text = Lang.T("אודות גשר אוצריא", "About Otzaria Bridge");
+        Text = Lang.T("אודות " + Program.AppName, "About " + Program.AppNameEn);
         Icon = Overlay.AppIcon();
         RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
         RightToLeftLayout = !Lang.En;
@@ -137,8 +154,8 @@ internal sealed class AboutForm : Form
         Padding = new Padding(20);
 
         var logo = new PictureBox { Image = new Icon(Overlay.AppIcon(), 64, 64).ToBitmap(), SizeMode = PictureBoxSizeMode.CenterImage, Height = 76, Dock = DockStyle.Top };
-        var title = new Label { Text = Lang.T("תורת אסתר", "Torat Esther"), Font = new Font("Segoe UI Semibold", 16f), Height = 38, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
-        var ver = new Label { Text = Lang.T("גרסה ", "Version ") + Program.Version + " · " + Lang.T("תורת אסתר", "Torat Esther"), Height = 26, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.DimGray };
+        var title = new Label { Text = Lang.T(Program.AppName, Program.AppNameEn), Font = new Font("Segoe UI Semibold", 16f), Height = 38, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
+        var ver = new Label { Text = Lang.T("גרסה ", "Version ") + Program.Version + " · " + Lang.T(Program.GemachName, Program.GemachNameEn), Height = 26, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.DimGray };
         var ded = new Label { Text = "לעילוי נשמת הנערה הצדקנית\nאסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט\"א\nתהא נשמתה צרורה בצרור החיים. תנצב\"ה", Height = 66, Font = new Font("Segoe UI", 10.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(90, 70, 40) };
         var link = new LinkLabel { Text = Lang.T("עמוד ההוצאות ויומן השינויים", "Releases page and changelog"), Height = 28, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         link.LinkClicked += (_, _) => OpenUrl(UpdateApi.AllReleasesUrl);
@@ -159,32 +176,51 @@ internal sealed class AboutForm : Form
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
     }
 
+    private const int StateBaseHeight = 44, StateMaxHeight = 140;
+
+    /// <summary>
+    /// הטקסט כאן הוא לפעמים הודעת שגיאה ארוכה (כולל ex.Message פנימי), וב-Height קבוע הוא נחתך
+    /// בלי שלוש נקודות ובלי אזהרה — נראה כמו תקלה. מודדים את הגובה הדרוש בפועל ומגדילים את התווית
+    /// ואת החלון בהתאם (ה-Dock=Top של שאר הפקדים משאיר אותם במקומם).
+    /// </summary>
+    private void SetState(string text, Color color)
+    {
+        if (text.Length > 300) text = text[..300] + "…";
+        _state.ForeColor = color;
+        _state.Text = text;
+        int width = Math.Max(1, _state.Width);
+        var size = TextRenderer.MeasureText(text, _state.Font, new Size(width, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+        int needed = Math.Clamp(size.Height + 12, StateBaseHeight, StateMaxHeight);
+        if (needed != _state.Height)
+        {
+            ClientSize = new Size(ClientSize.Width, ClientSize.Height - _state.Height + needed);
+            _state.Height = needed;
+        }
+    }
+
     private async Task DoCheck(bool force)
     {
-        _state.ForeColor = Color.DimGray;
-        _state.Text = Lang.T("בודק עדכונים…", "Checking for updates…");
+        SetState(Lang.T("בודק עדכונים…", "Checking for updates…"), Color.DimGray);
         _check.Enabled = false;
         try
         {
             var i = await UpdateApi.Check(force);
             if (i.Newer)
             {
-                _state.ForeColor = Color.FromArgb(0, 100, 180);
-                _state.Text = Lang.T("גרסה " + i.Latest + " זמינה (מותקנת " + i.Current + ")", "Version " + i.Latest + " is available (installed " + i.Current + ")");
+                string msg = Lang.T("גרסה " + i.Latest + " זמינה (מותקנת " + i.Current + ")", "Version " + i.Latest + " is available (installed " + i.Current + ")");
                 _install.Enabled = i.ExeUrl != null && !Kiosk.IsActive;
-                if (Kiosk.IsActive) _state.Text += Lang.T(" — לעדכון יש לבטל את הנעילה", " — turn off lock mode to update");
+                if (Kiosk.IsActive) msg += Lang.T(" — לעדכון יש לבטל את הנעילה", " — turn off lock mode to update");
+                SetState(msg, Color.FromArgb(0, 100, 180));
             }
             else
             {
-                _state.ForeColor = Color.FromArgb(20, 120, 60);
-                _state.Text = Lang.T("הגשר מעודכן ✓ (גרסה " + i.Current + ", האחרונה: " + (i.Latest ?? "?") + ")", "Up to date ✓ (" + i.Current + ", latest: " + (i.Latest ?? "?") + ")");
+                SetState(Lang.T("הגשר מעודכן ✓ (גרסה " + i.Current + ", האחרונה: " + (i.Latest ?? "?") + ")", "Up to date ✓ (" + i.Current + ", latest: " + (i.Latest ?? "?") + ")"), Color.FromArgb(20, 120, 60));
                 _install.Enabled = false;
             }
         }
         catch (Exception ex)
         {
-            _state.ForeColor = Color.Firebrick;
-            _state.Text = ex.Message;
+            SetState(ex.Message, Color.Firebrick);
         }
         finally { _check.Enabled = true; }
     }
@@ -192,17 +228,15 @@ internal sealed class AboutForm : Form
     private async Task DoInstall()
     {
         _install.Enabled = _check.Enabled = false;
-        _state.ForeColor = Color.DimGray;
-        _state.Text = Lang.T("מוריד ומאמת…", "Downloading and verifying…");
+        SetState(Lang.T("מוריד ומאמת…", "Downloading and verifying…"), Color.DimGray);
         try
         {
             await UpdateApi.Install();
-            _state.Text = Lang.T("מתקין… הגשר יופעל מחדש בעוד רגע.", "Installing… the bridge will restart in a moment.");
+            SetState(Lang.T("מתקין… הגשר יופעל מחדש בעוד רגע.", "Installing… the bridge will restart in a moment."), Color.DimGray);
         }
         catch (Exception ex)
         {
-            _state.ForeColor = Color.Firebrick;
-            _state.Text = ex.Message;
+            SetState(ex.Message, Color.Firebrick);
             _check.Enabled = true;
         }
     }

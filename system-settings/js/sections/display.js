@@ -16,7 +16,7 @@
       try { d = await SS.bridge.call('/sys/display/get'); }
       catch (e) {
         if (e.code === 'unsupported') d = { supported: false, brightness: null };
-        else { slot.innerHTML = ui.errorBox(e); return; }
+        else { slot.innerHTML = ui.errorBox(e, function () { SS.sections.find(function (s) { return s.id === 'display'; }).load(body); }); return; }
       }
       if (!d.supported || d.brightness == null) {
         slot.innerHTML = '<div class="state-box">' + ui.icon('info') + '<div><b>לא נתמך במחשב זה</b>' +

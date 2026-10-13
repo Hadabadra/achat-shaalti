@@ -14,7 +14,7 @@
   async function load(body) {
     var r;
     try { r = await SS.bridge.call('/kiosk/programs'); }
-    catch (e) { body.innerHTML = ui.errorBox(e); return; }
+    catch (e) { body.innerHTML = ui.errorBox(e, function () { load(body); }); return; }
     var progs = r.programs || [];
     var html = '<div class="card"><div class="card-title">פתיחת תוכנה</div>' +
       '<p class="muted">תוכנות לימוד שאפשר לפתוח מכאן גם כשהמחשב נעול. בסיום סוגרים את התוכנה וחוזרים לאוצריא.</p>';

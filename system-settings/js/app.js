@@ -14,7 +14,7 @@
       /* אם הפתיחה נכשלת — מעתיקים את הקישור ללוח, כדי שאפשר להדביק אותו בדפדפן */
       var failed = async function () {
         var ok = await SS.copyText(url);
-        ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + url, 'error');
+        ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + ui.isolateLtr(url), 'error');
       };
       /* שם הקריאה המתועד הוא app.openUrl; app.open_url הוא גיבוי למקרה שהגרסה של אוצריא מכירה רק אותו */
       var names = ['app.openUrl', 'app.open_url'], lastErr = '';
@@ -44,6 +44,46 @@
     ta.remove();
     return ok;
   };
+
+  /* ---------- ממסר זמני היום לשומר המסך (#33): רק כאן (בתוך אוצריא) אפשר לקרוא ל-calendar.*;
+     הגשר (תהליך Windows נפרד) לא יכול. שולחים לו מדי דקה POST ‏/kiosk/zmanim-cache עם מה שהתקבל,
+     והוא רק שומר ומציג. בלי window.Otzaria (תצוגה מקדימה בדפדפן) זה פשוט לא רץ. */
+  var zmanimTimer = null;
+  function unwrapOtzaria(r) { return r && r.data !== undefined ? r.data : r; }
+  async function pushZmanimCache() {
+    if (!window.Otzaria || !state.connected) return;
+    var st;
+    try { st = await SS.bridge.call('/kiosk/status'); } catch (e) { return; }
+    var city = (st.zmanimCity || '').trim();
+    var loc = (st.zmanimLocation || '').trim();
+    var args = { inIsrael: !st.zmanimDiaspora };
+    if (city) args.city = city;
+    else {
+      var m = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/.exec(loc);
+      if (m) { args.lat = +m[1]; args.lng = +m[2]; }
+      else return; /* אין עיר ואין קואורדינטות — אין מה לשלוח */
+    }
+    var dailyTimes = null, jewishDate = null, jewishDateTomorrow = null;
+    try { dailyTimes = unwrapOtzaria(await window.Otzaria.call('calendar.getDailyTimes', args)); } catch (e) { dailyTimes = null; }
+    try { jewishDate = unwrapOtzaria(await window.Otzaria.call('calendar.getJewishDate', {})); } catch (e) { jewishDate = null; }
+    try {
+      var t = new Date(); t.setDate(t.getDate() + 1);
+      jewishDateTomorrow = unwrapOtzaria(await window.Otzaria.call('calendar.getJewishDate', { date: t.toISOString().slice(0, 10) }));
+    } catch (e) { jewishDateTomorrow = null; }
+    if (!dailyTimes && !jewishDate) return;
+    try {
+      await SS.bridge.call('/kiosk/zmanim-cache', {
+        dailyTimes: dailyTimes || {}, jewishDate: jewishDate || {}, jewishDateTomorrow: jewishDateTomorrow || {}
+      });
+    } catch (e) { /* המטמון אינו קריטי; ננסה שוב בפעם הבאה */ }
+  }
+  function scheduleZmanim() {
+    clearTimeout(zmanimTimer);
+    if (state.suspended || !state.connected) return;
+    zmanimTimer = setTimeout(function () { pushZmanimCache().finally(scheduleZmanim); }, 60000);
+  }
+  /* נקרא גם מיד אחרי חיבור/שחזור, וגם אחרי שמירת הגדרות הנעילה, כדי שהתצוגה תתעדכן בלי לחכות דקה */
+  SS.pushZmanimNow = function () { clearTimeout(zmanimTimer); pushZmanimCache().finally(scheduleZmanim); };
 
   function sectionById(id) {
     return SS.sections.find(function (s) { return s.id === id; });
@@ -181,8 +221,8 @@
       off.innerHTML =
         '<div class="offline-card fade-in">' +
         '<div class="offline-art">' + ui.icon('bridge') + '</div>' +
-        '<h2>צריך את גשר אוצריא</h2>' +
-        '<p>כדי לשנות הגדרות של המחשב (שמע, מסך, בלוטות׳, רשת ונעילה), התוסף נעזר בתוכנה קטנה בשם <b>גשר אוצריא</b> שרצה ברקע במחשב שלכם. נראה שהיא עדיין לא מותקנת או לא פועלת.</p>' +
+        '<h2>צריך את תוכנת חסימת אוצריא</h2>' +
+        '<p>כדי לשנות הגדרות של המחשב (שמע, מסך, בלוטות׳, רשת ונעילה), התוסף נעזר בתוכנה קטנה בשם <b>תוכנת חסימת אוצריא</b> שרצה ברקע במחשב שלכם. נראה שהיא עדיין לא מותקנת או לא פועלת.</p>' +
         '<ol class="steps">' +
         '<li>מורידים את <b>OtzariaBridge.exe</b> מהקישור למטה.</li>' +
         '<li>מפעילים אותו פעם אחת — הוא מתקין את עצמו ויעלה אוטומטית בכל הפעלה של Windows.</li>' +
@@ -195,7 +235,7 @@
       off.querySelector('#off-dl').addEventListener('click', function () { SS.openUrl(SS.BRIDGE_URL); });
       off.querySelector('#off-copy').addEventListener('click', function () {
         SS.copyText(SS.BRIDGE_URL).then(function (ok) {
-          ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + SS.BRIDGE_URL, ok ? 'success' : 'error');
+          ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + ui.isolateLtr(SS.BRIDGE_URL), ok ? 'success' : 'error');
         });
       });
       off.querySelector('#off-retry').addEventListener('click', function () {
@@ -236,6 +276,7 @@
       var hash = (location.hash || '').replace('#', '');
       show(hash || start || (h.kioskActive ? 'kiosk' : 'audio'));
     }
+    SS.pushZmanimNow();
     return true;
   }
   SS.reprobe = connect;
@@ -300,10 +341,11 @@
     if (window.Otzaria) {
       window.Otzaria.on('plugin.boot', boot);
       window.Otzaria.on('theme.changed', ui.applyTheme);
-      window.Otzaria.on('plugin.suspended', function () { state.suspended = true; clearTimeout(state.probeTimer); });
+      window.Otzaria.on('plugin.suspended', function () { state.suspended = true; clearTimeout(state.probeTimer); clearTimeout(zmanimTimer); });
       window.Otzaria.on('plugin.resumed', function () {
         state.suspended = false;
-        if (!state.connected) connect(); else SS.bridge.probe().then(function (h) { if (!h) showOffline(); else setStatus(true); });
+        if (!state.connected) connect();
+        else SS.bridge.probe().then(function (h) { if (!h) showOffline(); else { setStatus(true); SS.pushZmanimNow(); } });
       });
     } else {
       document.body.classList.add('preview');

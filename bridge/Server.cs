@@ -58,6 +58,7 @@ public static class Server
         Kiosk.Register();
         Pairing.Register();
         HardLock.Register();
+        Zmanim.Register();
 
         int port = FindPort();
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory });
@@ -191,7 +192,8 @@ public static class Server
         PlatformNotSupportedException => ("unsupported", 501, ex.Message),
         PathTooLongException or ArgumentException or NotSupportedException => ("bad_request", 400, ex.Message),
         System.Runtime.InteropServices.COMException => ("unsupported", 501, "לא נתמך במחשב זה: " + ex.Message),
-        _ => ("internal", 500, "שגיאה פנימית: " + ex.Message),
+        // בעיה #14 סעיף 7: לא מדליפים את טקסט החריגה הפנימי ללקוח (ההודעה המלאה כבר נרשמת ביומן למעלה)
+        _ => ("internal", 500, "שגיאה פנימית. פרטים נרשמו ביומן הגשר"),
     };
 
     private static async Task<JsonDocument> ReadBody(HttpRequest req)
