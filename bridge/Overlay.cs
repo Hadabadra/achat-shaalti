@@ -384,9 +384,8 @@ internal sealed class RestScreen : Form
         var now = DateTime.Now;
         g.DrawString(now.ToString("HH:mm"), timeF, Brushes.White, Line(y, 110 * s), center);
         y += 108 * s;
-        g.DrawString(Overlay.HebrewDate(now), dateF, Brushes.White, Line(y, 40 * s), rtl);
-        y += 36 * s;
-        g.DrawString(now.ToString("d/M/yyyy"), hintF, dim, Line(y, 30 * s), center);
+        // #2: התאריך הלועזי באותה שורה עם העברי (לא בשורה נפרדת שנופלת מתחת להקדשה)
+        g.DrawString(Overlay.HebrewDate(now) + "   ·   " + now.ToString("d/M/yyyy"), dateF, Brushes.White, Line(y, 40 * s), rtl);
         if (Target == IntPtr.Zero && Idle)
         {
             y += 34 * s;
@@ -464,14 +463,14 @@ internal sealed class RestScreen : Form
     /// <summary>עמודת זמנים עם רקע עדין; הגופן קטן עד שהכול נכנס בגובה הזמין (לעולם לא גולש למטה)</summary>
     private static void DrawZmanimColumn(Graphics g, List<string> items, float x, float y, float w, float maxH, float s, Color gold)
     {
-        float size = 16f; float lineH; int blank = items.Count(i => i.Length == 0);
+        float size = 18f; float lineH; int blank = items.Count(i => i.Length == 0); // #1: גופן ברור יותר
         Font f;
         while (true)
         {
-            f = new Font("David", size, GraphicsUnit.Point);
-            lineH = f.GetHeight(g) * 1.18f;
+            f = new Font("Segoe UI Semibold", size, GraphicsUnit.Point);
+            lineH = f.GetHeight(g) * 1.25f;
             float need = 24 * s + lineH * (items.Count - blank) + lineH * 0.5f * blank;
-            if (need <= maxH || size <= 9f) { maxH = Math.Min(maxH, need); break; }
+            if (need <= maxH || size <= 11f) { maxH = Math.Min(maxH, need); break; }
             f.Dispose(); size -= 1f;
         }
         using (f)
