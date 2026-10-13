@@ -10,6 +10,8 @@ on:
       - "system-settings/**"
       - "file-explorer/**"
       - "installer/**"
+      - "tools/**"
+      - "tests/**"
       - "RELEASE_VERSION.txt"
       - ".github/workflows/build.yml"
   workflow_dispatch: {}
@@ -57,6 +59,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+
+      - name: בדיקות יחידה
+        run: dotnet test tests/OtzariaBridge.Tests -c Release
 
       # כותבים את גרסת התוספים המחושבת (steps.pluginver) לתוך שני המניפסטים לפני האריזה - רק בעותק
       # הזמני שב-runner, לא מחזירים commit לריפו (ר' הסבר אצל חישוב הגרסה למעלה)
