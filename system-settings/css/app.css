@@ -64,3 +64,9 @@ select.input { appearance: auto; cursor: pointer; }
   outline: none;
   box-shadow: 0 0 0 0.1875em var(--color-surface), 0 0 0 0.3125em var(--color-primary);
 }
+
+/* שדה מושבת בדיאלוג (למשל פתיחה זמנית כשהאימות הדו-שלבי כבוי) */
+.check-row.is-disabled, .field.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.check-row.is-disabled .check-box { cursor: not-allowed; }
+/* פתיחה זמנית: הזמן שנותר בכרטיס המצב */
+.temp-left { font-variant-numeric: tabular-nums; font-weight: 700; }

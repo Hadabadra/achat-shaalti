@@ -33,9 +33,24 @@
     render(body, st, progs, found, pairs);
   }
 
+  /* ספירה לאחור חיה של הפתיחה הזמנית בכרטיס המצב (מתאפסת בכל רינדור) */
+  var tempTimer = null;
+
   function render(body, st, progs, found, pairs) {
     var active = !!st.active;
-    var html =
+    var tu = st.tempUnlock || {};
+    clearInterval(tempTimer); tempTimer = null;
+    var html = '';
+    if (!active && tu.active) {
+      /* פתיחה זמנית: הנעילה עצמה דלוקה, ותחזור מעצמה בתום הזמן. הזמן מוצג כאן גם אם הבאנר במסך הוסתר */
+      html +=
+        '<div class="status-card active">' +
+        '<div class="status-ic">' + ui.icon('clock') + '</div>' +
+        '<div class="status-text"><span class="eyebrow">מצב נעילה</span><h3>פתוח זמנית</h3>' +
+        '<p><span>הנעילה תחזור אוטומטית בעוד</span> <bdi class="temp-left" dir="ltr" data-temp-left>' + fmtLeft(tu.secondsLeft) + '</bdi></p></div>' +
+        '<button class="btn btn-lg btn-on-status" data-act="temp-end">' + ui.icon('lock') + 'נעילה עכשיו</button>' +
+        '</div>';
+    } else html +=
       '<div class="status-card ' + (active ? 'active' : '') + '">' +
       '<div class="status-ic">' + ui.icon(active ? 'lock' : 'unlock') + '</div>' +
       '<div class="status-text"><span class="eyebrow">מצב נעילה</span><h3>' + (active ? 'פעיל' : 'לא פעיל') + '</h3>' +
@@ -44,7 +59,8 @@
         : 'המחשב פועל כרגיל. אפשר להפעיל נעילה כדי שישמש ללימוד בלבד.') + '</p></div>' +
       (st.hasPassword
         ? (active
-          ? '<button class="btn btn-lg btn-on-status" data-act="disable">' + ui.icon('unlock') + 'ביטול נעילה</button>'
+          ? (tu.usable ? '<button class="btn btn-lg btn-on-status" data-act="temp-unlock">' + ui.icon('clock') + 'פתיחה זמנית</button>' : '') +
+            '<button class="btn btn-lg btn-on-status" data-act="disable">' + ui.icon('unlock') + 'ביטול נעילה</button>'
           : '<button class="btn btn-lg btn-primary" data-act="enable">' + ui.icon('lock') + 'הפעלת נעילה</button>')
         : '') +
       '</div>';
@@ -102,6 +118,8 @@
           ? 'נעילה אוטומטית בכל יום <bdi dir="ltr">' + ui.esc(st.schedule.start) + '–' + ui.esc(st.schedule.end) + '</bdi>'
           : 'כבוי — נעילה ידנית בלבד') + '</span></div>' +
         '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
+        '<div class="setting-row"><div class="setting-text"><b>פתיחה זמנית בסיסמה נפרדת</b><span class="muted">' + tempSummary(tu) + '</span></div>' +
+        '<button class="btn btn-tonal" data-act="settings4">' + ui.icon('edit') + 'עריכה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>קבצים שמותר לפתוח בזמן נעילה</b><span class="muted"><bdi dir="ltr">' +
         ui.esc((st.allowOpenExtensions || []).length ? st.allowOpenExtensions.map(function (x) { return '.' + x; }).join(', ') : '—') + '</bdi></span></div>' +
         '<button class="btn btn-tonal" data-act="settings2">' + ui.icon('edit') + 'עריכה</button></div>' +
@@ -122,6 +140,7 @@
     }
 
     body.innerHTML = html;
+    if (!active && tu.active) startTempCountdown(body, tu.secondsLeft);
     wire(body, st, progs, found);
     wireHard(body, st, pairs);
   }
@@ -151,10 +170,13 @@
     }
     on('enable', function () { enable(body, st); });
     on('disable', function () { disable(body); });
+    on('temp-unlock', function () { tempUnlock(body, st); });
+    on('temp-end', function () { tempEnd(body); });
     on('chpw', function () { changePw(body); });
     on('settings', function () { editSettings(body, st); });
     on('settings2', function () { editSettings(body, st); });
     on('settings3', function () { editSettings(body, st); });
+    on('settings4', function () { editSettings(body, st); });
     on('prog-add', function () { addProgram(body, {}); });
     on('prog-auto', function () { toggleAuto(body, !!st.autoTorah); });
     found.forEach(function (f, i) {
@@ -236,6 +258,56 @@
       }
     });
     if (ok) { ui.toast('מצב נעילה בוטל', 'success'); load(body); }
+  }
+
+  /* ---------- פתיחה זמנית: כל הנעילה נפתחת לזמן קבוע, בסיסמה נפרדת מסיסמת הנעילה ---------- */
+  function fmtLeft(sec) {
+    sec = Math.max(0, sec | 0);
+    var s = sec % 60;
+    return Math.floor(sec / 60) + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function tempSummary(tu) {
+    if (tu.serviceOutdated) return 'רכיב ההקשחה צריך עדכון כדי לתמוך בפתיחה זמנית';
+    if (!tu.enabled) return 'כבויה';
+    if (!tu.twoFactorOn) return 'רדומה — פועלת רק כשהאימות הדו-שלבי מופעל';
+    if (!tu.configured) return 'לא נבחרה סיסמת פתיחה זמנית';
+    return tu.active ? 'פעילה עכשיו' : 'מופעלת · ' + (tu.minutes || 30) + ' דקות בכל פתיחה';
+  }
+
+  function startTempCountdown(body, secondsLeft) {
+    var end = Date.now() + Math.max(0, secondsLeft | 0) * 1000;
+    tempTimer = setInterval(function () {
+      var el = body.querySelector('[data-temp-left]');
+      if (!el) { clearInterval(tempTimer); tempTimer = null; return; }
+      var left = Math.ceil((end - Date.now()) / 1000);
+      el.textContent = fmtLeft(left);
+      if (left <= 0) { clearInterval(tempTimer); tempTimer = null; setTimeout(function () { load(body); }, 2500); }
+    }, 1000);
+  }
+
+  async function tempUnlock(body, st) {
+    var tu = st.tempUnlock || {};
+    var ok = await ui.dialog({
+      title: 'פתיחה זמנית', icon: 'clock',
+      body: '<p>הקלידו את <b>סיסמת הפתיחה הזמנית</b> (לא את סיסמת הנעילה). כל הנעילה, כולל סייר הקבצים, תיפתח ל-' +
+        ui.esc(String(tu.minutes || 30)) + ' דקות, ואז תחזור מעצמה.</p>',
+      fields: [{ name: 'pw', label: 'סיסמת פתיחה זמנית', type: 'password', dir: 'ltr' }],
+      actions: [{ label: 'ביטול', value: false }, { label: 'פתיחה', value: true, kind: 'primary' }],
+      validate: function (x) { return x.pw ? '' : 'יש להקליד את סיסמת הפתיחה הזמנית'; },
+      onSubmit: async function (x) {
+        await SS.bridge.call('/kiosk/temp-unlock', { password: x.pw }, { timeoutMs: 30000 });
+        return true;
+      }
+    });
+    if (ok) { ui.toast('המחשב נפתח זמנית', 'success'); load(body); }
+  }
+
+  async function tempEnd(body) {
+    if (!(await ui.confirm('נעילה עכשיו', '<p>לסיים את הפתיחה הזמנית ולהחזיר את הנעילה מיד?</p>', 'נעילה עכשיו'))) return;
+    try { await SS.bridge.call('/kiosk/temp-unlock/end', {}, { timeoutMs: 30000 }); ui.toast('הנעילה הוחזרה', 'success'); }
+    catch (e) { ui.error(e); }
+    load(body);
   }
 
   async function changePw(body) {
@@ -424,6 +496,16 @@
     fields.push({ name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' });
     fields.push({ name: 'tfa', type: 'checkbox', label: 'אימות דו-שלבי (Windows Hello)', value: !!st.twoFactor,
       hint: (st.twoFactorAvailable ? 'ביטול הנעילה ושינוי ההגדרות ידרשו גם זיהוי פנים/טביעת אצבע/PIN, בנוסף לסיסמה. קוד השחזור ימשיך לעבוד לחירום.' : '⚠ Windows Hello אינו מוגדר במחשב הזה — הגדירו אותו ב-Windows כדי להפעיל') });
+    /* פתיחה זמנית: אפשר להפעיל רק כשהאימות הדו-שלבי פעיל (או מסומן עכשיו בטופס הזה) */
+    var tu = st.tempUnlock || {};
+    var tfaNow = !!(tu.twoFactorOn != null ? tu.twoFactorOn : st.twoFactor);
+    var TU_HINT_ON = 'סיסמה נפרדת, שאפשר למסור למי שצריך את המחשב לזמן קצר, בלי לגלות את סיסמת הנעילה. כל הנעילה (גם סייר הקבצים) נפתחת לזמן שנקבע כאן, ואז חוזרת מעצמה. לא מתקבלת כסיסמת נעילה.';
+    var TU_HINT_OFF = 'זמין רק כשהאימות הדו-שלבי (Windows Hello) מופעל — סמנו קודם את האימות הדו-שלבי. אם הוא יכובה, הפתיחה הזמנית תיעצר עד שיופעל שוב (ההגדרות נשמרות).';
+    fields.push({ name: 'tu', type: 'checkbox', label: 'פתיחה זמנית בסיסמה נפרדת', value: !!tu.enabled,
+      disabled: !tfaNow && !tu.enabled, hint: '<span data-tu-hint>' + (tfaNow ? TU_HINT_ON : TU_HINT_OFF) + '</span>' });
+    fields.push({ name: 'tuMin', label: 'פתיחה זמנית: משך בדקות (1–60)', value: String(tu.minutes || 30), dir: 'ltr', placeholder: '30' });
+    fields.push({ name: 'tuPw', label: tu.configured ? 'סיסמת פתיחה זמנית חדשה (ריק = ללא שינוי)' : 'סיסמת פתיחה זמנית', type: 'password', dir: 'ltr' });
+    fields.push({ name: 'tuPw2', label: 'אימות סיסמת הפתיחה הזמנית', type: 'password', dir: 'ltr' });
     all.forEach(function (id) {
       fields.push({ name: 'sec_' + id, type: 'checkbox', label: 'פתוח בנעילה: ' + (SECTION_NAMES[id] || id), value: open.indexOf(id) >= 0 });
     });
@@ -454,18 +536,35 @@
         if (x.sched && x.schedStart === x.schedEnd) return 'שעת ההתחלה והסיום של התזמון זהות';
         if (!/^\d{1,2}$/.test(String(x.yzDay).trim()) || +x.yzDay > 30) return 'יום השנה: יום בחודש בין 0 ל-30';
         if (+x.yzDay > 0 && !x.yzMonth) return 'יום השנה: יש לבחור גם חודש עברי';
+        if (!/^\d{1,2}$/.test(String(x.tuMin).trim()) || +x.tuMin < 1 || +x.tuMin > 60) return 'פתיחה זמנית: משך בדקות בין 1 ל-60';
+        if (x.tuPw && x.tuPw.length < 6) return 'סיסמת הפתיחה הזמנית חייבת להכיל לפחות 6 תווים';
+        if (x.tuPw !== x.tuPw2) return 'סיסמאות הפתיחה הזמנית אינן תואמות';
+        if (x.tuPw && x.tuPw === x.pw) return 'סיסמת הפתיחה הזמנית חייבת להיות שונה מסיסמת הנעילה';
+        if (x.tu && !tu.enabled && !tu.configured && !x.tuPw) return 'יש לבחור סיסמת פתיחה זמנית לפני ההפעלה';
+        if (x.tu && !tu.enabled && !x.tfa) return 'פתיחה זמנית דורשת אימות דו-שלבי פעיל';
         var bad = parseExt(x.ext).filter(function (e) { return !/^[a-z0-9]{1,10}$/.test(e); });
         return bad.length ? 'סיומת לא תקינה: ' + bad[0] : '';
       },
-      onOpen: cityOptions.length > 1 ? function (form) {
-        /* בחירת עיר מהרשימה ממלאת אוטומטית את הקואורדינטות (גם כגיבוי לחישוב המקומי בגשר) */
-        var sel = form.querySelector('[name=zcity]'), loc = form.querySelector('[name=zloc]');
-        if (!sel || !loc) return;
-        sel.addEventListener('change', function () {
-          var c = cityByName[sel.value];
-          if (c && typeof c.lat === 'number' && typeof c.lng === 'number') loc.value = c.lat + ', ' + c.lng;
-        });
-      } : undefined,
+      onOpen: function (form) {
+        /* הפתיחה הזמנית תלויה באימות הדו-שלבי: סימון/ביטול שלו בטופס משנה מיד את זמינות המתג */
+        var tfa = form.querySelector('[name=tfa]'), tuCb = form.querySelector('[name=tu]'), hint = form.querySelector('[data-tu-hint]');
+        function syncTu() {
+          var on = !!(tfa && tfa.checked);
+          /* מתג שכבר דלוק נשאר ניתן לכיבוי גם בלי 2FA (הוא פשוט רדום); הפעלה חדשה רק עם 2FA */
+          ui.lockField(tuCb, !on && !tu.enabled);
+          if (hint) hint.textContent = on ? TU_HINT_ON : TU_HINT_OFF;
+        }
+        if (tfa && tuCb) { tfa.addEventListener('change', syncTu); syncTu(); }
+        if (cityOptions.length > 1) {
+          /* בחירת עיר מהרשימה ממלאת אוטומטית את הקואורדינטות (גם כגיבוי לחישוב המקומי בגשר) */
+          var sel = form.querySelector('[name=zcity]'), loc = form.querySelector('[name=zloc]');
+          if (!sel || !loc) return;
+          sel.addEventListener('change', function () {
+            var c = cityByName[sel.value];
+            if (c && typeof c.lat === 'number' && typeof c.lng === 'number') loc.value = c.lat + ', ' + c.lng;
+          });
+        }
+      },
       onSubmit: async function (x) {
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
@@ -475,7 +574,8 @@
           zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
           yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim(),
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
-          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn }
+          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn },
+          tempUnlockEnabled: !!x.tu, tempUnlockMinutes: +String(x.tuMin).trim() || 30, tempUnlockPassword: x.tuPw || ''
         });
         return true;
       }

@@ -96,6 +96,28 @@ public static class Overlay
 
     public static void HideCountdown() => Tray.Invoke(() => { if (_countdown is { Visible: true }) _countdown.Hide(); });
 
+    private static TempUnlockBanner _tempBanner;
+    private static DateTimeOffset _tempDismissedFor = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// באנר "המחשב פתוח זמנית" עם ספירה לאחור עד שהנעילה חוזרת. נקרא בכל טיק (Kiosk.TempTick) כל עוד הפתיחה פעילה.
+    /// אם המשתמש הסתיר אותו — לא מוצג שוב עד פתיחה זמנית חדשה (זמן סיום אחר). ההסתרה אינה מבטלת את הפתיחה;
+    /// הזמן שנותר ממשיך להופיע בהגדרות מערכת ← נעילה ובסייר הקבצים.
+    /// </summary>
+    public static void ShowTempUnlock(DateTimeOffset until) => Tray.Invoke(() =>
+    {
+        if (until == _tempDismissedFor) return;
+        _tempBanner ??= new TempUnlockBanner(() => _tempDismissedFor = _tempBanner.Until);
+        _tempBanner.SetUntil(until);
+        if (!_tempBanner.Visible) _tempBanner.Show(); // בלי Activate: לא גונב פוקוס ממה שהמשתמש עושה
+    });
+
+    public static void HideTempUnlock()
+    {
+        if (_tempBanner == null) return; // נקרא כל 2 שניות; בלי באנר אין מה להעביר לחוט הממשק
+        Tray.Invoke(() => { if (_tempBanner is { Visible: true }) _tempBanner.Hide(); });
+    }
+
     [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr h);
 
@@ -574,6 +596,112 @@ internal sealed class LockCountdown : Form
         catch (Exception ex) { _err.Text = ex.Message; CenterRows(); return; }
         _tick.Stop();
         Hide();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _tick.Dispose();
+        base.Dispose(disposing);
+    }
+}
+
+/// <summary>
+/// באנר "המחשב פתוח זמנית": אותה משפחה חזותית כמו אזהרת הנעילה המתוזמנת (LockCountdown) — פס כהה לרוחב המסך
+/// בשליש התחתון, מותאם DPI, בעברית מימין לשמאל — עם ספירה לאחור חיה עד שהנעילה חוזרת.
+/// לא גונב פוקוס (ShowWithoutActivation + WS_EX_NOACTIVATE), לא מופיע בשורת המשימות ותמיד מעל.
+/// "הסתרה" מסתירה רק את הבאנר; הפתיחה הזמנית ממשיכה, והזמן שנותר מוצג בהגדרות מערכת ← נעילה ובסייר הקבצים.
+/// </summary>
+internal sealed class TempUnlockBanner : Form
+{
+    private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
+    private readonly Label _title = new() { Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.White };
+    private readonly Label _left = new() { Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(220, 225, 232) };
+    private readonly Button _hide;
+    private readonly FlowLayoutPanel _row;
+    private readonly Action _onDismiss;
+
+    public DateTimeOffset Until { get; private set; }
+
+    public TempUnlockBanner(Action onDismiss)
+    {
+        _onDismiss = onDismiss;
+        FormBorderStyle = FormBorderStyle.None;
+        StartPosition = FormStartPosition.Manual;
+        ShowInTaskbar = false; TopMost = true;
+        BackColor = Color.FromArgb(24, 28, 34);
+        RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
+        Font = new Font("Segoe UI", 11f);
+
+        _title.Font = new Font("Segoe UI Semibold", 15f);
+        _left.Font = new Font("Segoe UI", 12f);
+        _title.Text = Lang.T("המחשב פתוח זמנית", "The computer is temporarily unlocked");
+
+        _hide = new Button
+        {
+            Text = Lang.T("הסתרה", "Hide"), AutoSize = true, FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(48, 53, 61), ForeColor = Color.White, Font = new Font("Segoe UI Semibold", 10.5f),
+            Padding = new Padding(ScaleX(10), ScaleX(6), ScaleX(10), ScaleX(6)),
+            FlatAppearance = { BorderSize = 0 },
+        };
+        _row = new FlowLayoutPanel
+        {
+            AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
+            FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft,
+        };
+        _row.Controls.Add(_hide);
+
+        // סדר ההוספה: Dock=Top האחרון שנוסף נמצא למעלה, ולכן הכותרת נוספת אחרונה
+        Controls.Add(_row);
+        Controls.Add(_left);
+        Controls.Add(_title);
+
+        _hide.Click += (_, _) => { _onDismiss?.Invoke(); Hide(); };
+        _tick.Tick += (_, _) => Upd();
+    }
+
+    protected override bool ShowWithoutActivation => true; // לא גונב פוקוס ממה שהמשתמש עושה
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ExStyle |= 0x08000000 /* WS_EX_NOACTIVATE */ | 0x00000080 /* WS_EX_TOOLWINDOW */ | 0x00000008 /* WS_EX_TOPMOST */;
+            return cp;
+        }
+    }
+
+    private int ScaleX(int v) => (int)Math.Round(v * DeviceDpi / 96.0);
+
+    public void SetUntil(DateTimeOffset until)
+    {
+        bool changed = until != Until;
+        Until = until;
+        if (changed || !Visible) Place();
+        Upd();
+        if (!_tick.Enabled) _tick.Start();
+    }
+
+    /// <summary>פס לרוחב מלא של המסך, ממורכז אנכית בתוך השליש התחתון (כמו LockCountdown)</summary>
+    private void Place()
+    {
+        var b = Screen.PrimaryScreen!.Bounds;
+        Width = b.Width;
+        Height = ScaleX(140);
+        _title.Height = ScaleX(44);
+        _left.Height = ScaleX(30);
+        int thirdTop = b.Top + b.Height * 2 / 3;
+        int thirdHeight = b.Bottom - thirdTop;
+        Location = new Point(b.Left, thirdTop + Math.Max(0, (thirdHeight - Height) / 2));
+        _row.Location = new Point((Width - _row.Width) / 2, _left.Bottom + ScaleX(10));
+    }
+
+    private void Upd()
+    {
+        int secs = TempUnlock.SecondsLeft(Until, DateTimeOffset.Now);
+        if (secs <= 0) { _tick.Stop(); Hide(); return; }
+        string t = TempUnlock.Format(secs);
+        _left.Text = Lang.T($"הנעילה תחזור בעוד {t}", $"The lock returns in {t}");
     }
 
     protected override void Dispose(bool disposing)
