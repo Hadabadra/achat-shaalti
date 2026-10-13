@@ -410,3 +410,13 @@ mark.fx-hit.cur { background: #f6a21b; color: #1c1c1c; outline: 0.125em solid #f
 .fx-slide h4 { margin: 0 0 0.5em; color: var(--color-primary); }
 .fx-unknown { gap: 0.5em; }
 .fx-unknown .fx-ic svg { width: 4em; height: 4em; }
+
+/* נגישות: טבעת פוקוס אחידה למקלדת (Tab) — אותה טבעת-בתוך-טבעת כמו app.css */
+.fx-cmd:focus-visible,
+.fx-crumb:focus-visible,
+.fx-seg-btn:focus-visible,
+.fx-tab:focus-visible,
+.fx-set-navbtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0.1875em var(--color-surface), 0 0 0 0.3125em var(--color-primary);
+}
