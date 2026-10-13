@@ -53,6 +53,7 @@ public static class Server
         OcrApi.Register();
         UpdateApi.Register();
         SysApi.Register();
+        OfflineMode.Register();
         DeviceApi.Register();
         MoreApi.Register();
         Kiosk.Register();

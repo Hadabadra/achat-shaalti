@@ -41,6 +41,7 @@ public static class Tray
         {
             try
             {
+                if (OfflineMode.IsOn()) return; // #9: אוצריא במצב מנותק — בלי בדיקת עדכונים
                 var i = await UpdateApi.Check(false);
                 if (i.Newer) Invoke(() => _icon.ShowBalloonTip(8000, Lang.T(Program.AppName, Program.AppNameEn),
                     Lang.T("גרסה " + i.Latest + " זמינה. לחצו לעדכון.", "Version " + i.Latest + " is available. Click to update."), ToolTipIcon.Info));
@@ -174,8 +175,13 @@ internal sealed class AboutForm : Form
         var row = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft, Padding = new Padding(80, 6, 0, 0) };
         row.Controls.AddRange(new Control[] { _check, _install });
 
-        Controls.AddRange(new Control[] { row, _state, link, zmanimLink, zmanimCredit, ded, ver, title, logo });
-        Shown += async (_, _) => await DoCheck(false);
+        if (OfflineMode.IsOn()) // #9: אוצריא במצב מנותק — מסתירים את אזור העדכונים
+            Controls.AddRange(new Control[] { zmanimLink, zmanimCredit, ded, ver, title, logo });
+        else
+        {
+            Controls.AddRange(new Control[] { row, _state, link, zmanimLink, zmanimCredit, ded, ver, title, logo });
+            Shown += async (_, _) => await DoCheck(false);
+        }
     }
 
     private static void OpenUrl(string url)

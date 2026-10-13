@@ -107,8 +107,12 @@
     set: function (k, v) { try { localStorage.setItem('ss.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } }
   };
   /* מצב מנותק: מחשב בלי רשת — מסתירים Wi-Fi, בלוטות׳ ומצב טיסה */
-  SS.isOfflineMode = function () { return !!SS.prefs.get('offlineMode', false); };
-  SS.setOfflineMode = function (on) { SS.prefs.set('offlineMode', !!on); refreshNav(); };
+  /* #8 (13.10.2026): נלקח ממצב המנותק של אוצריא עצמה דרך הגשר — אין הגדרה נפרדת בתוסף */
+  SS._offline = false;
+  SS.isOfflineMode = function () { return !!SS._offline; };
+  async function syncOffline() {
+    try { var r = await SS.bridge.call('/sys/offline', {}); var on = !!(r && r.offline); if (on !== SS._offline) { SS._offline = on; refreshNav(); } } catch (e) { }
+  }
   SS.lockOpen = null; /* רשימת ההגדרות הפתוחות בנעילה, כשהנעילה פעילה */
 
   function visible(s) {
@@ -271,6 +275,7 @@
     document.getElementById('offline').hidden = true;
     document.getElementById('shell-body').hidden = false;
     await syncLock(h);
+    syncOffline();
     if (!wasConnected) setTimeout(sendPendingReports, 4000);
     if (!wasConnected) {
       var start = null;
