@@ -229,7 +229,11 @@ public static class PairDialog
             }
             f.DialogResult = DialogResult.OK;
         };
-        f.Shown += (_, _) => { f.Activate(); (pw as Control ?? no).Focus(); };
+        // ביקורת #30 ממצא 6: חלון שנשכח פתוח לא חוסם צימוד לתמיד — נסגר כדחייה אחרי 2 דקות
+        var expire = new System.Windows.Forms.Timer { Interval = 120_000 };
+        expire.Tick += (_, _) => { expire.Stop(); f.DialogResult = DialogResult.Cancel; };
+        f.FormClosed += (_, _) => expire.Dispose();
+        f.Shown += (_, _) => { f.Activate(); (pw as Control ?? no).Focus(); expire.Start(); };
         return f.ShowDialog() == DialogResult.OK;
     }
 }
