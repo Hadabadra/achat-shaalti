@@ -186,7 +186,7 @@ public static class PairDialog
     {
         using var f = new Form
         {
-            Text = Lang.T("גשר אוצריא — בקשת גישה", "Otzaria Bridge — access request"),
+            Text = Lang.T(Program.AppName + " — בקשת גישה", Program.AppNameEn + " — access request"),
             FormBorderStyle = FormBorderStyle.FixedDialog,
             StartPosition = FormStartPosition.CenterScreen,
             MinimizeBox = false, MaximizeBox = false, TopMost = true, ShowInTaskbar = true,
