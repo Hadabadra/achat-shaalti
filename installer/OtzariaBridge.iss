@@ -1,4 +1,4 @@
-﻿; מתקין "תורת אסתר" (גשר אוצריא). בנייה:
+﻿; מתקין "תוכנת חסימת אוצריא - גמח תורת אסתר". בנייה:
 ;   ISCC.exe /DAppVersion=3.0.0 /DExePath=<נתיב ל-OtzariaBridge.exe שפורסם> OtzariaBridge.iss
 ; ההתקנה פר-משתמש (ללא הרשאות מנהל): הקובץ נכנס ל-%LOCALAPPDATA%\OtzariaBridge, שם הגשר מצפה להיות.
 ; הרכיב המוקשח (שירות SYSTEM) נשאר אופציונלי ומותקן מתוך הגדרות המערכת, כמו עד היום.
@@ -12,9 +12,9 @@
 
 [Setup]
 AppId={{6F1C2B7E-4D0A-4B8E-9C53-0E2A7B5D91A4}
-AppName=תורת אסתר - גשר אוצריא
+AppName=תוכנת חסימת אוצריא - גמח תורת אסתר
 AppVersion={#AppVersion}
-AppPublisher=תורת אסתר
+AppPublisher=גמח תורת אסתר
 DefaultDirName={localappdata}\OtzariaBridge
 DisableDirPage=yes
 DisableProgramGroupPage=yes
@@ -27,7 +27,7 @@ SolidCompression=yes
 OutputBaseFilename=OtzariaBridge-Setup-{#AppVersion}
 OutputDir=Output
 UninstallDisplayIcon={app}\OtzariaBridge.exe
-UninstallDisplayName=תורת אסתר - גשר אוצריא
+UninstallDisplayName=תוכנת חסימת אוצריא - גמח תורת אסתר
 
 WizardStyle=modern
 CloseApplications=no
@@ -78,7 +78,7 @@ var
 begin
   Form := CreateCustomForm(ScaleX(380), ScaleY(150), False, False);
   try
-    Form.Caption := 'הסרת תורת אסתר';
+    Form.Caption := 'הסרת תוכנת חסימת אוצריא';
     Lbl := TNewStaticText.Create(Form);
     Lbl.Parent := Form;
     Lbl.Caption := 'הקלידו את סיסמת הנעילה (או קוד שחזור) כדי להסיר:';
