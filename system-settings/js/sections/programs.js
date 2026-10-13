@@ -32,6 +32,10 @@
     progs.forEach(function (p) {
       on('prog-open-' + p.id, function () { K.open(p); setTimeout(function () { load(body); }, 3000); });
       on('prog-del-' + p.id, function () { K.remove(body, p, load); });
+      on('prog-close-' + p.id, function () { /* מנהל משימות פשוט */
+        SS.bridge.call('/kiosk/programs/close', { id: p.id }).then(function () { ui.toast('התוכנה נסגרת…', 'success'); setTimeout(function () { load(body); }, 3500); },
+          function (err) { ui.toast(ui.errText(err), 'error'); });
+      });
     });
   }
 })();

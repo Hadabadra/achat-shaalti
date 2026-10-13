@@ -69,6 +69,7 @@ public static class Programs
         Server.Route("/kiosk/programs", _ => ListResult());
         Server.Route("/kiosk/programs/launch", Launch);
         Server.Route("/kiosk/programs/focus", Launch);   // "העבר לחזית": זהה לפתיחה, ולא פותח עותק נוסף
+        Server.Route("/kiosk/programs/close", Close); // מנהל משימות פשוט: סגירת תוכנה מותרת בלבד (גם בנעילה)
         Server.Route("/kiosk/programs/add", Add);
         Server.Route("/kiosk/programs/remove", Remove);
         Server.Route("/kiosk/programs/detect", _ => Detect());
@@ -204,6 +205,31 @@ public static class Programs
     }
 
     /// <summary>חלון ראשי של התוכנה אם היא כבר רצה (כולל חלון מוקטן), אחרת Zero</summary>
+    /// מנהל משימות פשוט: סוגר רק תהליכים של תוכנה מהרשימה המותרת — סגירה רגילה, ואחרי 3 שניות בכוח.
+    private static object Close(JsonElement b)
+    {
+        string id = b.Req("id");
+        var e = Load().FirstOrDefault(x => x.Id == id)
+                ?? throw BridgeException.NotFound("התוכנה אינה ברשימת התוכנות המותרות");
+        int session = Process.GetCurrentProcess().SessionId, n = 0;
+        foreach (var p in Process.GetProcesses())
+        {
+            try
+            {
+                if (p.SessionId != session || IsOwnOrBlocked(p) || !MatchesList(p, new[] { e })) { p.Dispose(); continue; }
+                n++;
+                var proc = p;
+                Task.Run(() =>
+                {
+                    try { if (!proc.CloseMainWindow() || !proc.WaitForExit(3000)) proc.Kill(entireProcessTree: true); } catch { }
+                    finally { proc.Dispose(); }
+                });
+            }
+            catch { p.Dispose(); }
+        }
+        return new { closed = n };
+    }
+
     public static IntPtr ExistingWindow(Entry e)
     {
         int session = Process.GetCurrentProcess().SessionId;
