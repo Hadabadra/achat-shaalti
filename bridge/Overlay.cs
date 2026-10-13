@@ -465,9 +465,16 @@ internal sealed class RestScreen : Form
 /// </summary>
 internal sealed class LockCountdown : Form
 {
+    // פלטת הצבעים החמה/זהב כמו שאר ההגדרות (סייר קבצים/הגדרות מערכת) - לא הכחול הקר שהיה כאן קודם
+    private static readonly Color BgCream = Color.FromArgb(244, 237, 224);
+    private static readonly Color TextBrown = Color.FromArgb(61, 46, 31);
+    private static readonly Color GoldBorder = Color.FromArgb(138, 106, 58);
+    private static readonly Color BtnPrimary = Color.FromArgb(138, 106, 58);
+    private static readonly Color BtnSecondary = Color.FromArgb(232, 220, 200);
+
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
-    private readonly Label _msg = new() { Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.White };
-    private readonly Label _err = new() { AutoSize = true, ForeColor = Color.FromArgb(255, 138, 128) };
+    private readonly Label _msg = new() { Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = TextBrown };
+    private readonly Label _err = new() { AutoSize = true, ForeColor = Color.FromArgb(150, 54, 44) };
     private readonly TextBox _pw = new() { UseSystemPasswordChar = true, Width = 220 };
     private readonly Button _ok, _cancel, _confirm, _back;
     private readonly FlowLayoutPanel _normalRow, _pwRow;
@@ -479,7 +486,7 @@ internal sealed class LockCountdown : Form
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         ShowInTaskbar = false; TopMost = true;
-        BackColor = Color.FromArgb(24, 28, 34);
+        BackColor = BgCream;
         RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
         Font = new Font("Segoe UI", 11f);
 
@@ -507,11 +514,28 @@ internal sealed class LockCountdown : Form
         _tick.Tick += (_, _) => Upd();
     }
 
-    protected override bool ShowWithoutActivation => true; // לא גונב פוקוס עם ההופעה (כמו שאר ה-overlays)
+    // בניגוד לשאר ה-overlays (שעון/סרגל צד) - זה טופס שצריך לקבל הקלדה בפועל (שדה הסיסמה), אז
+    // WS_EX_NOACTIVATE קבוע היה מונע מהחלון להיות מופעל בכלל - שום טקסט לא היה מגיע לשדה, לעולם.
+    // לכן ה-flag מוסר/מוחזר דינמית ב-PwMode: נשאר כש"לא גונב פוקוס" רק כל עוד זה תצוגת ספירה פסיבית.
+    protected override bool ShowWithoutActivation => !_pwMode;
 
     protected override CreateParams CreateParams
     {
-        get { var cp = base.CreateParams; cp.ExStyle |= 0x08000000 /* WS_EX_NOACTIVATE */; return cp; }
+        get { var cp = base.CreateParams; if (!_pwMode) cp.ExStyle |= 0x08000000 /* WS_EX_NOACTIVATE */; return cp; }
+    }
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
+    private const int GwlExStyle = -20;
+    private const long WsExNoActivate = 0x08000000;
+
+    /// <summary>מוסיף/מסיר את WS_EX_NOACTIVATE על ה-handle החי (CreateParams נקרא רק ביצירה, לא אחר כך)</summary>
+    private void SetNoActivate(bool on)
+    {
+        if (!IsHandleCreated) return;
+        long cur = GetWindowLongPtr(Handle, GwlExStyle).ToInt64();
+        long next = on ? (cur | WsExNoActivate) : (cur & ~WsExNoActivate);
+        if (next != cur) SetWindowLongPtr(Handle, GwlExStyle, new IntPtr(next));
     }
 
     private int ScaleX(int v) => (int)Math.Round(v * DeviceDpi / 96.0);
@@ -519,8 +543,8 @@ internal sealed class LockCountdown : Form
     private Button Btn(string text, bool primary) => new()
     {
         Text = text, AutoSize = true, FlatStyle = FlatStyle.Flat,
-        BackColor = primary ? Color.FromArgb(74, 128, 196) : Color.FromArgb(48, 53, 61),
-        ForeColor = Color.White, Font = new Font("Segoe UI Semibold", 10.5f),
+        BackColor = primary ? BtnPrimary : BtnSecondary,
+        ForeColor = primary ? Color.White : TextBrown, Font = new Font("Segoe UI Semibold", 10.5f),
         Padding = new Padding(ScaleX(10), ScaleX(6), ScaleX(10), ScaleX(6)),
         FlatAppearance = { BorderSize = 0 },
     };
@@ -545,17 +569,25 @@ internal sealed class LockCountdown : Form
         if (!_tick.Enabled) _tick.Start();
     }
 
-    /// <summary>פס לרוחב מלא של המסך, ממורכז אנכית בתוך השליש התחתון</summary>
+    /// <summary>פאנל ברוחב שני-שליש מהמסך, ממורכז אופקית, בתוך השליש התחתון אנכית</summary>
     private void Place()
     {
         var b = Screen.PrimaryScreen!.Bounds;
-        Width = b.Width;
+        Width = b.Width * 2 / 3;
         Height = ScaleX(150);
         _msg.Height = ScaleX(46);
         int thirdTop = b.Top + b.Height * 2 / 3;
         int thirdHeight = b.Bottom - thirdTop;
-        Location = new Point(b.Left, thirdTop + Math.Max(0, (thirdHeight - Height) / 2));
+        Location = new Point(b.Left + (b.Width - Width) / 2, thirdTop + Math.Max(0, (thirdHeight - Height) / 2));
         CenterRows();
+    }
+
+    /// <summary>מסגרת זהב דקה - בלי זה פאנל קרם ממורכז (לא ברוחב מלא) לא נקרא כ"כרטיס" על שולחן העבודה</summary>
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        using var pen = new Pen(GoldBorder, 2);
+        e.Graphics.DrawRectangle(pen, 1, 1, Width - 3, Height - 3);
     }
 
     private void CenterRows()
@@ -571,10 +603,13 @@ internal sealed class LockCountdown : Form
         _normalRow.Visible = !on;
         _pwRow.Visible = on;
         _err.Text = "";
+        SetNoActivate(!on); // מצב סיסמה: מסירים את NOACTIVATE כדי שהחלון יוכל בכלל לקבל פוקוס מקלדת
         if (on)
         {
             _msg.Text = Lang.T("הקלידו את סיסמת הנעילה לביטול", "Enter the lock password to cancel");
-            _pw.Text = ""; _pw.Focus();
+            _pw.Text = "";
+            Kiosk.BringToFront(Handle); // לא מספיק להסיר NOACTIVATE - צריך גם לדרוש בפועל את החזית
+            _pw.Focus();
         }
         else Upd(); // מחזיר את טקסט הספירה הרגיל
         CenterRows();
