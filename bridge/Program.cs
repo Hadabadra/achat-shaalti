@@ -91,9 +91,6 @@ public static class Program
             Kiosk.RestoreOnStartup();
             HardLock.StartSync();
             Kiosk.StartScheduler();
-            // אכיפת FxPolicy/Kiosk.AllowedExtensions על דיאלוגי פתיחה/שמירה מקוריים של Windows בכל תהליך
-            // (בעיה #53/וורד: "קובץ ← פתיחה ← עיון" בתוכנה חיצונית מאושרת עוקף את הסייר הפנימי). ר' DialogGuard.cs
-            DialogGuard.Start();
             Tray.Run();
             Server.Stop();
             return 0;

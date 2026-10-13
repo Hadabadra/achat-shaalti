@@ -46,4 +46,9 @@
     <InternalsVisibleTo Include="OtzariaBridge.Tests" />
   </ItemGroup>
 
+  <!-- חושף חברי internal (אם יתווספו) לפרויקט הבדיקות בלבד -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="OtzariaBridge.Tests" />
+  </ItemGroup>
+
 </Project>

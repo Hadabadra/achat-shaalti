@@ -118,6 +118,18 @@ public static class Overlay
         Tray.Invoke(() => { if (_tempBanner is { Visible: true }) _tempBanner.Hide(); });
     }
 
+    private static LockCountdown _countdown;
+
+    /// <summary>אזהרת ספירה-לאחור לפני נעילה מתוזמנת (5 דקות ודקה לפני)</summary>
+    public static void ShowCountdown(DateTime target) => Tray.Invoke(() =>
+    {
+        _countdown ??= new LockCountdown();
+        _countdown.SetTarget(target);
+        if (!_countdown.Visible) { _countdown.Show(); _countdown.Activate(); }
+    });
+
+    public static void HideCountdown() => Tray.Invoke(() => { if (_countdown is { Visible: true }) _countdown.Hide(); });
+
     [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr h);
 
@@ -253,11 +265,7 @@ internal sealed class RestScreen : Form
 {
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 40 };
     private readonly Icon _icon = Overlay.AppIcon();
-    private readonly Bitmap _logo;
-    private readonly Stopwatch _clock = Stopwatch.StartNew();
-    private readonly Random _rnd = new();
-    private readonly Particle[] _parts = new Particle[70];
-    private const string Letters = "אבגדהוזחטיכלמנסעפצקרשת";
+    private Bitmap _iconBmp;
     private Rectangle _btn;
     public IntPtr Target;
     public bool Idle;
@@ -319,67 +327,16 @@ internal sealed class RestScreen : Form
         var r = ClientRectangle;
         float t = (float)_clock.Elapsed.TotalSeconds;
         float s = DeviceDpi / 96f;
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-
-        // רקע: לילה עמוק וחם, משתנה לאט מאוד
-        float k = (float)(Math.Sin(t / 22.0) * 0.5 + 0.5);
-        Color c1 = Mix(Color.FromArgb(22, 26, 44), Color.FromArgb(30, 24, 40), k);
-        Color c2 = Mix(Color.FromArgb(8, 9, 16), Color.FromArgb(12, 10, 14), k);
-        using (var bg = new LinearGradientBrush(r, c1, c2, 90f)) g.FillRectangle(bg, r);
-
-        // כוכבים עדינים בלבד (בלי אותיות), מנצנצים ועולים לאט מאוד
-        for (int i = 0; i < _parts.Length; i++)
+        int iconSize = (int)(128 * s);
+        int cx = r.Width / 2, top = (int)(r.Height * 0.22);
+        // נבנה פעם אחת ונשמר. קודם נוצר new Icon(...) בכל ציור (כל שנייה דרך הטיימר), וה-Icon
+        // הביניימי לא שוחרר — דליפת GDI handle לשנייה, שאחרי כמה שעות חוצה את תקרת 10,000 וקורסת.
+        if (_iconBmp == null)
         {
-            ref var p = ref _parts[i];
-            p.Y -= p.Speed * 0.012f;
-            if (p.Y < -0.05f) { p = NewParticle(false); p.Ch = '\0'; }
-            float px = p.X * r.Width, py = p.Y * r.Height;
-            int a = (int)(25 + 55 * (Math.Sin(t * 0.6f + p.Phase) * 0.5 + 0.5));
-            float d = p.Size * 2.2f * s;
-            using var sb = new SolidBrush(Color.FromArgb(a, 225, 215, 190));
-            g.FillEllipse(sb, px, py, d, d);
+            using var big = new Icon(_icon, 256, 256);
+            _iconBmp = big.ToBitmap();
         }
-
-        // כל התוכן נע לאט מאוד (מניעת צריבה)
-        float dx = (float)Math.Sin(t * 0.04) * r.Width * 0.04f;
-        float dy = (float)Math.Sin(t * 0.07) * r.Height * 0.025f;
-        float cx = r.Width / 2f + dx;
-        var rtl = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Center };
-        var center = new StringFormat { Alignment = StringAlignment.Center };
-        Color gold = Color.FromArgb(232, 200, 140);
-        using var goldB = new SolidBrush(gold);
-        using var dim = new SolidBrush(Color.FromArgb(170, 220, 214, 200));
-        using var headF = new Font("David", 40f, FontStyle.Bold, GraphicsUnit.Point);
-        using var verseF = new Font("David", 22f, GraphicsUnit.Point);
-        using var timeF = new Font("Segoe UI Light", 64f, GraphicsUnit.Point);
-        using var dateF = new Font("David", 20f, GraphicsUnit.Point);
-        using var dedF = new Font("David", 17f, GraphicsUnit.Point);
-        using var dedNameF = new Font("David", 21f, FontStyle.Bold, GraphicsUnit.Point);
-        using var hintF = new Font("Segoe UI", 11f, GraphicsUnit.Point);
-        // זמני היום בעמודה בצד (kiosk.restZmanimSide: right/left), כדי שלא יתנגשו בהקדשה ובשעה במרכז.
-        // העמודה לא זזה עם dx (רק dy), והתוכן במרכז מוגבל לרוחב שנשאר בין שתי השוליים.
-        var zmItems = ZmanimItems(Zmanim.Sections(DateTime.Now));
-        bool zmLeft = Config.Get("kiosk.restZmanimSide", "right") == "left";
-        float colW = zmItems.Count > 0 ? Math.Min(340 * s, r.Width * 0.24f) : 0;
-        float colMargin = 28 * s;
-        float W = zmItems.Count > 0 ? Math.Max(r.Width * 0.4f, r.Width - 2 * (colW + colMargin * 2) - 2 * Math.Abs(dx)) : r.Width;
-        RectangleF Line(float y, float h) => new(cx - W / 2f, y, W, h);
-
-        float y = r.Height * 0.09f + dy;
-        g.DrawString(Lang.T("לימוד ללא הפרעות", "Learning without distractions"), headF, goldB, Line(y, 70 * s), rtl);
-        y += 70 * s;
-        // קו מעוטר דק
-        using (var pen = new Pen(Color.FromArgb(120, gold), 1.2f * s))
-        {
-            g.DrawLine(pen, cx - 150 * s, y, cx - 12 * s, y);
-            g.DrawLine(pen, cx + 12 * s, y, cx + 150 * s, y);
-            g.FillEllipse(goldB, cx - 4 * s, y - 4 * s, 8 * s, 8 * s);
-        }
-        y += 14 * s;
-        g.DrawString("וְהָגִיתָ בּוֹ יוֹמָם וָלַיְלָה", verseF, dim, Line(y, 40 * s), rtl);
-        y += 58 * s;
+        g.DrawImage(_iconBmp, cx - iconSize / 2, top, iconSize, iconSize);
 
         var now = DateTime.Now;
         g.DrawString(now.ToString("HH:mm"), timeF, Brushes.White, Line(y, 110 * s), center);
@@ -702,31 +659,30 @@ internal sealed class LockCountdown : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _tick.Dispose();
+        if (disposing) { _tick.Dispose(); _icon.Dispose(); _iconBmp?.Dispose(); }
         base.Dispose(disposing);
     }
 }
 
 /// <summary>
-/// באנר "המחשב פתוח זמנית": אותה משפחה חזותית כמו אזהרת הנעילה המתוזמנת (LockCountdown) — פס כהה לרוחב המסך
-/// בשליש התחתון, מותאם DPI, בעברית מימין לשמאל — עם ספירה לאחור חיה עד שהנעילה חוזרת.
-/// לא גונב פוקוס (ShowWithoutActivation + WS_EX_NOACTIVATE), לא מופיע בשורת המשימות ותמיד מעל.
-/// "הסתרה" מסתירה רק את הבאנר; הפתיחה הזמנית ממשיכה, והזמן שנותר מוצג בהגדרות מערכת ← נעילה ובסייר הקבצים.
+/// אזהרת ספירה-לאחור לפני נעילה מתוזמנת: פס לרוחב המסך בשליש התחתון (לא חלון-דיאלוג מרובע),
+/// כדי שיהיה בולט בלי לחסום את כל המסך. מוצגת 5 דקות ודקה לפני תחילת החלון.
+/// "אישור" מאשר וסוגר; "ביטול הנעילה" מחליף את תוכן הפס לשדה סיסמה, ובסיסמה נכונה מדלג
+/// על הנעילה הקרובה (לא פותחים חלון נפרד — נשאר אותו פס).
 /// </summary>
-internal sealed class TempUnlockBanner : Form
+internal sealed class LockCountdown : Form
 {
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
-    private readonly Label _title = new() { Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.White };
-    private readonly Label _left = new() { Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(220, 225, 232) };
-    private readonly Button _hide;
-    private readonly FlowLayoutPanel _row;
-    private readonly Action _onDismiss;
+    private readonly Label _msg = new() { Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.White };
+    private readonly Label _err = new() { AutoSize = true, ForeColor = Color.FromArgb(255, 138, 128) };
+    private readonly TextBox _pw = new() { UseSystemPasswordChar = true, Width = 220 };
+    private readonly Button _ok, _cancel, _confirm, _back;
+    private readonly FlowLayoutPanel _normalRow, _pwRow;
+    private DateTime _target;
+    private bool _pwMode;
 
-    public DateTimeOffset Until { get; private set; }
-
-    public TempUnlockBanner(Action onDismiss)
+    public LockCountdown()
     {
-        _onDismiss = onDismiss;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         ShowInTaskbar = false; TopMost = true;
@@ -734,76 +690,119 @@ internal sealed class TempUnlockBanner : Form
         RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
         Font = new Font("Segoe UI", 11f);
 
-        _title.Font = new Font("Segoe UI Semibold", 15f);
-        _left.Font = new Font("Segoe UI", 12f);
-        _title.Text = Lang.T("המחשב פתוח זמנית", "The computer is temporarily unlocked");
+        _msg.Font = new Font("Segoe UI Semibold", 15f);
+        _pw.Font = new Font("Segoe UI", 11f);
 
-        _hide = new Button
-        {
-            Text = Lang.T("הסתרה", "Hide"), AutoSize = true, FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(48, 53, 61), ForeColor = Color.White, Font = new Font("Segoe UI Semibold", 10.5f),
-            Padding = new Padding(ScaleX(10), ScaleX(6), ScaleX(10), ScaleX(6)),
-            FlatAppearance = { BorderSize = 0 },
-        };
-        _row = new FlowLayoutPanel
-        {
-            AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
-            FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft,
-        };
-        _row.Controls.Add(_hide);
+        _ok = Btn(Lang.T("אישור", "OK"), primary: true);
+        _cancel = Btn(Lang.T("ביטול הנעילה", "Cancel lock"), primary: false);
+        _confirm = Btn(Lang.T("בטל נעילה", "Unlock"), primary: true);
+        _back = Btn(Lang.T("חזרה", "Back"), primary: false);
 
-        // סדר ההוספה: Dock=Top האחרון שנוסף נמצא למעלה, ולכן הכותרת נוספת אחרונה
-        Controls.Add(_row);
-        Controls.Add(_left);
-        Controls.Add(_title);
+        _normalRow = Row(_ok, _cancel);
+        _pwRow = Row(_pw, _confirm, _back);
+        _pwRow.Controls.Add(_err);
 
-        _hide.Click += (_, _) => { _onDismiss?.Invoke(); Hide(); };
+        Controls.Add(_msg);
+        Controls.Add(_normalRow);
+        Controls.Add(_pwRow);
+
+        _ok.Click += (_, _) => Hide();
+        _cancel.Click += (_, _) => PwMode(true);
+        _back.Click += (_, _) => PwMode(false);
+        _confirm.Click += (_, _) => DoCancel();
+        _pw.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; DoCancel(); } };
         _tick.Tick += (_, _) => Upd();
     }
 
-    protected override bool ShowWithoutActivation => true; // לא גונב פוקוס ממה שהמשתמש עושה
+    protected override bool ShowWithoutActivation => true; // לא גונב פוקוס עם ההופעה (כמו שאר ה-overlays)
 
     protected override CreateParams CreateParams
     {
-        get
-        {
-            var cp = base.CreateParams;
-            cp.ExStyle |= 0x08000000 /* WS_EX_NOACTIVATE */ | 0x00000080 /* WS_EX_TOOLWINDOW */ | 0x00000008 /* WS_EX_TOPMOST */;
-            return cp;
-        }
+        get { var cp = base.CreateParams; cp.ExStyle |= 0x08000000 /* WS_EX_NOACTIVATE */; return cp; }
     }
 
     private int ScaleX(int v) => (int)Math.Round(v * DeviceDpi / 96.0);
 
-    public void SetUntil(DateTimeOffset until)
+    private Button Btn(string text, bool primary) => new()
     {
-        bool changed = until != Until;
-        Until = until;
-        if (changed || !Visible) Place();
-        Upd();
+        Text = text, AutoSize = true, FlatStyle = FlatStyle.Flat,
+        BackColor = primary ? Color.FromArgb(74, 128, 196) : Color.FromArgb(48, 53, 61),
+        ForeColor = Color.White, Font = new Font("Segoe UI Semibold", 10.5f),
+        Padding = new Padding(ScaleX(10), ScaleX(6), ScaleX(10), ScaleX(6)),
+        FlatAppearance = { BorderSize = 0 },
+    };
+
+    /// <summary>שורת כפתורים/שדות ממורכזת אופקית (לא Dock — ממוקמת ידנית ב-CenterRows כדי לא להימתח לרוחב מלא)</summary>
+    private FlowLayoutPanel Row(params Control[] controls)
+    {
+        var p = new FlowLayoutPanel
+        {
+            AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
+            FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft,
+        };
+        p.Controls.AddRange(controls);
+        return p;
+    }
+
+    public void SetTarget(DateTime target)
+    {
+        _target = target;
+        Place();
+        PwMode(false);
         if (!_tick.Enabled) _tick.Start();
     }
 
-    /// <summary>פס לרוחב מלא של המסך, ממורכז אנכית בתוך השליש התחתון (כמו LockCountdown)</summary>
+    /// <summary>פס לרוחב מלא של המסך, ממורכז אנכית בתוך השליש התחתון</summary>
     private void Place()
     {
         var b = Screen.PrimaryScreen!.Bounds;
         Width = b.Width;
-        Height = ScaleX(140);
-        _title.Height = ScaleX(44);
-        _left.Height = ScaleX(30);
+        Height = ScaleX(150);
+        _msg.Height = ScaleX(46);
         int thirdTop = b.Top + b.Height * 2 / 3;
         int thirdHeight = b.Bottom - thirdTop;
         Location = new Point(b.Left, thirdTop + Math.Max(0, (thirdHeight - Height) / 2));
-        _row.Location = new Point((Width - _row.Width) / 2, _left.Bottom + ScaleX(10));
+        CenterRows();
+    }
+
+    private void CenterRows()
+    {
+        int y = _msg.Bottom + ScaleX(14);
+        _normalRow.Location = new Point((Width - _normalRow.Width) / 2, y);
+        _pwRow.Location = new Point((Width - _pwRow.Width) / 2, y);
+    }
+
+    private void PwMode(bool on)
+    {
+        _pwMode = on;
+        _normalRow.Visible = !on;
+        _pwRow.Visible = on;
+        _err.Text = "";
+        if (on)
+        {
+            _msg.Text = Lang.T("הקלידו את סיסמת הנעילה לביטול", "Enter the lock password to cancel");
+            _pw.Text = ""; _pw.Focus();
+        }
+        else Upd(); // מחזיר את טקסט הספירה הרגיל
+        CenterRows();
     }
 
     private void Upd()
     {
-        int secs = TempUnlock.SecondsLeft(Until, DateTimeOffset.Now);
-        if (secs <= 0) { _tick.Stop(); Hide(); return; }
-        string t = TempUnlock.Format(secs);
-        _left.Text = Lang.T($"הנעילה תחזור בעוד {t}", $"The lock returns in {t}");
+        var left = _target - DateTime.Now;
+        if (left <= TimeSpan.Zero) { _tick.Stop(); Hide(); return; }
+        if (_pwMode) return; // לא דורסים את הנחיית הסיסמה בכל שנייה
+        int m = (int)left.TotalMinutes, s = left.Seconds;
+        _msg.Text = Lang.T($"המחשב ננעל בעוד {m}:{s:00} לאוצריא בלבד", $"The computer locks to Otzaria only in {m}:{s:00}");
+    }
+
+    private void DoCancel()
+    {
+        try { Kiosk.ScheduleSkipCurrent(_pw.Text); }
+        catch (BridgeException ex) { _err.Text = ex.Message; _pw.SelectAll(); _pw.Focus(); CenterRows(); return; }
+        catch (Exception ex) { _err.Text = ex.Message; CenterRows(); return; }
+        _tick.Stop();
+        Hide();
     }
 
     protected override void Dispose(bool disposing)

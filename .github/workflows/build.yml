@@ -12,7 +12,24 @@ on:
       - "installer/**"
       - "RELEASE_VERSION.txt"
       - ".github/workflows/build.yml"
-  workflow_dispatch: {}
+  # בדיקת בנייה בלבד ל-PR-ים (ל-main): בלי שחרור/פרסום, שתלויים ב-github.ref == refs/heads/main
+  # שלעולם אינו מתקיים באירוע pull_request (שם ה-ref הוא refs/pull/<n>/merge).
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "bridge/**"
+      - "system-settings/**"
+      - "file-explorer/**"
+      - "system-settings-screenshots/**"
+      - "tools/screens/**"
+      - "CHANGELOG.md"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+    inputs:
+      store:
+        description: "לפרסם את שני התוספים לחנות אוצריא"
+        type: boolean
+        default: false
 
 permissions:
   contents: write

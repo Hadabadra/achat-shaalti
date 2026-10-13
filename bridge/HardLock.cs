@@ -346,20 +346,17 @@ public static class HardLock
 
     /// <summary>העברת חלון התזמון לשירות (הוא המתזמן כשהוא מותקן)</summary>
     public static void SetSchedule(string password, bool enabled, string start, string end) =>
-        Must(CallSensitive(new JsonObject
+        Must(Call(new JsonObject
         {
             ["op"] = "settings", ["password"] = password ?? "",
             ["scheduleEnabled"] = enabled, ["scheduleStart"] = start ?? "", ["scheduleEnd"] = end ?? "",
-        }, password));
+        }));
 
-    /// <summary>
-    /// דילוג על הנעילה המתוזמנת הקרובה עד הזמן הנתון (מ"ביטול הנעילה" באזהרה). עד 36 שעות, ולכן דורש
-    /// גם 2FA כשהוא פעיל — אחרת סיסמה לבדה הייתה יכולה לנטרל את התזמון לצמיתות (חזרה על הדילוג כל 36ש').
-    /// </summary>
+    /// <summary>דילוג על הנעילה המתוזמנת הקרובה עד הזמן הנתון (מ"ביטול הנעילה" באזהרה)</summary>
     public static void Skip(string password, string untilIso) =>
-        Must(CallSensitive(new JsonObject { ["op"] = "skip", ["password"] = password ?? "", ["until"] = untilIso ?? "" }, password));
+        Must(Call(new JsonObject { ["op"] = "skip", ["password"] = password ?? "", ["until"] = untilIso ?? "" }));
 
-    /// <summary>קוד שחזור משורת הפקודה: מבטל גם בשירות (פטור מ-2FA — ביטול חירום)</summary>
+    /// <summary>קוד שחזור משורת הפקודה: מבטל גם בשירות</summary>
     public static bool EmergencyDisable(string code)
     {
         var r = Call(new JsonObject { ["op"] = "disable", ["password"] = code ?? "" });
@@ -418,8 +415,6 @@ public static class HardLock
         if (Kiosk.ScheduleEnabled)
             try { SetSchedule(b.Str("password"), true, Kiosk.ScheduleStart, Kiosk.ScheduleEnd); }
             catch (Exception ex) { Config.Log("hardlock schedule: " + ex.Message); }
-        _cacheAt = DateTime.MinValue;
-        SyncPolicy(b.Str("password"));
         Config.Log("hardlock: רכיב ההקשחה הותקן/עודכן");
         return Status(fresh: true);
     }
@@ -982,7 +977,6 @@ public class HardLockService : ServiceBase
                         ["scheduleEnabled"] = _state["scheduleEnabled"]?.GetValue<bool>() == true,
                         ["scheduleStart"] = _state["scheduleStart"]?.ToString() ?? "",
                         ["scheduleEnd"] = _state["scheduleEnd"]?.ToString() ?? "",
-                        ["twoFactor"] = TwoFactorOn,
                         ["otzariaPath"] = _state["otzariaPath"]?.ToString() ?? "", ["sessions"] = _sessions,
                         ["policy"] = PolicyNode(),
                         ["tempUnlock"] = TempNode(),
@@ -1010,7 +1004,6 @@ public class HardLockService : ServiceBase
                     if ((e = Check(pw, false)) != null) return e;
                     _state["active"] = true;
                     _state["activatedBy"] = "manual"; // נעילה ידנית לא תבוטל בסוף חלון התזמון
-                    _state["tempUnlockUntil"] = "";   // הפעלה בסיסמה מסיימת פתיחה זמנית
                     string otz = q["otzariaPath"]?.ToString();
                     if (!string.IsNullOrEmpty(otz)) _state["otzariaPath"] = otz;
                     Save();
@@ -1033,7 +1026,6 @@ public class HardLockService : ServiceBase
                     if ((e = Need2fa(q, q["old"]?.ToString())) != null) return e;
                     string np = q["new"]?.ToString() ?? "";
                     if (np.Length < 6) return Err("bad_request", "הסיסמה חייבת להכיל לפחות 6 תווים");
-                    if (Matches(np, "tempUnlockHash", "tempUnlockSalt")) return Err("bad_request", "סיסמת הנעילה חייבת להיות שונה מסיסמת הפתיחה הזמנית");
                     byte[] salt = RandomNumberGenerator.GetBytes(16);
                     _state["salt"] = Convert.ToBase64String(salt);
                     _state["passwordHash"] = Secret.Hash(np, salt);
@@ -1055,64 +1047,13 @@ public class HardLockService : ServiceBase
                     if (q["scheduleEnabled"] is JsonValue se) _state["scheduleEnabled"] = se.GetValue<bool>();
                     if (q["scheduleStart"]?.ToString() is string ss && Sched.IsValid(ss)) _state["scheduleStart"] = ss;
                     if (q["scheduleEnd"]?.ToString() is string ee && Sched.IsValid(ee)) _state["scheduleEnd"] = ee;
-                    foreach (var kv in policy) _state[kv.Key] = kv.Value;
                     Save();
-                    if (policy.Count > 0) HardLock.SvcLog("service: עודכנה מדיניות הנעילה (" + string.Join(", ", policy.Keys) + ")");
-                    if (temp.Count > 0) HardLock.SvcLog("service: עודכנו הגדרות הפתיחה הזמנית (" + string.Join(", ", temp.Keys.Where(k => k != "tempUnlockSalt")) + ")");
-                    Task.Run(Tick);
-                    return Ok();
-                }
-
-                case "temp-unlock":
-                {
-                    // הסיסמה כאן היא סיסמת הפתיחה הזמנית בלבד — לא סיסמת הנעילה ולא קוד השחזור. בלי Windows Hello:
-                    // זו בדיוק הסיסמה שנמסרת למי שאין לו את זהות המנהל (ולכן היא קיימת רק כשהאימות הדו-שלבי פעיל)
-                    if (!Configured) return Err("bad_request", "רכיב ההקשחה עדיין לא הוגדר");
-                    if (DateTime.UtcNow < _lockoutUntil)
-                        return Err("too_many", $"יותר מדי ניסיונות שגויים. נסו שוב בעוד {(int)Math.Ceiling((_lockoutUntil - DateTime.UtcNow).TotalSeconds)} שניות");
-                    if (!TwoFactorOn) return Err("forbidden", "פתיחה זמנית פועלת רק כשהאימות הדו-שלבי (Windows Hello) מופעל");
-                    if (!TempUnlockUsable) return Err("bad_request", "הפתיחה הזמנית כבויה או שלא הוגדרה לה סיסמה");
-                    if (!Matches(pw, "tempUnlockHash", "tempUnlockSalt"))
-                    {
-                        if (++_failures >= 5) { _failures = 0; _lockoutUntil = DateTime.UtcNow.AddSeconds(60); }
-                        return Err("wrong_password", "סיסמת הפתיחה הזמנית שגויה");
-                    }
-                    _failures = 0;
-                    if (!Active) return Err("bad_request", "המחשב אינו נעול כרגע");
-                    if (TempSecondsLeft > 0) return Err("bad_request", "המחשב כבר פתוח זמנית");
-                    int minutes = TempUnlockMinutes;
-                    var until = TempUnlock.Until(DateTimeOffset.Now, minutes);
-                    _state["tempUnlockUntil"] = until.ToString("o");
-                    Save();
-                    HardLock.SvcLog($"service: פתיחה זמנית ל-{minutes} דקות (עד {until:HH:mm:ss})");
-                    Task.Run(Tick);
-                    return new JsonObject { ["ok"] = true, ["until"] = until.ToString("o"), ["secondsLeft"] = TempSecondsLeft };
-                }
-
-                case "temp-unlock-end":
-                    // סיום מוקדם רק מחזיר את האכיפה (הכיוון הבטוח), ולכן בלי סיסמה
-                    if (string.IsNullOrEmpty(_state["tempUnlockUntil"]?.ToString())) return Ok();
-                    _state["tempUnlockUntil"] = "";
-                    Save();
-                    HardLock.SvcLog("service: הפתיחה הזמנית הסתיימה ידנית");
                     Task.Run(Tick);
                     return Ok();
 
                 case "skip":
                     if ((e = Check(pw, false)) != null) return e;
-                    if ((e = Need2fa(q, pw)) != null) return e;
-                    {
-                        // ריק = ניקוי הדילוג; אחרת חייב להיות תאריך תקין, לכל היותר 36 שעות קדימה
-                        string until = q["until"]?.ToString() ?? "";
-                        if (until.Length > 0)
-                        {
-                            if (!DateTimeOffset.TryParse(until, null, System.Globalization.DateTimeStyles.RoundtripKind, out var ud))
-                                return Err("bad_request", "זמן הדילוג אינו תקין");
-                            if (ud > DateTimeOffset.Now.AddHours(36)) ud = DateTimeOffset.Now.AddHours(36);
-                            until = ud.ToString("o");
-                        }
-                        _state["skipUntil"] = until;
-                    }
+                    _state["skipUntil"] = q["until"]?.ToString() ?? "";
                     Save();
                     Task.Run(Tick);
                     return Ok();
@@ -1190,8 +1131,7 @@ public class HardLockService : ServiceBase
             lock (_gate)
             {
                 EvaluateSchedule();   // תזמון לפי שעות — עשוי להפעיל/לבטל את הנעילה
-                ExpireTempUnlock();   // פתיחה זמנית שהסתיימה — האכיפה חוזרת כבר בטיק הזה
-                active = Enforced;
+                active = Active;
                 blockUsb = _state["blockUsbStorage"]?.GetValue<bool>() == true;
             }
             EnforcePolicies(active);
@@ -1212,9 +1152,8 @@ public class HardLockService : ServiceBase
         string start = _state["scheduleStart"]?.ToString();
         string end = _state["scheduleEnd"]?.ToString();
         // דילוג ידני (מ"ביטול הנעילה" באזהרה) או תזמון כבוי → כמו "מחוץ לחלון"
-        // מושווה כרגע מוחלט (DateTimeOffset) — חסין למעבר שעון קיץ/חורף ולסוג ה-Kind
-        bool skip = DateTimeOffset.TryParse(_state["skipUntil"]?.ToString(), null,
-            System.Globalization.DateTimeStyles.RoundtripKind, out var su) && DateTimeOffset.Now < su;
+        bool skip = DateTime.TryParse(_state["skipUntil"]?.ToString(), null,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var su) && DateTime.Now < su;
         bool inWindow = _state["scheduleEnabled"]?.GetValue<bool>() == true && !skip && Sched.InWindow(start, end, DateTime.Now);
         bool active = Active;
         string by = _state["activatedBy"]?.ToString() ?? "manual";
@@ -1231,18 +1170,6 @@ public class HardLockService : ServiceBase
             Save();
             HardLock.SvcLog("service: תזמון — מחוץ לחלון, נעילה בוטלה");
         }
-    }
-
-    /// <summary>
-    /// מנקה זמן סיום של פתיחה זמנית שעבר (או שהפך ללא שמיש). נקרא תחת _gate מתוך Tick. ההחזרה של האכיפה עצמה
-    /// אינה תלויה בניקוי (Enforced מחושב לפי הזמן), זה רק כדי שהמצב השמור והיומן יהיו ברורים.
-    /// </summary>
-    private void ExpireTempUnlock()
-    {
-        if (string.IsNullOrEmpty(_state["tempUnlockUntil"]?.ToString()) || TempSecondsLeft > 0) return;
-        _state["tempUnlockUntil"] = "";
-        Save();
-        HardLock.SvcLog(Active ? "service: הפתיחה הזמנית הסתיימה — הנעילה נאכפת שוב" : "service: הפתיחה הזמנית הסתיימה (הנעילה כבר אינה דלוקה)");
     }
 
     /// <summary>מדיניות בכל חשבון מחובר (HKEY_USERS\SID): מנהל המשימות ועורך הרישום חסומים; מוחזרת אם נמחקה</summary>

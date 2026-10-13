@@ -115,15 +115,13 @@
         '<button class="btn btn-tonal" data-act="chpw">' + ui.icon('edit') + 'שינוי</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>מה פתוח בזמן נעילה</b><span class="muted">' +
         ui.esc((st.openSections || []).map(function (id) { return SECTION_NAMES[id] || id; }).join(', ') || 'רק תוכנות לימוד ואודות') +
-        (st.readOnly ? ' · קבצים לקריאה בלבד' : '') + (st.allowExcelDocs ? ' · Excel מותר בסייר' : '') + (st.clock !== false ? ' · שעון צף' : '') + '</span></div>' +
-        '</div>' +
+        (st.readOnly ? ' · קבצים לקריאה בלבד' : '') + (st.clock !== false ? ' · שעון צף' : '') + '</span></div>' +
+        '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>תזמון נעילה לפי שעות</b><span class="muted">' +
         (st.schedule && st.schedule.enabled
           ? 'נעילה אוטומטית בכל יום <bdi dir="ltr">' + ui.esc(st.schedule.start) + '–' + ui.esc(st.schedule.end) + '</bdi>'
           : 'כבוי — נעילה ידנית בלבד') + '</span></div>' +
-        '</div>' +
-        '<div class="setting-row"><div class="setting-text"><b>פתיחה זמנית בסיסמה נפרדת</b><span class="muted">' + tempSummary(tu) + '</span></div>' +
-        '</div>' +
+        '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>קבצים שמותר לפתוח בזמן נעילה</b><span class="muted"><bdi dir="ltr">' +
         ui.esc((st.allowOpenExtensions || []).length ? st.allowOpenExtensions.map(function (x) { return '.' + x; }).join(', ') : '—') + '</bdi></span></div>' +
         '</div>' +
@@ -352,7 +350,7 @@
         '<button class="btn btn-tonal" data-act="hard-settings">' + ui.icon('edit') + 'הגדרות</button>' +
         '<button class="btn btn-tonal" data-act="hard-remove">' + ui.icon('close') + 'הסרה</button>';
     var updateWarning = (h.installed && h.needsUpdate)
-      ? '<div class="state-box error">' + ui.icon('warning') + '<div><b>רכיב ההקשחה בגרסה ישנה מהגשר</b>' +
+      ? '<div class="state-box error"><div>' + ui.icon('warning') + '</div><div><b>רכיב ההקשחה בגרסה ישנה מהגשר</b>' +
         '<span class="muted">גרסה ' + ui.esc(h.version || '') + ' · מומלץ לעדכן כדי לשמור על תאימות מלאה</span>' +
         '<button class="btn btn-tonal" data-act="hard-install">' + ui.icon('shield') + 'עדכון עכשיו</button></div></div>'
       : '';
@@ -705,20 +703,7 @@
     fields.push({ name: 'schedStart', label: 'שעת התחלה', type: 'time', value: sc.start || '20:00', dir: 'ltr' });
     fields.push({ name: 'schedEnd', label: 'שעת סיום', type: 'time', value: sc.end || '02:00', dir: 'ltr' });
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
-    fields.push({
-      name: 'pos', type: 'select', label: 'מיקום השעון', value: st.clockPosition || 'bottom-left',
-      options: [
-        { value: 'bottom-left', label: 'למטה-שמאל' },
-        { value: 'bottom-right', label: 'למטה-ימין' },
-        { value: 'top-left', label: 'למעלה-שמאל' },
-        { value: 'top-right', label: 'למעלה-ימין' }
-      ]
-    });
-    fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
-      options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
-      hint: 'מציג שורה מיוחדת בשומר המסך ביום הזה בכל שנה. ריק = כבוי. לא קשור בהכרח להקדשה הקבועה שבתוסף' });
-    fields.push({ name: 'yzDay', label: 'יום השנה: יום בחודש (1–30)', value: String(st.yahrzeitDay || 0), dir: 'ltr', placeholder: '0' });
-    fields.push({ name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
+    fields.push({ name: 'pos', label: 'מיקום השעון (bottom-left / bottom-right / top-left / top-right)', value: st.clockPosition || 'bottom-left', dir: 'ltr' });
     fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
     var slot = body.querySelector('[data-slot=kset]'); if (!slot) return;
     var ok = await ui.inlineForm(slot, {
@@ -728,23 +713,9 @@
       actions: [{ label: 'ביטול', value: false }, { label: 'שמירה', value: true, kind: 'primary' }],
       validate: function (x) {
         if (!x.pw) return 'יש להקליד את סיסמת הנעילה';
-        if (!/^\d{1,3}$/.test(String(x.idle).trim()) || +x.idle > 240) return 'זמן שומר המסך: מספר דקות בין 0 ל-240';
-        if (x.zloc.trim() && !/^-?\d{1,2}(\.\d+)?\s*,\s*-?\d{1,3}(\.\d+)?$/.test(x.zloc.trim())) return 'מיקום לא תקין: קו רוחב, קו אורך (למשל 31.78, 35.22)';
-        if (!/^\d{1,4}$/.test(String(x.zelev).trim()) || +x.zelev > 5000) return 'גובה: מספר מטרים בין 0 ל-5000';
-        if (['noaa', 'kosherjava'].indexOf(x.zengine) < 0) return 'מנוע חישוב גיבוי לא תקין';
-        if (!/^\d{1,3}$/.test(String(x.candle).trim()) || +x.candle > 90) return 'הדלקת נרות: מספר דקות בין 0 ל-90';
-        if (['bottom-left', 'bottom-right', 'top-left', 'top-right'].indexOf(x.pos) < 0) return 'מיקום שעון לא תקין';
+        if (['bottom-left', 'bottom-right', 'top-left', 'top-right'].indexOf(x.pos.trim()) < 0) return 'מיקום שעון לא תקין';
         if (x.sched && (!/^\d{1,2}:\d{2}$/.test(x.schedStart || '') || !/^\d{1,2}:\d{2}$/.test(x.schedEnd || ''))) return 'יש להזין שעת התחלה ושעת סיום לתזמון';
         if (x.sched && x.schedStart === x.schedEnd) return 'שעת ההתחלה והסיום של התזמון זהות';
-        if (!/^\d{1,2}$/.test(String(x.yzDay).trim()) || +x.yzDay > 30) return 'יום השנה: יום בחודש בין 0 ל-30';
-        if (+x.yzDay > 0 && !x.yzMonth) return 'יום השנה: יש לבחור גם חודש עברי';
-        if (['right', 'left', 'top', 'bottom'].indexOf(x.sidePos) < 0) return 'מיקום סרגל לא תקין';
-        if (!/^\d{1,2}$/.test(String(x.tuMin).trim()) || +x.tuMin < 1 || +x.tuMin > 60) return 'פתיחה זמנית: משך בדקות בין 1 ל-60';
-        if (x.tuPw && x.tuPw.length < 6) return 'סיסמת הפתיחה הזמנית חייבת להכיל לפחות 6 תווים';
-        if (x.tuPw !== x.tuPw2) return 'סיסמאות הפתיחה הזמנית אינן תואמות';
-        if (x.tuPw && x.tuPw === x.pw) return 'סיסמת הפתיחה הזמנית חייבת להיות שונה מסיסמת הנעילה';
-        if (x.tu && !tu.enabled && !tu.configured && !x.tuPw) return 'יש לבחור סיסמת פתיחה זמנית לפני ההפעלה';
-        if (x.tu && !tu.enabled && !x.tfa) return 'פתיחה זמנית דורשת אימות דו-שלבי פעיל';
         var bad = parseExt(x.ext).filter(function (e) { return !/^[a-z0-9]{1,10}$/.test(e); });
         return bad.length ? 'סיומת לא תקינה: ' + bad[0] : '';
       },
@@ -762,16 +733,9 @@
       onSubmit: async function (x) {
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
-          readOnly: !!x.ro, allowExcelDocs: !!x.xls, twoFactor: !!x.tfa, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos,
-          restIdleMinutes: +String(x.idle).trim() || 0, zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
-          zmanimElevation: +String(x.zelev).trim() || 0, zmanimFallbackEngine: x.zengine,
-          zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
-          zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
-          showParsha: !!x.parsha, showDafYomi: !!x.dafyomi,
-          yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim(),
+          readOnly: !!x.ro, twoFactor: !!x.tfa, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, clockPosition: x.pos.trim(),
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
-          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn },
-          tempUnlockEnabled: !!x.tu, tempUnlockMinutes: +String(x.tuMin).trim() || 30, tempUnlockPassword: x.tuPw || ''
+          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn }
         });
         return true;
       }
