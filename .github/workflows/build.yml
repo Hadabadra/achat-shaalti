@@ -22,6 +22,23 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # נדרש היסטוריה מלאה (לא שכפול רדוד) לחישוב גרסת התוספים למטה
+
+      # גרסת התוספים (file-explorer/system-settings): עצמאית מגרסת הגשר ומגרסת ה-Release, ומסונכרנת
+      # בין שני התוספים (לא עצמאית לכל אחד). מחושבת מהיסטוריית git, לא נשמרת/מתעדכנת בקובץ בריפו -
+      # כך שאין סיכון ללולאת commit אינסופית (ה-commit של "העלאת גרסה" היה גם הוא נספר כשינוי בתוספים).
+      # מתחילה מ-0.2.0 ועולה ב-minor (0.3.0, 0.4.0...) רק כש-file-explorer/system-settings השתנו בפועל
+      # מאז BASE_SHA למטה (קומיט לפני השינוי הזה) - אם לא השתנו, נשאר אותו מספר כמו הפעם הקודמת.
+      - name: גרסת התוספים
+        id: pluginver
+        shell: pwsh
+        env:
+          BASE_SHA: a349071dff9759f51cbe3193313f130d0e80a340
+        run: |
+          $count = (git log --oneline "$env:BASE_SHA..HEAD" -- file-explorer system-settings | Measure-Object -Line).Lines
+          $minor = 1 + $count
+          "version=0.$minor.0" >> $env:GITHUB_OUTPUT
 
       # מספור ה-Release: שני המקטעים הראשונים (major.minor) נשלטים ע"י RELEASE_VERSION.txt (לעדכן:
       # לערוך ולדחוף); המקטע השלישי (patch) הוא github.run_number - מתקדם אוטומטית בכל push. מחושב
@@ -41,9 +58,18 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      # כותבים את גרסת התוספים המחושבת (steps.pluginver) לתוך שני המניפסטים לפני האריזה - רק בעותק
+      # הזמני שב-runner, לא מחזירים commit לריפו (ר' הסבר אצל חישוב הגרסה למעלה)
       - name: אריזת התוספים כמשאב מוטמע
         shell: pwsh
         run: |
+          $pv = "${{ steps.pluginver.outputs.version }}"
+          foreach ($f in @("file-explorer/manifest.json", "system-settings/manifest.json")) {
+            (Get-Content $f -Raw) -replace '"version":\s*"[^"]*"', ('"version": "' + $pv + '"') | Set-Content $f -Encoding utf8NoBOM -NoNewline
+          }
+          Get-Content file-explorer/manifest.json | Select-String '"version"'
+          Get-Content system-settings/manifest.json | Select-String '"version"'
+
           New-Item -ItemType Directory -Force bridge/plugins | Out-Null
           Compress-Archive -Path system-settings/* -DestinationPath bridge/plugins/system-settings.zip -Force
           Get-ChildItem file-explorer -Exclude WIP.md | Compress-Archive -DestinationPath bridge/plugins/file-explorer.zip -Force
