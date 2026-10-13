@@ -163,8 +163,9 @@
     kiosk: {
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
-      allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, clock: true, clockPosition: 'bottom-left',
-      restScreen: true, restIdleMinutes: 0, zmanimLocation: '', fullscreenOtzaria: true,
+      allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left',
+      restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
+      candleLightingMinutes: 18, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
       activatedBy: 'manual',
       schedule: { enabled: false, start: '20:00', end: '02:00', warn: true },
       openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer'],
@@ -296,9 +297,16 @@
       checkPw(b.password, false);
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
-      ['readOnly', 'clock', 'restScreen', 'fullscreenOtzaria'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
+      ['readOnly', 'twoFactor', 'clock', 'restScreen', 'fullscreenOtzaria'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
       if (typeof b.restIdleMinutes === 'number') M.kiosk.restIdleMinutes = Math.max(0, Math.min(240, b.restIdleMinutes | 0));
       if (typeof b.zmanimLocation === 'string') M.kiosk.zmanimLocation = b.zmanimLocation;
+      if (typeof b.zmanimCity === 'string') M.kiosk.zmanimCity = b.zmanimCity;
+      if (typeof b.zmanimDiaspora === 'boolean') M.kiosk.zmanimDiaspora = b.zmanimDiaspora;
+      if (typeof b.candleLightingMinutes === 'number') M.kiosk.candleLightingMinutes = Math.max(0, Math.min(90, b.candleLightingMinutes | 0));
+      if (Array.isArray(b.zmanimShow)) M.kiosk.zmanimShow = b.zmanimShow.slice();
+      if (typeof b.yahrzeitMonth === 'string') M.kiosk.yahrzeitMonth = b.yahrzeitMonth;
+      if (typeof b.yahrzeitDay === 'number') M.kiosk.yahrzeitDay = Math.max(0, Math.min(30, b.yahrzeitDay | 0));
+      if (typeof b.yahrzeitLabel === 'string') M.kiosk.yahrzeitLabel = b.yahrzeitLabel;
       if (b.clockPosition) M.kiosk.clockPosition = b.clockPosition;
       if (Array.isArray(b.openSections)) M.kiosk.openSections = b.openSections.slice();
       if (b.schedule && typeof b.schedule === 'object') {
@@ -309,6 +317,7 @@
       }
       return clone(M.kiosk);
     },
+    '/kiosk/zmanim-cache': function () { return { ok: true }; },
     '/kiosk/programs': function () {
       var list = clone(M.programs);
       if (M.autoTorah) list.push({ id: 'auto-0001', name: 'Word', path: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE', procs: [], exists: true, auto: true });
@@ -340,6 +349,27 @@
     }
   };
 
+
+  /* ---------- mock: מדיניות סייר הקבצים (browser preview) ---------- */
+  M.fx = { mode: 'off', roots: [], minutes: 15, until: 0 };
+  function fxState() {
+    var left = Math.max(0, Math.ceil((M.fx.until - Date.now()) / 1000));
+    var eff = M.fx.mode === 'off' ? 'open' : M.fx.mode === 'locked' ? (left > 0 ? 'open' : 'locked') : (M.fx.roots.length ? 'restricted' : (left > 0 ? 'open' : 'locked'));
+    return { mode: M.fx.mode, effective: eff, locked: eff === 'locked', fallback: M.fx.mode === 'restricted' && !M.fx.roots.length,
+      roots: M.fx.roots.slice(), activeRoots: M.fx.roots.slice(), invalidRoots: [], unlockMinutes: M.fx.minutes, unlockedSeconds: left,
+      passwordConfigured: !!M.password, defaults: [{ id: 'desktop', name: 'שולחן העבודה', path: 'C:\\Users\\talmid\\Desktop' }] };
+  }
+  mockRoutes['/fs/policy/get'] = function () { return fxState(); };
+  mockRoutes['/fs/policy/set'] = function (b) {
+    if (!M.password) throw mockErr('no_password', 'יש להגדיר סיסמת נעילה לפני שינוי מדיניות סייר הקבצים');
+    checkPw(b.password, true);
+    if (['off', 'restricted', 'locked'].indexOf(b.mode) < 0) throw mockErr('bad_request', 'mode חייב להיות off, restricted או locked');
+    if (b.mode === 'restricted' && !(b.roots || []).length) throw mockErr('bad_request', 'במצב מוגבל יש לבחור לפחות תיקייה אחת');
+    M.fx = { mode: b.mode, roots: (b.roots || []).slice(), minutes: Math.min(Math.max(parseInt(b.unlockMinutes, 10) || 15, 1), 1440), until: 0 };
+    return fxState();
+  };
+  mockRoutes['/fs/policy/unlock'] = function (b) { checkPw(b.password, false); M.fx.until = Date.now() + M.fx.minutes * 60000; return fxState(); };
+  mockRoutes['/fs/policy/lock'] = function () { M.fx.until = 0; return fxState(); };
 
   /* ---------- mock: USB, keyboard, energy (browser preview) ---------- */
   M.usb = [

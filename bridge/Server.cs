@@ -58,6 +58,7 @@ public static class Server
         Kiosk.Register();
         Pairing.Register();
         HardLock.Register();
+        Zmanim.Register();
 
         int port = FindPort();
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory });

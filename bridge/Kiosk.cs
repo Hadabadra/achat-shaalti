@@ -15,7 +15,6 @@ namespace OtzariaBridge;
 /// </summary>
 public static class Kiosk
 {
-    private const int Iterations = 200_000;
     private const string PoliciesKey = @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
     private const string WinlogonKey = @"Software\Microsoft\Windows NT\CurrentVersion\Winlogon";
 
@@ -115,29 +114,18 @@ public static class Kiosk
     }
 
     // ---------- סיסמה ----------
+    // החישוב הקריפטוגרפי הטהור (Hash/Matches/נורמליזציה/קוד שחזור) משותף ל-Kiosk ול-HardLockService
+    // דרך Secret.cs, כדי ששני המקומות לא יתפצלו בלי ששמים לב. כאן רק קריאה/כתיבה מ-Config.
 
-    private static string Hash(string secret, byte[] salt) =>
-        Convert.ToBase64String(Rfc2898DeriveBytes.Pbkdf2(secret, salt, Iterations, HashAlgorithmName.SHA256, 32));
-
-    private static bool Matches(string secret, string hashKey, string saltKey)
-    {
-        string hash = Config.Get<string>(hashKey, null);
-        string salt = Config.Get<string>(saltKey, null);
-        if (string.IsNullOrEmpty(hash) || string.IsNullOrEmpty(salt) || string.IsNullOrEmpty(secret)) return false;
-        byte[] expected = Convert.FromBase64String(hash);
-        byte[] actual = Convert.FromBase64String(Hash(secret, Convert.FromBase64String(salt)));
-        return CryptographicOperations.FixedTimeEquals(expected, actual);
-    }
+    private static bool Matches(string secret, string hashKey, string saltKey) =>
+        Secret.Matches(secret, Config.Get<string>(hashKey, null), Config.Get<string>(saltKey, null));
 
     private static void StoreSecret(string secret, string hashKey, string saltKey)
     {
         byte[] salt = RandomNumberGenerator.GetBytes(16);
         Config.Set(saltKey, Convert.ToBase64String(salt));
-        Config.Set(hashKey, Hash(secret, salt));
+        Config.Set(hashKey, Secret.Hash(secret, salt));
     }
-
-    // internal (ולא private) כדי שפרויקט הבדיקות יוכל לבדוק נורמליזציה (מקפים/רווחים/אותיות) ישירות
-    internal static string NormalizeRecovery(string s) => (s ?? "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
 
     /// <summary>בודק סיסמה או קוד שחזור, עם השהיה אחרי 5 ניסיונות שגויים</summary>
     private static void Verify(string password, bool allowRecovery)
@@ -152,7 +140,7 @@ public static class Kiosk
             // כשרכיב ההקשחה מותקן — הוא מקור האמת לסיסמה (עריכת config.json לא עוזרת)
             if (HardLock.Available) { HardLock.Verify(password, allowRecovery); return; }
             bool ok = Matches(password, "kiosk.passwordHash", "kiosk.salt") ||
-                      (allowRecovery && Matches(NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt"));
+                      (allowRecovery && Matches(Secret.NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt"));
             if (ok)
             {
                 _failures = 0;
@@ -169,6 +157,12 @@ public static class Kiosk
 
     /// <summary>אימות סיסמה לשימוש מודולים אחרים (בלי קוד שחזור)</summary>
     internal static void RequirePassword(string password) => Verify(password, allowRecovery: false);
+
+    /// <summary>כמו RequirePassword, אבל מקבל גם את קוד השחזור (כדי שלא ננעל מחוץ למדיניות סייר הקבצים)</summary>
+    internal static void RequirePasswordOrRecovery(string password) => Verify(password, allowRecovery: true);
+
+    /// <summary>האם הוגדרה סיסמת נעילה (בקובץ ההגדרות או ברכיב ההקשחה)</summary>
+    internal static bool PasswordConfigured => HasPassword || HardLock.Available;
 
     [StructLayout(LayoutKind.Sequential)] private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
     [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO lii);
@@ -221,12 +215,6 @@ public static class Kiosk
         }
     }
 
-    private static string NewRecoveryCode()
-    {
-        const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        return new string(Enumerable.Range(0, 12).Select(_ => alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)]).ToArray());
-    }
-
     // ---------- נקודות קצה ----------
 
     private static object Status() => new
@@ -244,6 +232,13 @@ public static class Kiosk
         restScreen = Config.Get("kiosk.restScreen", true),
         restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 0),
         zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
+        zmanimCity = Config.Get("kiosk.zmanimCity", ""),
+        zmanimShow = Config.HasList("kiosk.zmanimShow") ? Config.GetList("kiosk.zmanimShow") : null,
+        zmanimDiaspora = Config.Get("kiosk.zmanimDiaspora", false),
+        candleLightingMinutes = Config.Get("kiosk.candleLightingMinutes", 18),
+        yahrzeitMonth = Config.Get("kiosk.yahrzeitMonth", ""),
+        yahrzeitDay = Config.Get("kiosk.yahrzeitDay", 0),
+        yahrzeitLabel = Config.Get("kiosk.yahrzeitLabel", ""),
         fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
         sideBar = Config.Get("kiosk.sideBar", true),
         sideBarIconsOnly = Config.Get("kiosk.sideBarIconsOnly", false),
@@ -253,6 +248,8 @@ public static class Kiosk
         warnings = Warnings(),
         schedule = new { enabled = ScheduleEnabled, start = ScheduleStart, end = ScheduleEnd, warn = ScheduleWarn },
         activatedBy = Config.Get<string>("kiosk.activatedBy", "manual"),
+        twoFactor = TwoFactor.Enabled,
+        twoFactorAvailable = TwoFactor.Available(),
         hard = HardLock.Status(),
     };
 
@@ -354,6 +351,10 @@ public static class Kiosk
         }
     }
 
+    /// <summary>האם הטקסט שהוקלד הוא קוד השחזור (פטור מאימות דו-שלבי בביטול חירום)</summary>
+    internal static bool IsRecoveryCode(string s) =>
+        Matches(Secret.NormalizeRecovery(s), "kiosk.recoveryHash", "kiosk.recoverySalt");
+
     /// <summary>רכיב ההקשחה אומר "נעול" (למשל אחרי עריכת config.json או בחשבון Windows אחר) — נועלים גם כאן</summary>
     public static void ForceActivate(string servicePath)
     {
@@ -394,7 +395,7 @@ public static class Kiosk
         else
         {
             // הגדרה ראשונה: יוצרים קוד שחזור חד-פעמי
-            recovery = NewRecoveryCode();
+            recovery = Secret.NewRecoveryCode();
             StoreSecret(recovery, "kiosk.recoveryHash", "kiosk.recoverySalt");
         }
         StoreSecret(newPassword, "kiosk.passwordHash", "kiosk.salt");
@@ -437,8 +438,12 @@ public static class Kiosk
 
     private static object Disable(JsonElement b)
     {
-        Verify(b.Str("password"), allowRecovery: true);
-        if (HardLock.Available) HardLock.Disable(b.Str("password"));
+        string pw = b.Str("password");
+        bool viaRecovery = IsRecoveryCode(pw);
+        Verify(pw, allowRecovery: true);
+        // קוד שחזור פטור מ-2FA (ביטול חירום); סיסמה רגילה דורשת גם Windows Hello אם מופעל
+        if (!viaRecovery) TwoFactor.Require("ביטול נעילת המחשב");
+        if (HardLock.Available) HardLock.Disable(pw);
         Release();
         return new { active = false };
     }
@@ -446,6 +451,24 @@ public static class Kiosk
     private static object Settings(JsonElement b)
     {
         Verify(b.Str("password"), allowRecovery: false);
+        // שינוי הגדרות דורש Windows Hello כשהאימות הדו-שלבי כבר פעיל (הפעלה ראשונה מטופלת למטה)
+        TwoFactor.Require("שינוי הגדרות הנעילה");
+        if (b.Has("twoFactor"))
+        {
+            bool want = b.Bool("twoFactor");
+            if (want && !TwoFactor.Enabled)
+            {
+                // הפעלה ראשונה: לוודא ש-Hello זמין ושהמנהל מצליח לעבור אותו עכשיו — אחרת נעילה-עצמית
+                if (!TwoFactor.Available())
+                    throw BridgeException.BadRequest("Windows Hello אינו מוגדר במחשב הזה. הגדירו זיהוי פנים/טביעת אצבע/PIN ב-Windows ונסו שוב.");
+                if (!TwoFactor.Verify("אישור הפעלת אימות דו-שלבי"))
+                    throw new BridgeException("two_factor", "האימות נכשל — האימות הדו-שלבי לא הופעל", 401);
+            }
+            // כשרכיב ההקשחה מותקן, חובה לסנכרן אליו גם: אחרת Hello נאכף רק ב-HTTP של הגשר, ולא מול
+            // הצינור של השירות עצמו (ביקורת #30 ממצא 1) — עדכון שלא עובר לשירות משאיר את הפרצה פתוחה.
+            if (HardLock.Available) HardLock.SetTwoFactor(b.Str("password"), want);
+            Config.Set("kiosk.twoFactor", want);
+        }
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
         foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
@@ -455,6 +478,29 @@ public static class Kiosk
             string loc = (b.Str("zmanimLocation") ?? "").Trim();
             if (loc.Length > 0 && Zmanim.ParseLocation(loc) == null) throw BridgeException.BadRequest("מיקום לא תקין: יש להקליד קו רוחב, קו אורך (למשל 31.78, 35.22)");
             Config.Set("kiosk.zmanimLocation", loc);
+        }
+        // עיר מרשימה (אם נבחרה) מועברת כפי שהיא ל-calendar.getDailyTimes באוצריא; הקואורדינטות
+        // למעלה נשארות כאפשרות מתקדמת, וגם משמשות גיבוי כש-kiosk.zmanimCity ריק
+        if (b.Has("zmanimCity")) Config.Set("kiosk.zmanimCity", (b.Str("zmanimCity") ?? "").Trim());
+        if (b.Has("zmanimDiaspora")) Config.Set("kiosk.zmanimDiaspora", b.Bool("zmanimDiaspora"));
+        if (b.Has("zmanimShow"))
+        {
+            var ids = b.StrArray("zmanimShow").Select(x => x.Trim().ToLowerInvariant()).Where(x => x.Length > 0).Distinct().Take(20).ToArray();
+            Config.Set("kiosk.zmanimShow", new JsonArray(ids.Select(x => (JsonNode)x).ToArray()));
+        }
+        if (b.Has("candleLightingMinutes")) Config.Set("kiosk.candleLightingMinutes", (int)Math.Clamp(b.Long("candleLightingMinutes", 18), 0, 90));
+        if (b.Has("yahrzeitMonth"))
+        {
+            string mon = (b.Str("yahrzeitMonth") ?? "").Trim();
+            if (mon.Length > 0 && !Zmanim.YahrzeitMonths.Contains(mon)) throw BridgeException.BadRequest("חודש עברי לא תקין ליום השנה");
+            Config.Set("kiosk.yahrzeitMonth", mon);
+        }
+        if (b.Has("yahrzeitDay")) Config.Set("kiosk.yahrzeitDay", (int)Math.Clamp(b.Long("yahrzeitDay", 0), 0, 30));
+        if (b.Has("yahrzeitLabel"))
+        {
+            string lbl = (b.Str("yahrzeitLabel") ?? "").Trim();
+            if (lbl.Length > 200) lbl = lbl.Substring(0, 200);
+            Config.Set("kiosk.yahrzeitLabel", lbl);
         }
         string cp = b.Str("clockPosition");
         if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right") Config.Set("kiosk.clockPosition", cp);
@@ -469,6 +515,8 @@ public static class Kiosk
         {
             string p = b.Str("otzariaPath", "");
             if (p.Length > 0 && !File.Exists(p)) throw BridgeException.NotFound("הקובץ לא נמצא: " + p);
+            // כשרכיב ההקשחה מותקן הנתיב נשמר קודם אצלו (מקור האמת); כישלון שם עוצר גם את השמירה המקומית
+            if (HardLock.Available) HardLock.SetOtzariaPath(b.Str("password"), p);
             Config.Set("kiosk.otzariaPath", p);
         }
         bool schedChanged = false;
@@ -508,7 +556,10 @@ public static class Kiosk
 
     public static string OtzariaPath()
     {
-        string configured = Config.Get<string>("kiosk.otzariaPath", null);
+        // כשרכיב ההקשחה מותקן ויש לו נתיב — הוא מקור האמת, ו-config.json (כתיב למשתמש המחובר) לא נקרא.
+        // נתיב ריק אצלו = זיהוי אוטומטי; נתיב שלא קיים בחשבון הזה = זיהוי אוטומטי (ולא ערך מ-config.json)
+        string servicePath = HardLock.Policy?.OtzariaPath;
+        string configured = servicePath ?? Config.Get<string>("kiosk.otzariaPath", null);
         if (!string.IsNullOrEmpty(configured) && File.Exists(configured)) return configured;
 
         try
@@ -708,7 +759,7 @@ public static class Kiosk
     /// <summary>קוד שחזור משורת הפקודה: OtzariaBridge.exe --unlock CODE</summary>
     public static bool EmergencyUnlock(string code)
     {
-        if (!Matches(NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
+        if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
         int self = Environment.ProcessId;
         foreach (var p in Process.GetProcessesByName("OtzariaBridge"))
         {
@@ -730,7 +781,7 @@ public static class Kiosk
     /// </summary>
     public static bool EmergencyRelease(string code)
     {
-        if (!Matches(NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
+        if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
         try { HardLock.EmergencyDisable(code); } catch (Exception ex) { Config.Log("emergency: " + ex.Message); }
         Release();
         Config.Log("kiosk: הנעילה בוטלה בקיצור חירום עם קוד שחזור");
@@ -741,7 +792,7 @@ public static class Kiosk
     public static string ReleaseForUninstall(string password)
     {
         if (HasPassword && !(Matches(password, "kiosk.passwordHash", "kiosk.salt") ||
-                             Matches(NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt")))
+                             Matches(Secret.NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt")))
             return "נדרשת סיסמת הנעילה: --password <סיסמה>";
         Config.Set("kiosk.active", false);
         Config.Set("kiosk.strict", false);
@@ -859,6 +910,23 @@ public static class Kiosk
 
     private static int _watchBusy;
 
+    /// <summary>
+    /// מעטפת פקודה/מסוף/מארח סקריפטים בחזית בזמן נעילה נסגרת (כמו מנהל המשימות כשהמדיניות לא נכתבה).
+    /// מדיניות DisableTaskMgr/DisableRegistryTools לא חוסמת אותם, והחזרת אוצריא לחזית לבדה לא עוצרת תהליך שכבר רץ.
+    /// </summary>
+    private static void CloseShellWindow(uint fgPid, int session)
+    {
+        try
+        {
+            using var p = Process.GetProcessById((int)fgPid);
+            if (p.SessionId != session || !Programs.IsShellHost(p)) return;
+            string n = p.ProcessName;
+            p.Kill();
+            LogThrottled("shell:" + n, "watchdog: חלון " + n + " נסגר (מעטפות ומארחי סקריפטים חסומים בנעילה)", 60);
+        }
+        catch { /* נסגר כבר או ללא הרשאה */ }
+    }
+
     private static void Watch()
     {
         if (!IsActive || Interlocked.Exchange(ref _watchBusy, 1) == 1) return;
@@ -916,7 +984,8 @@ public static class Kiosk
 
             GetWindowThreadProcessId(GetForegroundWindow(), out uint fgPid);
             if (fgPid == otz.Id || fgPid == Environment.ProcessId) return;
-            if (Programs.ShouldYieldTo(fgPid)) return; // תוכנה מותרת (רשימה מוגדרת בסיסמה) בחזית
+            CloseShellWindow(fgPid, session);
+            if (Programs.IsAllowedForeground(fgPid)) return; // תוכנה מותרת (רשימה מוגדרת בסיסמה) בחזית
             try
             {
                 using var fgp = Process.GetProcessById((int)fgPid);
@@ -964,7 +1033,7 @@ public static class Kiosk
         {
             GetWindowThreadProcessId(GetForegroundWindow(), out uint pid);
             if (pid == 0 || pid == (uint)Environment.ProcessId || IsOtzariaPid(pid)) return false;
-            return Programs.ShouldYieldTo(pid);
+            return Programs.IsAllowedForeground(pid);
         }
         catch { return false; }
     }

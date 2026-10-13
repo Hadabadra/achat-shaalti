@@ -9,7 +9,7 @@
   SS.radioCard = async function (slot, kind, label, onChange) {
     var r;
     try { r = await SS.bridge.call('/sys/radios/get'); }
-    catch (e) { slot.innerHTML = ui.errorBox(e); return null; }
+    catch (e) { slot.innerHTML = ui.errorBox(e, function () { SS.radioCard(slot, kind, label, onChange); }); return null; }
     var radio = (r.radios || []).find(function (x) { return x.kind === kind; });
     if (!radio) {
       slot.innerHTML = '<div class="state-box">' + ui.icon('info') + '<div><b>לא נמצא מתאם ' + ui.esc(label) + '</b><p class="muted">ייתכן שאין במחשב זה רכיב ' + ui.esc(label) + ' או שהוא מושבת במנהל ההתקנים.</p></div></div>';
@@ -74,7 +74,7 @@
     var d;
     try { d = await SS.bridge.call('/sys/bluetooth/devices', { scan: !!scan }, { timeoutMs: 30000 }); }
     catch (e) {
-      slot.innerHTML = ui.errorBox(e);
+      slot.innerHTML = ui.errorBox(e, function () { loadDevices(body, scan); });
       resetBtn(); return;
     }
     resetBtn();
@@ -115,7 +115,7 @@
     });
     slot.querySelectorAll('[data-unpair]').forEach(function (b) {
       b.addEventListener('click', async function () {
-        var ok = await ui.confirm('הסרת מכשיר', 'להסיר את <b>' + ui.esc(b.dataset.name) + '</b> מרשימת המכשירים המוצמדים? כדי להשתמש בו שוב יהיה צריך לצמד מחדש.', 'הסר', 'danger');
+        var ok = await ui.confirm('הסרת מכשיר', 'להסיר את <b>' + ui.isolateLtr(ui.esc(b.dataset.name)) + '</b> מרשימת המכשירים המוצמדים? כדי להשתמש בו שוב יהיה צריך לצמד מחדש.', 'הסר', 'danger');
         if (!ok) return;
         b.disabled = true;
         try {

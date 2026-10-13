@@ -34,6 +34,7 @@ public static class FsApi
 
     public static void Register()
     {
+        FxPolicy.Register();
         Server.Route("/fs/roots", _ => Roots());
         Server.Route("/fs/list", List);
         Server.Route("/fs/stat", b => Stat(FullPath(b.Req("path"))));
@@ -58,7 +59,9 @@ public static class FsApi
         if (string.IsNullOrWhiteSpace(p)) throw BridgeException.BadRequest("נתיב ריק");
         p = Environment.ExpandEnvironmentVariables(p.Trim());
         if (!Path.IsPathFullyQualified(p)) throw BridgeException.BadRequest("נדרש נתיב מלא: " + p);
-        return Path.GetFullPath(p);
+        string full = Path.GetFullPath(p);
+        FxPolicy.EnsurePathAllowed(full);   // מדיניות סייר הקבצים: נעילה או הגבלה לתיקיות
+        return full;
     }
 
     private static string Iso(DateTime t) => t.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
@@ -80,36 +83,8 @@ public static class FsApi
         if (!string.Equals(canon, Path.GetFullPath(p), StringComparison.OrdinalIgnoreCase)) EnsureNotProtectedCore(canon);
     }
 
-    /// <summary>הנתיב הסופי (שמות ארוכים, צמתים וקישורים מפוענחים) של הנתיב או של ההורה הקיים הקרוב</summary>
-    internal static string CanonicalPath(string p)
-    {
-        string full = Path.GetFullPath(p);
-        string probe = full, tail = "";
-        while (!string.IsNullOrEmpty(probe) && !File.Exists(probe) && !Directory.Exists(probe))
-        {
-            tail = Path.Combine(Path.GetFileName(probe), tail);
-            probe = Path.GetDirectoryName(probe);
-        }
-        if (string.IsNullOrEmpty(probe)) return full;
-        try
-        {
-            using var h = CreateFileW(probe, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero); // FILE_FLAG_BACKUP_SEMANTICS
-            if (h.IsInvalid) return full;
-            var sb = new System.Text.StringBuilder(1024);
-            uint n = GetFinalPathNameByHandleW(h, sb, (uint)sb.Capacity, 0);
-            if (n == 0 || n >= sb.Capacity) return full;
-            string r = sb.ToString();
-            if (r.StartsWith(@"\\?\UNC\")) r = @"\\" + r.Substring(8);
-            else if (r.StartsWith(@"\\?\")) r = r.Substring(4);
-            return tail.Length == 0 ? r : Path.Combine(r, tail.TrimEnd('\\'));
-        }
-        catch { return full; }
-    }
-
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
-    private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr sa, uint disp, uint flags, IntPtr tmpl);
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
-    private static extern uint GetFinalPathNameByHandleW(Microsoft.Win32.SafeHandles.SafeFileHandle h, System.Text.StringBuilder buf, uint len, uint flags);
+    /// <summary>הנתיב הסופי (שמות ארוכים, צמתים וקישורים מפוענחים) של הנתיב או של ההורה הקיים הקרוב. הלוגיקה ב-PathPolicy</summary>
+    internal static string CanonicalPath(string p) => PathPolicy.Canonical(p, strict: false);
 
     private static void EnsureNotProtectedCore(string p)
     {
@@ -161,6 +136,7 @@ public static class FsApi
 
     private static object Roots()
     {
+        FxPolicy.EnsureAvailable();
         var drives = new List<object>();
         foreach (var d in DriveInfo.GetDrives())
         {
@@ -179,11 +155,27 @@ public static class FsApi
             drives.Add(new { path = d.RootDirectory.FullName, label, type, totalBytes = total, freeBytes = free });
         }
 
-        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var known = new List<object>();
+        foreach (var k in KnownFolders()) known.Add(new { k.id, k.name, k.path });
+        if (FxPolicy.IsRestricted)
+        {
+            // מצב מוגבל: רק התיקיות שהמנהל התיר. כוננים ותיקיות אחרות לא מוצגים
+            drives.Clear();
+            known.Clear();
+            foreach (string r in FxPolicy.ActiveRoots())
+                known.Add(new { id = "root", name = Path.GetFileName(r.TrimEnd('\\')) is { Length: > 0 } n ? n : r, path = r });
+        }
+        return new { drives, known };
+    }
+
+    /// <summary>תיקיות המערכת המוכרות שקיימות במחשב (שולחן עבודה, מסמכים...)</summary>
+    internal static List<(string id, string name, string path)> KnownFolders()
+    {
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var known = new List<(string, string, string)>();
         void Add(string id, string name, string path)
         {
-            if (!string.IsNullOrEmpty(path) && Directory.Exists(path)) known.Add(new { id, name, path });
+            if (!string.IsNullOrEmpty(path) && Directory.Exists(path)) known.Add((id, name, path));
         }
         Add("desktop", "שולחן העבודה", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
         Add("documents", "מסמכים", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
@@ -192,7 +184,7 @@ public static class FsApi
         Add("music", "מוזיקה", Environment.GetFolderPath(Environment.SpecialFolder.MyMusic));
         Add("videos", "סרטונים", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos));
         Add("home", "תיקיית הבית", home);
-        return new { drives, known };
+        return known;
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
@@ -232,7 +224,9 @@ public static class FsApi
             else if (i is FileInfo f)
                 files.Add(new { name = f.Name, path = f.FullName, type = "file", size = f.Length, modified = Iso(f.LastWriteTime), ext = f.Extension.TrimStart('.').ToLowerInvariant(), hidden });
         }
-        return new { path = dir.FullName, parent = dir.Parent?.FullName, entries = dirs.Concat(files) };
+        string parent = dir.Parent?.FullName;
+        if (parent != null && !FxPolicy.IsPathAllowed(parent)) parent = null;   // לא חושפים נתיב מחוץ לתיקיות המותרות
+        return new { path = dir.FullName, parent, entries = dirs.Concat(files) };
     }
 
     private static object Stat(string path)
@@ -289,6 +283,7 @@ public static class FsApi
         EnsureNotProtected(path);
 
         string dest = Path.Combine(Path.GetDirectoryName(path)!, newName);
+        FxPolicy.EnsurePathAllowed(dest);
         bool caseOnly = string.Equals(dest, path, StringComparison.OrdinalIgnoreCase);
         if (!caseOnly && Exists(dest)) throw BridgeException.Exists("כבר קיים: " + dest);
 
@@ -327,6 +322,7 @@ public static class FsApi
                 if (move) EnsureNotProtected(src);
 
                 string dest = Path.Combine(destDir, Path.GetFileName(src.TrimEnd('\\')));
+                FxPolicy.EnsurePathAllowed(dest);   // היעד עצמו (למשל קישור/צומת בתוך התיקייה) חייב להישאר בתוך המדיניות
                 if (Directory.Exists(src) &&
                     (destDir + "\\").StartsWith(src.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
                     throw BridgeException.BadRequest("לא ניתן להעתיק תיקייה לתוך עצמה");
@@ -349,6 +345,7 @@ public static class FsApi
                     }
                 }
 
+                FxPolicy.EnsurePathAllowed(dest);
                 if (Directory.Exists(src))
                 {
                     bool sameVolume = string.Equals(Path.GetPathRoot(src), Path.GetPathRoot(dest), StringComparison.OrdinalIgnoreCase);
@@ -366,6 +363,7 @@ public static class FsApi
                 }
                 done++;
             }
+            catch (BridgeException bx) when (bx.Code.StartsWith("fx_")) { throw; }   // הפרת מדיניות מבטלת את כל הבקשה
             catch (Exception ex)
             {
                 failed.Add(new { path = src, message = ex.Message });
@@ -390,36 +388,72 @@ public static class FsApi
         }
     }
 
-    // מחיקה לסל המיחזור דרך SHFileOperation
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct SHFILEOPSTRUCT
+    // מחיקה לסל המיחזור דרך IFileOperation (ולא SHFileOperation הישן: הוא לא תומך בנתיבים
+    // ארוכים מ-MAX_PATH ונכשל עם קוד 124/DE_INVALIDFILES על תיקיות עמוקות בשמות עבריים/ארוכים)
+    [ComImport, Guid("3AD05575-8857-4850-9277-11B85BDB8E09")] private class FileOperationCoClass { }
+
+    [ComImport, Guid("947aab5f-0a5c-4c13-b4d6-4bf7836fc9f8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IFileOperation
     {
-        public IntPtr hwnd;
-        public uint wFunc;
-        public string pFrom;
-        public string pTo;
-        public ushort fFlags;
-        public bool fAnyOperationsAborted;
-        public IntPtr hNameMappings;
-        public string lpszProgressTitle;
+        void Advise(IntPtr pfops, out uint pdwCookie);
+        void Unadvise(uint dwCookie);
+        void SetOperationFlags(uint dwOperationFlags);
+        void SetProgressMessage([MarshalAs(UnmanagedType.LPWStr)] string pszMessage);
+        void SetProgressDialog(IntPtr popd);
+        void SetProperties(IntPtr pproparray);
+        void SetOwnerWindow(IntPtr hwndOwner);
+        void ApplyPropertiesToItem(IShellItem psiItem);
+        void ApplyPropertiesToItems(IntPtr punkItems);
+        void RenameItem(IShellItem psiItem, [MarshalAs(UnmanagedType.LPWStr)] string pszNewName, IntPtr pfopsItem);
+        void RenameItems(IntPtr pUnkItems, [MarshalAs(UnmanagedType.LPWStr)] string pszNewName);
+        void MoveItem(IShellItem psiItem, IShellItem psiDestinationFolder, [MarshalAs(UnmanagedType.LPWStr)] string pszNewName, IntPtr pfopsItem);
+        void MoveItems(IntPtr punkItems, IShellItem psiDestinationFolder);
+        void CopyItem(IShellItem psiItem, IShellItem psiDestinationFolder, [MarshalAs(UnmanagedType.LPWStr)] string pszCopyName, IntPtr pfopsItem);
+        void CopyItems(IntPtr punkItems, IShellItem psiDestinationFolder);
+        void DeleteItem(IShellItem psiItem, IntPtr pfopsItem);
+        void DeleteItems(IntPtr punkItems);
+        void NewItem(IShellItem psiDestinationFolder, uint dwFileAttributes, [MarshalAs(UnmanagedType.LPWStr)] string pszName, [MarshalAs(UnmanagedType.LPWStr)] string pszTemplateName, IntPtr pfopsItem);
+        void PerformOperations();
+        [return: MarshalAs(UnmanagedType.Bool)] bool GetAnyOperationsAborted();
     }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern int SHFileOperation(ref SHFILEOPSTRUCT op);
+    [ComImport, Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItem
+    {
+        void BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid, out IntPtr ppv);
+        void GetParent(out IShellItem ppsi);
+        void GetDisplayName(uint sigdnName, out IntPtr ppszName);
+        void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+        void Compare(IShellItem psi, uint hint, out int piOrder);
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+    private static extern void SHCreateItemFromParsingName([MarshalAs(UnmanagedType.LPWStr)] string path, IntPtr pbc, ref Guid riid, out IShellItem item);
 
     private static void Recycle(string path)
     {
-        const uint FO_DELETE = 3;
-        const ushort FOF_SILENT = 0x4, FOF_NOCONFIRMATION = 0x10, FOF_ALLOWUNDO = 0x40, FOF_NOERRORUI = 0x400;
-        var op = new SHFILEOPSTRUCT
+        const uint FOF_SILENT = 0x4, FOF_NOCONFIRMATION = 0x10, FOF_ALLOWUNDO = 0x40, FOF_NOERRORUI = 0x400;
+        var fo = (IFileOperation)new FileOperationCoClass();
+        IShellItem item = null;
+        try
         {
-            wFunc = FO_DELETE,
-            pFrom = path + "\0\0",
-            fFlags = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI,
-        };
-        int r = SHFileOperation(ref op);
-        if (r != 0 || op.fAnyOperationsAborted)
-            throw new IOException("המחיקה לסל המיחזור נכשלה (קוד " + r + ")");
+            fo.SetOperationFlags(FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI);
+            Guid iid = typeof(IShellItem).GUID;
+            SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out item);
+            fo.DeleteItem(item, IntPtr.Zero);
+            fo.PerformOperations();
+            if (fo.GetAnyOperationsAborted())
+                throw new IOException("המחיקה לסל המיחזור בוטלה");
+        }
+        catch (COMException ex)
+        {
+            throw new IOException("המחיקה לסל המיחזור נכשלה (קוד 0x" + ex.HResult.ToString("X8") + ")", ex);
+        }
+        finally
+        {
+            if (item != null) Marshal.ReleaseComObject(item);
+            Marshal.ReleaseComObject(fo);
+        }
     }
 
     private static object Delete(JsonElement b)
@@ -445,6 +479,7 @@ public static class FsApi
                 }
                 deleted++;
             }
+            catch (BridgeException bx) when (bx.Code.StartsWith("fx_")) { throw; }
             catch (Exception ex)
             {
                 failed.Add(new { path = p, message = ex.Message });
@@ -525,6 +560,13 @@ public static class FsApi
     {
         string path = FullPath(b.Req("path"));
         if (!Exists(path)) throw BridgeException.NotFound("לא נמצא: " + path);
+        if (FxPolicy.IsRestricted)
+        {
+            // פתיחת תיקייה או קיצור דרך מפעילה את סייר Windows עצמו, שאינו כפוף למדיניות
+            string e = Path.GetExtension(path).ToLowerInvariant();
+            if (Directory.Exists(path) || e is ".lnk" or ".url" or ".scf" or ".appref-ms")
+                throw FxPolicy.Outside("במצב מוגבל אי אפשר לפתוח תיקיות וקיצורי דרך בסייר Windows");
+        }
         if (Kiosk.IsActive)
         {
             string ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
@@ -540,6 +582,7 @@ public static class FsApi
     {
         if (Kiosk.IsActive) throw BridgeException.Locked();
         string path = FullPath(b.Req("path"));
+        if (FxPolicy.IsRestricted) throw FxPolicy.Outside("במצב מוגבל אי אפשר להציג בסייר Windows");
         if (!Exists(path)) throw BridgeException.NotFound("לא נמצא: " + path);
         string args = File.Exists(path) ? "/select,\"" + path + "\"" : "\"" + path + "\"";
         Process.Start(new ProcessStartInfo("explorer.exe", args) { UseShellExecute = true });
@@ -550,7 +593,8 @@ public static class FsApi
 
     private static object ClipboardGet() => Sta.Run(() =>
     {
-        var list = Clipboard.ContainsFileDropList() ? Clipboard.GetFileDropList().Cast<string>().ToArray() : Array.Empty<string>();
+        FxPolicy.EnsureAvailable();
+        var list = Clipboard.ContainsFileDropList() ? Clipboard.GetFileDropList().Cast<string>().Where(FxPolicy.IsPathAllowed).ToArray() : Array.Empty<string>();
         bool cut = false;
         if (Clipboard.GetData("Preferred DropEffect") is MemoryStream ms && ms.Length >= 4)
         {

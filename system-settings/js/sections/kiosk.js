@@ -16,7 +16,7 @@
   async function load(body) {
     var st;
     try { st = await SS.bridge.call('/kiosk/status'); }
-    catch (e) { body.innerHTML = ui.errorBox(e); return; }
+    catch (e) { body.innerHTML = ui.errorBox(e, function () { load(body); }); return; }
     if (SS.bridge.health) { SS.bridge.health.kioskActive = !!st.active; SS.setStatus(true); if (SS.syncLock) SS.syncLock(SS.bridge.health); }
     var progs = [], found = [];
     try {
@@ -105,9 +105,14 @@
         '<div class="setting-row"><div class="setting-text"><b>קבצים שמותר לפתוח בזמן נעילה</b><span class="muted"><bdi dir="ltr">' +
         ui.esc((st.allowOpenExtensions || []).length ? st.allowOpenExtensions.map(function (x) { return '.' + x; }).join(', ') : '—') + '</bdi></span></div>' +
         '<button class="btn btn-tonal" data-act="settings2">' + ui.icon('edit') + 'עריכה</button></div>' +
+        '<div class="setting-row"><div class="setting-text"><b>זמני היום בשומר המסך</b><span class="muted">' +
+        ui.esc(st.zmanimCity || (st.zmanimLocation ? 'קואורדינטות מותאמות אישית' : 'לא הוגדר מיקום')) +
+        (st.yahrzeitDay ? ' · יום השנה מוגדר' : '') + '</span></div>' +
+        '<button class="btn btn-tonal" data-act="settings3">' + ui.icon('edit') + 'עריכה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
       html += programsCard(progs, found, !!st.autoTorah);
+      html += fxCard();
       html += hardCard(st.hard || {});
       html += pairCard(pairs);
       html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
@@ -149,6 +154,7 @@
     on('chpw', function () { changePw(body); });
     on('settings', function () { editSettings(body, st); });
     on('settings2', function () { editSettings(body, st); });
+    on('settings3', function () { editSettings(body, st); });
     on('prog-add', function () { addProgram(body, {}); });
     on('prog-auto', function () { toggleAuto(body, !!st.autoTorah); });
     found.forEach(function (f, i) {
@@ -356,22 +362,68 @@
     printer: 'מדפסות', time: 'שעה ותאריך', wifi: 'רשת אלחוטית', bluetooth: 'בלוטות׳', airplane: 'מצב טיסה', usb: 'התקני USB'
   };
 
+  /* זמנים ידועים שאפשר להציג בשומר המסך (ת"ז מתאימות ל-bridge/Zmanim.cs KnownZmanim).
+     ברירת המחדל (DEFAULT_ZMAN_SHOW) תואמת ל-DefaultShow שם */
+  var ZMAN_FIELDS = [
+    { id: 'alot', label: 'עלות השחר' }, { id: 'netz', label: 'הנץ החמה' },
+    { id: 'shemaMga', label: 'סוף ק"ש (מג"א)' }, { id: 'shemaGra', label: 'סוף ק"ש (גר"א)' },
+    { id: 'tefilaMga', label: 'סוף תפילה (מג"א)' }, { id: 'tefilaGra', label: 'סוף תפילה (גר"א)' },
+    { id: 'chatzot', label: 'חצות' }, { id: 'minchaGedola', label: 'מנחה גדולה' },
+    { id: 'minchaKetana', label: 'מנחה קטנה' }, { id: 'plag', label: 'פלג המנחה' },
+    { id: 'shkia', label: 'שקיעה' }, { id: 'tzeit', label: 'צאת הכוכבים' }
+  ];
+  var DEFAULT_ZMAN_SHOW = ['alot', 'netz', 'shemaGra', 'chatzot', 'shkia', 'tzeit'];
+  var YAHRZEIT_MONTHS = ['תשרי', 'חשון', 'כסלו', 'טבת', 'שבט', 'אדר', 'אדר א', 'אדר ב', 'ניסן', 'אייר', 'סיון', 'תמוז', 'אב', 'אלול'];
+
   async function editSettings(body, st) {
     var all = st.allSections || Object.keys(SECTION_NAMES);
     var open = st.openSections || [];
+    var zmanShow = st.zmanimShow || DEFAULT_ZMAN_SHOW;
+
+    /* רשימת ערים מלוח השנה של אוצריא עצמה (calendar.getCities) — אם זמינה. קואורדינטות
+       נשארות תמיד כאפשרות מתקדמת ("מותאם אישית") גם כשיש רשימת ערים */
+    var cities = [];
+    if (window.Otzaria) {
+      try {
+        var r = await window.Otzaria.call('calendar.getCities', {});
+        var list = (r && r.data !== undefined ? r.data : r) || [];
+        if (Array.isArray(list)) cities = list;
+      } catch (e) { cities = []; }
+    }
+    var cityOptions = [{ value: '', label: 'מותאם אישית (קואורדינטות)' }].concat(
+      cities.map(function (c) { return { value: c.name, label: c.name + (c.country ? ' (' + c.country + ')' : '') }; })
+    );
+    var cityByName = {};
+    cities.forEach(function (c) { cityByName[c.name] = c; });
+
     var fields = [
       { name: 'ext', label: 'סיומות קבצים שמותר לפתוח בתוכנות אחרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
       { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
       { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
       { name: 'rest', type: 'checkbox', label: 'מסך מנוחה כשאוצריא ממוזערת', value: st.restScreen !== false, hint: 'סמל אוצריא, שעה ותאריך במסך מלא. לחיצה בכל מקום מחזירה לאוצריא' },
-      { name: 'idle', label: 'שומר מסך אחרי דקות ללא פעילות (0 = כבוי)', value: String(st.restIdleMinutes || 0), dir: 'ltr', placeholder: '0', hint: 'מסך המנוחה מופיע גם כשאוצריא פתוחה, אחרי הזמן הזה בלי מקלדת ועכבר. עד 240 דקות' },
-      { name: 'zloc', label: 'מיקום לזמני היום בשומר המסך (קו רוחב, קו אורך)', value: st.zmanimLocation || '', dir: 'ltr', placeholder: '31.78, 35.22', hint: 'ריק = בלי זמנים. מוצגים עלות השחר, הנץ, סוף זמן ק"ש (מג"א וגר"א), חצות, שקיעה וצאת הכוכבים, לפי חישוב אסטרונומי בגובה פני הים — להצגה בלבד' },
-      { name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' },
-      { name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' },
-      { name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' },
-      { name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' },
-      { name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' }
+      { name: 'idle', label: 'שומר מסך אחרי דקות ללא פעילות (0 = כבוי)', value: String(st.restIdleMinutes || 0), dir: 'ltr', placeholder: '0', hint: 'מסך המנוחה מופיע גם כשאוצריא פתוחה, אחרי הזמן הזה בלי מקלדת ועכבר. עד 240 דקות' }
     ];
+    if (cityOptions.length > 1) {
+      fields.push({ name: 'zcity', type: 'select', label: 'עיר לזמני היום בשומר המסך', value: st.zmanimCity || '', options: cityOptions,
+        hint: 'הזמנים עצמם (הנץ, שקיעה, זמני ק"ש ועוד) מחושבים על ידי לוח השנה של אוצריא עצמה' });
+    }
+    fields.push({ name: 'zloc', label: cityOptions.length > 1 ? 'קואורדינטות (כש"מותאם אישית" נבחר למעלה)' : 'מיקום לזמני היום בשומר המסך (קו רוחב, קו אורך)',
+      value: st.zmanimLocation || '', dir: 'ltr', placeholder: '31.78, 35.22',
+      hint: 'ריק וגם בלי עיר שנבחרה = בלי זמני היום בשומר המסך' });
+    fields.push({ name: 'diaspora', type: 'checkbox', label: 'חוץ לארץ (יום טוב שני)', value: !!st.zmanimDiaspora,
+      hint: 'משפיע על זיהוי כניסת/יציאת חג של יום טוב שני של גלויות' });
+    fields.push({ name: 'candle', label: 'הדלקת נרות: דקות לפני השקיעה', value: String(st.candleLightingMinutes != null ? st.candleLightingMinutes : 18), dir: 'ltr', placeholder: '18' });
+    fields.push({ name: 'zshowHead', type: 'note', label: 'אילו זמנים להציג בשומר המסך:' });
+    ZMAN_FIELDS.forEach(function (z) {
+      fields.push({ name: 'zm_' + z.id, type: 'checkbox', label: z.label, value: zmanShow.indexOf(z.id) >= 0 });
+    });
+    fields.push({ name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' });
+    fields.push({ name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' });
+    fields.push({ name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' });
+    fields.push({ name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' });
+    fields.push({ name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' });
+    fields.push({ name: 'tfa', type: 'checkbox', label: 'אימות דו-שלבי (Windows Hello)', value: !!st.twoFactor,
+      hint: (st.twoFactorAvailable ? 'ביטול הנעילה ושינוי ההגדרות ידרשו גם זיהוי פנים/טביעת אצבע/PIN, בנוסף לסיסמה. קוד השחזור ימשיך לעבוד לחירום.' : '⚠ Windows Hello אינו מוגדר במחשב הזה — הגדירו אותו ב-Windows כדי להפעיל') });
     all.forEach(function (id) {
       fields.push({ name: 'sec_' + id, type: 'checkbox', label: 'פתוח בנעילה: ' + (SECTION_NAMES[id] || id), value: open.indexOf(id) >= 0 });
     });
@@ -381,6 +433,11 @@
     fields.push({ name: 'schedEnd', label: 'שעת סיום', type: 'time', value: sc.end || '02:00', dir: 'ltr' });
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
     fields.push({ name: 'pos', label: 'מיקום השעון (bottom-left / bottom-right / top-left / top-right)', value: st.clockPosition || 'bottom-left', dir: 'ltr' });
+    fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
+      options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
+      hint: 'מציג שורה מיוחדת בשומר המסך ביום הזה בכל שנה. ריק = כבוי. לא קשור בהכרח להקדשה הקבועה שבתוסף' });
+    fields.push({ name: 'yzDay', label: 'יום השנה: יום בחודש (1–30)', value: String(st.yahrzeitDay || 0), dir: 'ltr', placeholder: '0' });
+    fields.push({ name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
     fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
     var ok = await ui.dialog({
       title: 'הגדרות נעילה', icon: 'edit',
@@ -391,24 +448,45 @@
         if (!x.pw) return 'יש להקליד את סיסמת הנעילה';
         if (!/^\d{1,3}$/.test(String(x.idle).trim()) || +x.idle > 240) return 'זמן שומר המסך: מספר דקות בין 0 ל-240';
         if (x.zloc.trim() && !/^-?\d{1,2}(\.\d+)?\s*,\s*-?\d{1,3}(\.\d+)?$/.test(x.zloc.trim())) return 'מיקום לא תקין: קו רוחב, קו אורך (למשל 31.78, 35.22)';
+        if (!/^\d{1,3}$/.test(String(x.candle).trim()) || +x.candle > 90) return 'הדלקת נרות: מספר דקות בין 0 ל-90';
         if (['bottom-left', 'bottom-right', 'top-left', 'top-right'].indexOf(x.pos.trim()) < 0) return 'מיקום שעון לא תקין';
         if (x.sched && (!/^\d{1,2}:\d{2}$/.test(x.schedStart || '') || !/^\d{1,2}:\d{2}$/.test(x.schedEnd || ''))) return 'יש להזין שעת התחלה ושעת סיום לתזמון';
         if (x.sched && x.schedStart === x.schedEnd) return 'שעת ההתחלה והסיום של התזמון זהות';
+        if (!/^\d{1,2}$/.test(String(x.yzDay).trim()) || +x.yzDay > 30) return 'יום השנה: יום בחודש בין 0 ל-30';
+        if (+x.yzDay > 0 && !x.yzMonth) return 'יום השנה: יש לבחור גם חודש עברי';
         var bad = parseExt(x.ext).filter(function (e) { return !/^[a-z0-9]{1,10}$/.test(e); });
         return bad.length ? 'סיומת לא תקינה: ' + bad[0] : '';
       },
+      onOpen: cityOptions.length > 1 ? function (form) {
+        /* בחירת עיר מהרשימה ממלאת אוטומטית את הקואורדינטות (גם כגיבוי לחישוב המקומי בגשר) */
+        var sel = form.querySelector('[name=zcity]'), loc = form.querySelector('[name=zloc]');
+        if (!sel || !loc) return;
+        sel.addEventListener('change', function () {
+          var c = cityByName[sel.value];
+          if (c && typeof c.lat === 'number' && typeof c.lng === 'number') loc.value = c.lat + ', ' + c.lng;
+        });
+      } : undefined,
       onSubmit: async function (x) {
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
-          readOnly: !!x.ro, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, resetOnShutdown: !!x.reset, clockPosition: x.pos.trim(),
-          restIdleMinutes: +String(x.idle).trim() || 0, zmanimLocation: x.zloc.trim(),
+          readOnly: !!x.ro, twoFactor: !!x.tfa, clock: !!x.clock, restScreen: !!x.rest, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, resetOnShutdown: !!x.reset, clockPosition: x.pos.trim(),
+          restIdleMinutes: +String(x.idle).trim() || 0, zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
+          zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
+          zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
+          yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim(),
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
           schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn }
         });
         return true;
       }
     });
-    if (ok) { ui.toast('ההגדרות נשמרו', 'success'); load(body); }
+    if (ok) { ui.toast('ההגדרות נשמרו', 'success'); if (SS.pushZmanimNow) SS.pushZmanimNow(); load(body); }
+  }
+
+  /* מדיניות סייר הקבצים נערכת בתוסף "סייר קבצים" עצמו; כאן רק מפנים אליה */
+  function fxCard() {
+    return '<div class="card subtle"><div class="card-title">נעילה והגבלה של סייר הקבצים</div>' +
+      '<p class="muted">אפשר לנעול את סייר הקבצים בסיסמת המנהל, או להגביל אותו לתיקיות מסוימות (למשל שולחן העבודה). ההגדרה נמצאת בתוסף „סייר קבצים”: הגדרות ← נעילה והגבלה, ונאכפת בגשר.</p></div>';
   }
 
   function programsCard(progs, found, autoTorah) {

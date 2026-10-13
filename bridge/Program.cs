@@ -42,6 +42,17 @@ public static class Program
             if (Has("--install-service")) return HardLock.InstallService();
 
             Lang.FromArgs(args);
+
+            // תהליך עזר שהשירות מפעיל בסשן של המשתמש כדי להציג את חלון Windows Hello (סשן 0 של השירות לא יכול)
+            if (Has("--hello-helper"))
+            {
+                int i = Array.IndexOf(args, "--hello-helper");
+                string nonce = i >= 0 && i + 1 < args.Length ? args[i + 1] : "";
+                bool ok = TwoFactor.Verify(Lang.T("אימות פעולה ברכיב ההקשחה של תורת אסתר", "Verify an action in the Torat Esther hardened lock"));
+                HardLock.Call(new JsonObject { ["op"] = "hello-done", ["nonce"] = nonce, ["ok"] = ok });
+                return ok ? 0 : 2;
+            }
+
             if (Has("--unlock"))
             {
                 AttachConsole(-1);

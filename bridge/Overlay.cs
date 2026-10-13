@@ -364,12 +364,17 @@ internal sealed class RestScreen : Form
             y += 34 * s;
             g.DrawString(Lang.T("אוצריא לא נמצאה במחשב. לביטול הנעילה: Ctrl+Alt+Shift+F12", "Otzaria was not found. To unlock: Ctrl+Alt+Shift+F12"), hintF, dim, Line(y, 30 * s), rtl);
         }
-        string zm = Zmanim.Line(now);
-        if (zm != null)
+        var zmSections = Zmanim.Sections(now);
+        if (zmSections.Length > 0)
         {
-            y += 34 * s;
             using var zmF = new Font("David", 16f, GraphicsUnit.Point);
-            g.DrawString(zm, zmF, goldB, Line(y, 64 * s), rtl);
+            foreach (var sec in zmSections)
+            {
+                y += 30 * s;
+                int lineCount = sec.Count(ch => ch == '\n') + 1;
+                g.DrawString(sec, zmF, goldB, Line(y, 26 * s * lineCount), rtl);
+                y += 26 * s * (lineCount - 1);
+            }
         }
 
         // נר הנצחה בתחתית, עם להבה מרצדת והילה חמה
@@ -564,11 +569,32 @@ internal sealed class LockCountdown : Form
 
     private void DoCancel()
     {
-        try { Kiosk.ScheduleSkipCurrent(_pw.Text); }
-        catch (BridgeException ex) { _err.Text = ex.Message; _pw.SelectAll(); _pw.Focus(); CenterRows(); return; }
-        catch (Exception ex) { _err.Text = ex.Message; CenterRows(); return; }
-        _tick.Stop();
-        Hide();
+        // הדילוג עובר דרך השירות ועשוי לדרוש Windows Hello (עד כ-75 שניות) — חוט נפרד כדי שהבאנר לא יקפא
+        string pw = _pw.Text;
+        _confirm.Enabled = _back.Enabled = false;
+        _err.Text = Lang.T("מאמת…", "Verifying…");
+        CenterRows();
+        Task.Run(() =>
+        {
+            Exception error = null;
+            try { Kiosk.ScheduleSkipCurrent(pw); } catch (Exception ex) { error = ex; }
+            try
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    _confirm.Enabled = _back.Enabled = true;
+                    if (error != null)
+                    {
+                        _err.Text = error.Message;
+                        _pw.SelectAll(); _pw.Focus(); CenterRows();
+                        return;
+                    }
+                    _tick.Stop();
+                    Hide();
+                }));
+            }
+            catch { }
+        });
     }
 
     protected override void Dispose(bool disposing)

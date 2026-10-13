@@ -60,7 +60,7 @@
     try { console.warn('openUrl failed', lastErr); } catch (e) { /* אין קונסול */ }
     /* גיבוי: מעתיקים את הקישור ללוח, כדי שאפשר להדביק אותו בדפדפן */
     var ok = await copyText(url);
-    ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + url, 'error');
+    ui.toast(ok ? 'לא ניתן לפתוח את הקישור, הוא הועתק ללוח' : 'לא ניתן לפתוח את הקישור: ' + ui.isolateLtr(url), 'error');
   }
   async function copyText(text) {
     try {
@@ -100,7 +100,7 @@
     $('fx-dl').addEventListener('click', function () { openUrl(FX.BRIDGE_URL); });
     $('fx-copy-link').addEventListener('click', async function () {
       var ok = await copyText(FX.BRIDGE_URL);
-      ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + FX.BRIDGE_URL, ok ? 'success' : 'error');
+      ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + ui.isolateLtr(FX.BRIDGE_URL), ok ? 'success' : 'error');
     });
     $('fx-retry').addEventListener('click', function () {
       var btn = this; btn.disabled = true;
@@ -130,9 +130,24 @@
     $('fx-hidden').hidden = !p.caps.hidden;
     $('fx-add-folder').hidden = !p.caps.addFolder;
     $('fx-content-wrap').hidden = !p.caps.contentSearch;
+    await FX.Policy.refresh();
+    if (FX.Policy.locked()) { FX.Policy.showLock(); return; }
+    FX.Policy.hideLock();
     await renderSide();
     var start = prefs['last.' + p.kind] || '';
+    if (!FX.Policy.pathAllowed(start)) start = '';   /* מצב מוגבל: לא פותחים נתיב שמחוץ לתיקיות המותרות */
     try { await load(start, false); } catch (e) { await load('', false); }
+  }
+
+  /* אחרי שינוי מדיניות או פתיחה בסיסמה: טוענים מחדש את הסרגל והתיקייה */
+  async function afterPolicy() {
+    if (!S.prov) return;
+    await FX.Policy.refresh();
+    if (FX.Policy.locked()) { FX.Policy.showLock(); return; }
+    FX.Policy.hideLock();
+    await renderSide();
+    var start = FX.Policy.pathAllowed(S.path) ? S.path : '';
+    try { await load(start, false); } catch (e) { try { await load('', false); } catch (e2) { /* כבר דווח */ } }
   }
 
   async function connect(manual) {
@@ -163,6 +178,10 @@
     return c === 'unreachable' || c === 'transport' || c === 'offline';
   }
   function opError(e, prefix) {
+    if (e && e.code === 'fx_locked') {   /* הגשר נעל את הסייר (למשל בתום הזמן): מסך הנעילה */
+      FX.Policy.refresh().then(function () { if (FX.Policy.locked()) FX.Policy.showLock(); });
+      return;
+    }
     ui.toast((prefix ? prefix + ': ' : '') + FX.errorText(e), 'error');
     if (S.prov && S.prov.kind === 'bridge' && isLinkError(e)) connect(false);
   }
@@ -782,7 +801,7 @@
     if (clash.length) {
       var ans = await ui.dialog({
         title: 'פריטים בשם זהה', icon: 'warning',
-        body: '<p>' + FX.formatNumber(clash.length) + ' מהפריטים כבר קיימים בתיקייה הזו (למשל <b>' + FX.esc(S.prov.nameOf(clash[0])) + '</b>). מה לעשות?</p>',
+        body: '<p>' + FX.formatNumber(clash.length) + ' מהפריטים כבר קיימים בתיקייה הזו (למשל <b>' + ui.isolateLtr(FX.esc(S.prov.nameOf(clash[0]))) + '</b>). מה לעשות?</p>',
         actions: [{ label: 'ביטול', value: false }, { label: 'דילוג', value: 'skip' }, { label: 'החלפה', value: 'overwrite' }, { label: 'שמירת שניהם', value: 'rename', kind: 'primary' }]
       });
       if (!ans) return;
@@ -860,7 +879,7 @@
   }
   async function purgeSel() {
     var sel = selected();
-    var what = sel.length === 1 ? '<b>' + FX.esc(sel[0].name) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
+    var what = sel.length === 1 ? '<b>' + ui.isolateLtr(FX.esc(sel[0].name)) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
     var ok = await ui.confirm('מחיקה לצמיתות', '<p>' + what + ' יימחקו <b>לצמיתות</b> מסל המיחזור. לא ניתן לשחזר אותם.</p>', 'מחיקה לצמיתות', 'danger');
     if (!ok) return;
     busy(true, 'מוחק…');
@@ -888,7 +907,7 @@
     var sel = selected();
     var p = S.prov;
     var perm = !!permanent || !p.caps.recycle;
-    var what = sel.length === 1 ? '<b>' + FX.esc(sel[0].name) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
+    var what = sel.length === 1 ? '<b>' + ui.isolateLtr(FX.esc(sel[0].name)) + '</b>' : FX.formatNumber(sel.length) + ' פריטים';
     var body = perm
       ? '<p>' + what + ' יימחקו <b>לצמיתות</b>. לא ניתן לשחזר אותם.</p>' + (!p.caps.recycle && p.capReasons ? '<p class="muted small">' + FX.esc(p.capReasons.recycle) + '</p>' : '')
       : '<p>' + what + ' יועברו לסל המיחזור.</p><p class="muted small">Shift+Delete מוחק לצמיתות.</p>';
@@ -932,6 +951,7 @@
   var SET_CATS = [
     ['open', 'פתיחת קבצים', 'open'],
     ['view', 'תצוגה', 'grid'],
+    ['security', 'נעילה והגבלה', 'lock'],
     ['general', 'כללי', 'settings'],
     ['about', 'אודות', 'info']
   ];
@@ -969,6 +989,7 @@
       setRow('שליחת הערה או דיווח על תקלה', '', '<button type="button" class="btn btn-tonal" data-act="fb">שליחת הערה</button>') +
       setRow('איפוס הגדרות הסייר', 'מחזיר את כל ההגדרות שבמסך הזה לברירת המחדל', '<button type="button" class="btn btn-tonal" data-act="reset">איפוס</button>') +
       '</div>';
+    if (id === 'security') return '<div id="fx-pol-host">' + ui.loading('טוען…') + '</div>';
     var b = FX.Bridge && FX.Bridge.info;
     return '<div class="fx-set-card fx-set-hero"><div class="fx-set-logo">' + ic('folder') + '</div><div>' +
       '<h3>סייר קבצים</h3><p class="muted">גרסה ' + FX.esc(FX.VERSION) + ' · גמח תורת אסתר</p>' +
@@ -999,6 +1020,14 @@
       page.querySelectorAll('.fx-set-navbtn').forEach(function (x) { x.classList.toggle('on', x.dataset.cat === id); });
       content.innerHTML = setCat(id);
       content.scrollTop = 0;
+      if (id === 'security') {
+        var host = content.querySelector('#fx-pol-host');
+        FX.Policy.refresh().then(function () {
+          if (!host.isConnected) return;
+          host.innerHTML = FX.Policy.editorHtml();
+          FX.Policy.bindEditor(host);
+        });
+      }
       try { localStorage.setItem('fx.setCat', id); } catch (e) { /* כלום */ }
     }
     function close() { page.remove(); document.removeEventListener('keydown', onKey, true); $('fx-main').focus(); }
@@ -1606,7 +1635,7 @@
       window.Otzaria.on('plugin.resumed', function () {
         S.suspended = false;
         if (!S.prov || S.prov.kind !== 'bridge') connect(false);
-        else FX.Bridge.probe().then(function (h) { if (!h) connect(false); });
+        else FX.Bridge.probe().then(function (h) { if (!h) connect(false); else afterPolicy(); });
       });
     } else {
       document.body.classList.add('preview');
@@ -1615,7 +1644,7 @@
     }
   }
 
-  FX.app = { go: go, refresh: refresh, connect: connect, selected: function () { return S.prov ? selected() : []; }, prov: function () { return S.prov; } };
+  FX.app = { go: go, refresh: refresh, connect: connect, afterPolicy: afterPolicy, selected: function () { return S.prov ? selected() : []; }, prov: function () { return S.prov; } };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
