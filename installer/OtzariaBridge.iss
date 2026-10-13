@@ -45,6 +45,53 @@ Source: "{#ExePath}"; DestDir: "{app}"; DestName: "OtzariaBridge.exe"; Flags: ig
 Filename: "{app}\OtzariaBridge.exe"; Parameters: "--install --quiet"; StatusMsg: "מגדיר הפעלה אוטומטית ומתקין את התוספים באוצריא..."; Flags: waituntilterminated runhidden
 
 [Code]
+// ---- אישור בפועל שהתוספים הותקנו באוצריא (לא רק שהזרימה הופעלה) ----
+// אין לנו דרך תכנותית לדעת אם המשתמש אכן אישר את חלון ההתקנה באוצריא (זו זרימה
+// חד-כיוונית דרך otzaria://plugin/install-local, בלי ערוץ חזרה) - לכן שואלים במפורש,
+// עם אפשרות להפעיל את ההתקנה שוב ולתת את הנתיב המדויק אם עדיין לא בוצע.
+var
+  PluginsConfirmed: Boolean;
+
+procedure RerunPluginInstall();
+var
+  rc: Integer;
+begin
+  Exec(ExpandConstant('{app}\OtzariaBridge.exe'), '--install --quiet', '', SW_HIDE, ewWaitUntilTerminated, rc);
+  Sleep(1500);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  choice: Integer;
+begin
+  if CurStep <> ssPostInstall then exit;
+  PluginsConfirmed := MsgBox(
+    'אוצריא היה אמור להיפתח ולבקש לאשר את התקנת שני התוספים: "סייר קבצים" ו"הגדרות מערכת".' + #13#10#13#10 +
+    'האם אישרת את ההתקנה של שני התוספים בחלון שנפתח באוצריא?',
+    mbConfirmation, MB_YESNO) = IDYES;
+  while not PluginsConfirmed do
+  begin
+    choice := MsgBox(
+      'בלי התקנת שני התוספים באוצריא, החסימה לא תעבוד!' + #13#10#13#10 +
+      'נתיב התוספים: ' + ExpandConstant('{app}') + '\plugins' + #13#10#13#10 +
+      'ללחוץ "כן" כדי להפעיל שוב את ההתקנה באוצריא, או "לא" כדי להמשיך בלעדיה (לא מומלץ).',
+      mbError, MB_YESNO);
+    if choice = IDNO then break;
+    RerunPluginInstall();
+    PluginsConfirmed := MsgBox('האם אישרת עכשיו את התקנת שני התוספים באוצריא?', mbConfirmation, MB_YESNO) = IDYES;
+  end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID <> wpFinished) or PluginsConfirmed then exit;
+  WizardForm.FinishedLabel.Caption :=
+    'התקנת רכיב החסימה הושלמה - אבל התוספים באוצריא עדיין לא אושרו!' + #13#10#13#10 +
+    'יש להתקין אותם כדי שהחסימה תעבוד בפועל: פתחו את אוצריא, ואז מתפריט הגשר במגש המערכת ' +
+    'בחרו "התקן/עדכן את התוספים באוצריא" - או התקינו ידנית מהנתיב:' + #13#10 +
+    ExpandConstant('{app}') + '\plugins';
+end;
+
 // עוצרים גשר שרץ מהתקנה קודמת, כדי שאפשר יהיה להחליף את הקובץ
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
