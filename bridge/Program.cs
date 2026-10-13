@@ -16,8 +16,12 @@ public static class Program
     public const string AppNameEn = "Achat Sha'alti";
     public const string GemachName = "גמח תורת אסתר";
     public const string GemachNameEn = "Torat Esther Gemach";
-    public const string AppFullName = AppName + " - " + GemachName;
-    public const string AppFullNameEn = AppNameEn + " — " + GemachNameEn;
+    // סלוגן מדויק לפי בעלת הריפו (14.10.2026)
+    public const string Slogan = "תוכנת חסימת מחשב לתוכנות תורניות בלבד";
+    public const string SloganEn = "Computer lock for Torah software only";
+    public const string Dedication = "לע\"נ אסתר גיטה דינר ע\"ה";
+    public const string AppFullName = AppName + " - " + Slogan;
+    public const string AppFullNameEn = AppNameEn + " — " + SloganEn;
 
     [DllImport("kernel32.dll")] private static extern bool AttachConsole(int pid);
 
