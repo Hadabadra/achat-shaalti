@@ -1049,8 +1049,7 @@
       setRow(b ? 'מחובר · גרסה ' + FX.esc(b.version || '?') : 'הגשר אינו מחובר', b ? '' : 'בלי הגשר הסייר עובד על תיקיות שאישרתם בלבד',
         b ? '<button type="button" class="btn btn-tonal" data-act="upd">בדיקת עדכונים</button>' : '') +
       '<div class="fx-upd muted small" data-slot="upd"></div>' +
-      '<div class="fx-set-actions"><button type="button" class="btn btn-tonal" data-act="changelog">יומן שינויים</button>' +
-      '<button type="button" class="btn btn-tonal" data-act="releases">עמוד ההוצאות</button></div></div>';
+      '</div>'; /* #19: יומן השינויים ועמוד ההוצאות נמצאים בגשר (אודות) */
   }
   function settingsDialog(cat) {
     var old = $('fx-setpage');

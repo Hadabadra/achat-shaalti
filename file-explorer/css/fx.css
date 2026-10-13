@@ -249,7 +249,7 @@ a.btn { text-decoration: none; display: inline-flex; }
 :root { --fx-zoom: 0.9; --fx-prev-w: 22em; }
 .fx-shell, .fx-viewer, #dialogs, .fx-menu, #toasts { font-size: calc(var(--fx-zoom) * 1em); }
 .fx-split {
-  flex: 0 0 auto; width: 0.375em; cursor: col-resize; position: relative; outline: none;
+  flex: 0 0 auto; width: 0.625em; cursor: col-resize; position: relative; outline: none; z-index: 2;
   background: transparent; touch-action: none;
 }
 .fx-split::after {
@@ -297,7 +297,7 @@ a.btn { text-decoration: none; display: inline-flex; }
 .fx-props-head .fx-ic .ic { width: 2em; height: 2em; }
 .fx-attrs { display: flex; flex-direction: column; gap: 0.5em; margin-top: 0.75em; }
 a.btn { text-decoration: none; display: inline-flex; }
-@media (max-width: 45em) { .fx-preview, #fx-split-prev, #fx-split-side { display: none; } }
+@media (max-width: 30em) { .fx-preview, #fx-split-prev, #fx-split-side { display: none; } }
 
 /* ---------- 2.0: מסך הגדרות בסגנון אוצריא ---------- */
 .fx-setpage {
