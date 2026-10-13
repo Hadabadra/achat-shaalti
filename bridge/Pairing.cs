@@ -123,13 +123,47 @@ public static class Pairing
     /// בקשת צימוד: מציגה למשתמש חלון אישור (עם סיסמת נעילה כשהנעילה פעילה).
     /// רק חלון אחד בכל פעם; אחרי 3 דחיות — המתנה של דקה.
     /// </summary>
-    public static async Task<object> Request(JsonElement b)
+    // #32 ממצא 6: זיהוי התהליך הפונה לפי הפורט המקומי של החיבור (טבלת TCP של Windows)
+    [System.Runtime.InteropServices.DllImport("iphlpapi.dll")]
+    private static extern uint GetExtendedTcpTable(IntPtr tbl, ref int size, bool sort, int af, int cls, uint reserved);
+
+    public static string CallerProcess(int remotePort)
+    {
+        foreach (int af in new[] { 2, 23 })
+        {
+            int size = 0; GetExtendedTcpTable(IntPtr.Zero, ref size, false, af, 5, 0);
+            if (size <= 0) continue;
+            IntPtr buf = System.Runtime.InteropServices.Marshal.AllocHGlobal(size);
+            try
+            {
+                if (GetExtendedTcpTable(buf, ref size, false, af, 5, 0) != 0) continue;
+                int n = System.Runtime.InteropServices.Marshal.ReadInt32(buf);
+                int rowSize = af == 2 ? 24 : 56, portOff = af == 2 ? 8 : 20, pidOff = af == 2 ? 20 : 52;
+                for (int i = 0; i < n; i++)
+                {
+                    IntPtr row = buf + 4 + i * rowSize;
+                    int lp = System.Runtime.InteropServices.Marshal.ReadInt32(row + portOff);
+                    int port = ((lp & 0xFF) << 8) | ((lp >> 8) & 0xFF);
+                    if (port != remotePort) continue;
+                    int pid = System.Runtime.InteropServices.Marshal.ReadInt32(row + pidOff);
+                    try { using var pr = System.Diagnostics.Process.GetProcessById(pid); return pr.ProcessName; } catch { return "pid " + pid; }
+                }
+            }
+            finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buf); }
+        }
+        return null;
+    }
+
+    public static async Task<object> Request(JsonElement b, int remotePort = 0)
     {
         string client = (b.Str("client") ?? "").Trim();
         string name = (b.Str("name") ?? client).Trim();
+        string caller = null; try { if (remotePort > 0) caller = CallerProcess(remotePort); } catch { }
+        Config.Log("pair/request מ-" + (caller ?? "לא ידוע") + ": " + client);
         if (client.Length == 0 || client.Length > 60) throw BridgeException.BadRequest("שדה client חסר או ארוך מדי");
         name = new string(name.Where(ch => !char.IsControl(ch)).ToArray()); // בלי שורות חדשות/תווי בקרה בחלון האישור
         if (name.Length > 60) name = name[..60];
+        if (caller != null) name += " (" + caller + ")";
 
         if (DateTime.UtcNow < _cooldownUntil)
             throw new BridgeException("too_many", "יותר מדי בקשות צימוד שנדחו. נסו שוב בעוד דקה", 429);

@@ -156,7 +156,7 @@ public static class Server
             // בעיה #2: בקשת צימוד היא הנקודה היחידה שפתוחה בלי מפתח; היא מציגה חלון אישור למשתמש
             if (path.Equals("/pair/request", StringComparison.OrdinalIgnoreCase))
             {
-                await WriteOk(ctx, await Pairing.Request(body));
+                await WriteOk(ctx, await Pairing.Request(body, ctx.Connection.RemotePort));
                 return;
             }
             if (path.Equals("/fs/search", StringComparison.OrdinalIgnoreCase))
