@@ -76,9 +76,7 @@ var
   Edit: TPasswordEdit;
   Ok, Cancel: TNewButton;
 begin
-  Form := CreateCustomForm;
-    Form.ClientWidth := ScaleX(380);
-    Form.ClientHeight := ScaleY(150);
+  Form := CreateCustomForm(ScaleX(380), ScaleY(150), False, False);
   try
     Form.Caption := 'הסרת תורת אסתר';
     Lbl := TNewStaticText.Create(Form);
