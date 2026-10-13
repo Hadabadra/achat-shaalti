@@ -230,6 +230,8 @@ internal sealed class ClockBar : Form
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        // #56: מעבר בהיר/כהה באוצריא — הצבעים נקבעו רק בבנאי, ולכן השורה נשארה בערכת הנושא הישנה
+        if (BackColor != Theme.Bar || ForeColor != Theme.BarText) { BackColor = Theme.Bar; ForeColor = Theme.BarText; }
         var g = e.Graphics;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
         g.SmoothingMode = SmoothingMode.AntiAlias;

@@ -213,6 +213,8 @@ internal sealed class ReportsForm : Form
             Directory.CreateDirectory(dir);
             string dest = Path.Combine(dir, Path.GetFileName(path));
             File.Copy(path, dest, overwrite: true);
+            // לא לצבור ללא גבול: שומרים 20 אחרונים (ב-zip נכנסים 5)
+            foreach (var old in Directory.GetFiles(dir, "*.png").OrderByDescending(x => x).Skip(20)) { try { File.Delete(old); } catch { } }
             string txt = (_note.Text.Trim() + "\n[צורף צילום מסך: " + Path.GetFileName(dest) + " — מצורף לקובץ ה-zip של איסוף היומנים]").Trim();
             if (Reports.AddNote(txt)) { _note.Clear(); Reload(); }
         }

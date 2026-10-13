@@ -10,7 +10,7 @@ namespace OtzariaBridge;
 public static class SettingsIO
 {
     private static readonly string[] Prefixes = { "kiosk.", "fx.", "theme.", "zmanim." };
-    private static readonly Regex Blocked = new("(hash|salt|secret|password|recovery|token|key|pair|device|path|twofactor|tfa|tempunlock|active)", RegexOptions.IgnoreCase);
+    private static readonly Regex Blocked = new("(hash|salt|secret|password|recovery|token|key|pair|device|path|twofactor|tfa|tempunlock|active|roots|location|confirmed|strict)", RegexOptions.IgnoreCase);
 
     public static void Register()
     {
@@ -20,11 +20,19 @@ public static class SettingsIO
 
     private static bool Allowed(string k) => Prefixes.Any(p => k.StartsWith(p, StringComparison.Ordinal)) && !Blocked.IsMatch(k);
 
+    // ניקוי רקורסיבי: אובייקט מקונן (למשל fx.policy) לא יעביר שורשי נתיבים/סודות בשמות שדות פנימיים.
+    private static JsonNode Clean(JsonNode n)
+    {
+        if (n is JsonObject o) foreach (var kv in o.ToList()) { if (Blocked.IsMatch(kv.Key)) o.Remove(kv.Key); else Clean(kv.Value); }
+        else if (n is JsonArray a) foreach (var x in a) Clean(x);
+        return n;
+    }
+
     private static object Export(JsonElement b)
     {
         Kiosk.RequirePasswordOrRecovery(b.Str("password"));
         var o = new JsonObject();
-        foreach (var k in Config.Keys().Where(Allowed).OrderBy(k => k)) o[k] = Config.Raw(k);
+        foreach (var k in Config.Keys().Where(Allowed).OrderBy(k => k)) o[k] = Clean(Config.Raw(k)?.DeepClone());
         var doc = new JsonObject { ["format"] = "achat-shaalti-settings", ["version"] = 1, ["bridge"] = Program.Version, ["exported"] = DateTime.Now.ToString("s"), ["settings"] = o };
         string text = doc.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
         string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "achat-shaalti-settings-" + DateTime.Now.ToString("yyyyMMdd-HHmm") + ".json");
@@ -44,7 +52,7 @@ public static class SettingsIO
         foreach (var kv in s.ToList())
         {
             if (!Allowed(kv.Key)) { skipped++; continue; }
-            Config.Set(kv.Key, kv.Value?.DeepClone());
+            Config.Set(kv.Key, Clean(kv.Value?.DeepClone()));
             n++;
         }
         Config.Save();

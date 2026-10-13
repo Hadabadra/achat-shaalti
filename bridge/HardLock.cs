@@ -293,7 +293,13 @@ public static class HardLock
         var res = Call(req, timeoutMs);
         if (res?["code"]?.ToString() == "two_factor")
         {
-            req["hello"] = RunHello(password);
+            string nonce = RunHello(password);
+            req["hello"] = nonce;
+            // #32 ממצא 1: אם לשירות אין עדיין מפתח HMAC (התקנה ישנה) — מצמידים אותו עכשיו, עם אותו אישור Hello טרי
+            if (res["macPaired"]?.GetValue<bool>() == false)
+                Must(Call(new JsonObject { ["op"] = "set-mac-key", ["password"] = password ?? "", ["hello"] = nonce,
+                                           ["key"] = Convert.ToBase64String(PipeMac.EnsureKey()) }, timeoutMs));
+            PipeMac.Sign(req);
             res = Call(req, timeoutMs);
         }
         return res;
@@ -412,6 +418,7 @@ public static class HardLock
                 // אם האימות הדו-שלבי כבר דלוק בגשר, יורש אותו מיד — אחרת ההתקנה הראשונה הייתה משאירה
                 // את הצינור בלי Hello עד שהמנהל היה נוגע שוב בהגדרות (ביקורת #30 ממצא 1)
                 ["twoFactor"] = Config.Get("kiosk.twoFactor", false),
+                ["macKey"] = Convert.ToBase64String(PipeMac.EnsureKey()), // #32: סוד משותף לחתימת פקודות רגישות
             }));
         }
         if (Kiosk.IsActive) Enable(b.Str("password"), Kiosk.OtzariaPath());
@@ -938,7 +945,10 @@ public class HardLockService : ServiceBase
     }
 
     /// <summary>null = מותר להמשיך. כש-2FA פעיל (או force) נדרש אישור Hello חד-פעמי; קוד שחזור פטור (ביטול חירום)</summary>
-    private JsonObject Need2fa(JsonObject q, string supplied, bool force = false)
+    private byte[] MacKey { get { try { var s = _state["macKey"]?.ToString(); return string.IsNullOrEmpty(s) ? null : Convert.FromBase64String(s); } catch { return null; } } }
+    private static bool ValidKey(string b64) { try { return !string.IsNullOrEmpty(b64) && Convert.FromBase64String(b64).Length >= 32; } catch { return false; } }
+
+    private JsonObject Need2fa(JsonObject q, string supplied, bool force = false, bool consume = true, bool requireMac = true)
     {
         if (!TwoFactorOn && !force) return null;
         if (!force && !string.IsNullOrEmpty(supplied) && !Matches(supplied, "passwordHash", "salt")
@@ -950,11 +960,21 @@ public class HardLockService : ServiceBase
             PruneHello();
             if (nonce != null && _hello.TryGetValue(nonce, out var h) && h.State == "approved" && DateTime.UtcNow < h.ApprovedUntil)
             {
-                _hello.Remove(nonce); // חד-פעמי
+                // #32 ממצא 1: כשיש מפתח משותף — האישור תקף רק לפקודה חתומה וטרייה (HMAC על כל השדות, כולל hello)
+                var key = MacKey;
+                if (requireMac && key != null && !PipeMac.Verify(key, q, DateTimeOffset.UtcNow.ToUnixTimeSeconds()))
+                {
+                    _hello.Remove(nonce); // ניסיון עם חתימה פגומה שורף את האישור
+                    HardLock.SvcLog("service: נדחתה פקודה רגישה עם חתימה לא תקינה (" + q["op"] + ")");
+                    return Err("two_factor", "אישור Windows Hello אינו חתום כראוי — נסו שוב");
+                }
+                if (consume) _hello.Remove(nonce); // חד-פעמי
                 return null;
             }
         }
-        return Err("two_factor", "נדרש אימות Windows Hello (זיהוי פנים/טביעת אצבע/PIN)");
+        var err = Err("two_factor", "נדרש אימות Windows Hello (זיהוי פנים/טביעת אצבע/PIN)");
+        err["macPaired"] = MacKey != null;
+        return err;
     }
 
     private async Task ServeOne(NamedPipeServerStream pipe, CancellationToken ct)
@@ -1031,6 +1051,7 @@ public class HardLockService : ServiceBase
                         ["scheduleStart"] = _state["scheduleStart"]?.ToString() ?? "",
                         ["scheduleEnd"] = _state["scheduleEnd"]?.ToString() ?? "",
                         ["twoFactor"] = TwoFactorOn,
+                        ["macPaired"] = MacKey != null,
                         ["otzariaPath"] = _state["otzariaPath"]?.ToString() ?? "", ["sessions"] = _sessions,
                         ["policy"] = PolicyNode(),
                         ["tempUnlock"] = TempNode(),
@@ -1047,6 +1068,7 @@ public class HardLockService : ServiceBase
                         _state[k] = v;
                     }
                     if (q["twoFactor"] is JsonValue tfSetup) _state["twoFactor"] = tfSetup.GetValue<bool>();
+                    if (ValidKey(q["macKey"]?.ToString())) _state["macKey"] = q["macKey"].ToString();
                     Save();
                     HardLock.SvcLog("service: הוגדרו סיסמה וקוד שחזור");
                     return Ok();
@@ -1164,6 +1186,18 @@ public class HardLockService : ServiceBase
                     Save();
                     Task.Run(Tick);
                     return Ok();
+
+                case "set-mac-key":
+                {
+                    // הצמדת/החלפת המפתח המשותף: סיסמה ראשית (לא קוד שחזור) + Hello טרי בפועל; האישור לא נצרך (משמש לפקודה שאחריו)
+                    if ((e = Check(pw, false)) != null) return e;
+                    if ((e = Need2fa(q, pw, force: true, consume: false, requireMac: false)) != null) return e;
+                    if (!ValidKey(q["key"]?.ToString())) return Err("bad_request", "מפתח לא תקין");
+                    _state["macKey"] = q["key"].ToString();
+                    Save();
+                    HardLock.SvcLog("service: הוצמד מפתח חתימה לגשר");
+                    return Ok();
+                }
 
                 case "hello-start":
                 {

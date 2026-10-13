@@ -523,7 +523,8 @@ internal static class Diagnostics_
         try
         {
             string zip = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                "otzaria-bridge-report-" + DateTime.Now.ToString("yyyyMMdd-HHmm") + ".zip");
+                "otzaria-bridge-report-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".zip");
+            if (File.Exists(zip)) File.Delete(zip); // ZipArchiveMode.Create נכשל על קובץ קיים
             using (var z = ZipFile.Open(zip, ZipArchiveMode.Create))
             {
                 string log = Path.Combine(Config.Dir, "bridge.log");
@@ -540,7 +541,7 @@ internal static class Diagnostics_
                 string shots = Path.Combine(Config.Dir, "report-shots");
                 if (Directory.Exists(shots))
                     foreach (var f in Directory.GetFiles(shots, "*.png").OrderByDescending(x => x).Take(5))
-                        z.CreateEntryFromFile(f, "screenshots/" + Path.GetFileName(f));
+                        try { z.CreateEntryFromFile(f, "screenshots/" + Path.GetFileName(f)); } catch { } // קובץ נעול לא מפיל את כל האיסוף
             }
             Process.Start(new ProcessStartInfo(IssuesUrl + "?title=" + Uri.EscapeDataString("דיווח מהגשר " + Program.Version) +
                 "&body=" + Uri.EscapeDataString("**מה קרה?**\n\n\n**מה ציפיתי שיקרה?**\n\n\n(צרפו כאן את קובץ ה-zip מהשולחן העבודה בגרירה)\n\n" + Info())) { UseShellExecute = true });
