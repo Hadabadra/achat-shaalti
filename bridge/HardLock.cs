@@ -595,6 +595,33 @@ public static class HardLock
 /// <summary>השירות עצמו (LocalSystem). מופעל עם OtzariaBridge.exe --service</summary>
 public class HardLockService : ServiceBase
 {
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int RegOpenKeyEx(IntPtr hKey, string sub, int opts, int sam, out IntPtr res);
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int RegQueryValueEx(IntPtr hKey, string name, IntPtr res, out int type, IntPtr data, ref int len);
+    [System.Runtime.InteropServices.DllImport("advapi32.dll")]
+    private static extern int RegCloseKey(IntPtr hKey);
+
+    /// <summary>האם אחד המפתחות בנתיב (תחת HKEY_USERS) הוא קישור סמלי של הרישום</summary>
+    internal static bool RegPathHasLink(string path)
+    {
+        var hku = new IntPtr(unchecked((int)0x80000003));
+        string cur = "";
+        foreach (var part in path.Split('\\'))
+        {
+            cur = cur.Length == 0 ? part : cur + "\\" + part;
+            // REG_OPTION_OPEN_LINK = 8, KEY_QUERY_VALUE = 1
+            if (RegOpenKeyEx(hku, cur, 8, 1, out var h) != 0) return false; // המפתח לא קיים — מכאן ייווצר כרגיל
+            try
+            {
+                int len = 0;
+                if (RegQueryValueEx(h, "SymbolicLinkValue", IntPtr.Zero, out _, IntPtr.Zero, ref len) == 0) return true;
+            }
+            finally { RegCloseKey(h); }
+        }
+        return false;
+    }
+
     private const string PoliciesSub = @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
     private const string UsbStorKey = @"SYSTEM\CurrentControlSet\Services\USBSTOR";
     private static readonly Regex UserSid = new(@"^S-1-5-21-[\d-]+$", RegexOptions.Compiled);
@@ -1257,6 +1284,8 @@ public class HardLockService : ServiceBase
         {
             try
             {
+                // ביקורת #30 ממצא 10: לא כותבים כ-SYSTEM דרך מפתח שהוא קישור רישום (עלול להפנות ל-HKLM)
+                if (RegPathHasLink(sid + "\\" + PoliciesSub)) { HardLock.SvcLog("policy " + sid + ": registry link — skipped"); continue; }
                 if (active)
                 {
                     using var k = Registry.Users.CreateSubKey(sid + "\\" + PoliciesSub);
