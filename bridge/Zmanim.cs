@@ -54,7 +54,7 @@ internal static class Zmanim
         return (lat, lon);
     }
 
-    /// <summary>שורות לשומר המסך: זמני היום, כניסת שבת/חג, ספירת העומר ויום השנה — או מערך ריק</summary>
+    /// <summary>שורות לשומר המסך: זמני היום, כניסת שבת/חג, ספירת העומר, יום השנה, פרשת השבוע ודף יומי — או מערך ריק</summary>
     public static string[] Sections(DateTime now)
     {
         var list = new List<string>();
@@ -76,7 +76,84 @@ internal static class Zmanim
             string fb = FallbackLine(now);
             if (fb != null) list.Add(fb);
         }
+        // פרשת השבוע ודף יומי: לא תלויים במטמון מאוצריא (וגם לא בהגדרת מיקום) — מחושבים תמיד ישירות
+        // דרך ספריית Zmanim/KosherJava (קרדיט למעלה) מהתאריך הנוכחי בלבד. כל אחד עם מתג נפרד, כבוי כברירת מחדל.
+        string ps = ParshaLine(now);
+        if (ps != null) list.Add(ps);
+        string df = DafYomiLine(now);
+        if (df != null) list.Add(df);
         return list.ToArray();
+    }
+
+    // ---------- פרשת השבוע: מחושבת דרך JewishCalendar.GetParshah (API ציבורי של ספריית Zmanim/KosherJava) ----------
+    // הספרייה (פורט .NET, גרסה 1.5.0) אינה חושפת method ציבורי לשם הפרשה בעברית (יש רק TransliteratedParshiosList
+    // לאנגלית, ושדה hebrewParshiyos פנימי/פרטי בלבד) — ולכן שמות התצוגה כאן הם טבלה קבועה שלנו (כמו DayWords/WeekWords
+    // למעלה), לא חישוב עצמאי של הפרשה עצמה. את הפרשה עצמה (איזה שבוע) מחשבת הספרייה, לא אנחנו.
+
+    private static readonly Dictionary<string, (string he, string en)> ParshaNames = new()
+    {
+        ["BERESHIS"] = ("בראשית", "Bereshis"), ["NOACH"] = ("נח", "Noach"), ["LECH_LECHA"] = ("לך לך", "Lech Lecha"),
+        ["VAYERA"] = ("וירא", "Vayera"), ["CHAYEI_SARA"] = ("חיי שרה", "Chayei Sara"), ["TOLDOS"] = ("תולדות", "Toldos"),
+        ["VAYETZEI"] = ("ויצא", "Vayetzei"), ["VAYISHLACH"] = ("וישלח", "Vayishlach"), ["VAYESHEV"] = ("וישב", "Vayeshev"),
+        ["MIKETZ"] = ("מקץ", "Miketz"), ["VAYIGASH"] = ("ויגש", "Vayigash"), ["VAYECHI"] = ("ויחי", "Vayechi"),
+        ["SHEMOS"] = ("שמות", "Shemos"), ["VAERA"] = ("וארא", "Vaera"), ["BO"] = ("בא", "Bo"),
+        ["BESHALACH"] = ("בשלח", "Beshalach"), ["YISRO"] = ("יתרו", "Yisro"), ["MISHPATIM"] = ("משפטים", "Mishpatim"),
+        ["TERUMAH"] = ("תרומה", "Terumah"), ["TETZAVEH"] = ("תצוה", "Tetzaveh"), ["KI_SISA"] = ("כי תשא", "Ki Sisa"),
+        ["VAYAKHEL"] = ("ויקהל", "Vayakhel"), ["PEKUDEI"] = ("פקודי", "Pekudei"), ["VAYIKRA"] = ("ויקרא", "Vayikra"),
+        ["TZAV"] = ("צו", "Tzav"), ["SHMINI"] = ("שמיני", "Shmini"), ["TAZRIA"] = ("תזריע", "Tazria"),
+        ["METZORA"] = ("מצרע", "Metzora"), ["ACHREI_MOS"] = ("אחרי מות", "Achrei Mos"), ["KEDOSHIM"] = ("קדושים", "Kedoshim"),
+        ["EMOR"] = ("אמור", "Emor"), ["BEHAR"] = ("בהר", "Behar"), ["BECHUKOSAI"] = ("בחקתי", "Bechukosai"),
+        ["BAMIDBAR"] = ("במדבר", "Bamidbar"), ["NASSO"] = ("נשא", "Nasso"), ["BEHAALOSCHA"] = ("בהעלתך", "Beha'aloscha"),
+        ["SHLACH"] = ("שלח לך", "Shlach"), ["KORACH"] = ("קרח", "Korach"), ["CHUKAS"] = ("חוקת", "Chukas"),
+        ["BALAK"] = ("בלק", "Balak"), ["PINCHAS"] = ("פינחס", "Pinchas"), ["MATOS"] = ("מטות", "Matos"),
+        ["MASEI"] = ("מסעי", "Masei"), ["DEVARIM"] = ("דברים", "Devarim"), ["VAESCHANAN"] = ("ואתחנן", "Vaeschanan"),
+        ["EIKEV"] = ("עקב", "Eikev"), ["REEH"] = ("ראה", "Re'eh"), ["SHOFTIM"] = ("שופטים", "Shoftim"),
+        ["KI_SEITZEI"] = ("כי תצא", "Ki Seitzei"), ["KI_SAVO"] = ("כי תבוא", "Ki Savo"), ["NITZAVIM"] = ("ניצבים", "Nitzavim"),
+        ["VAYEILECH"] = ("וילך", "Vayeilech"), ["HAAZINU"] = ("האזינו", "Haazinu"), ["VZOS_HABERACHA"] = ("וזאת הברכה", "Vezos Haberacha"),
+        ["VAYAKHEL_PEKUDEI"] = ("ויקהל פקודי", "Vayakhel-Pekudei"), ["TAZRIA_METZORA"] = ("תזריע מצרע", "Tazria-Metzora"),
+        ["ACHREI_MOS_KEDOSHIM"] = ("אחרי מות קדושים", "Achrei Mos-Kedoshim"), ["BEHAR_BECHUKOSAI"] = ("בהר בחקתי", "Behar-Bechukosai"),
+        ["CHUKAS_BALAK"] = ("חוקת בלק", "Chukas-Balak"), ["MATOS_MASEI"] = ("מטות מסעי", "Matos-Masei"),
+        ["NITZAVIM_VAYEILECH"] = ("ניצבים וילך", "Nitzavim-Vayeilech"), ["SHKALIM"] = ("שקלים", "Shekalim"),
+        ["ZACHOR"] = ("זכור", "Zachor"), ["PARA"] = ("פרה", "Para"), ["HACHODESH"] = ("החודש", "HaChodesh"),
+    };
+
+    /// <summary>
+    /// פרשת השבת הקרובה (היום עצמו אם שבת, אחרת השבת הבאה): JewishCalendar.GetParshah מחשב איזו פרשה זו
+    /// לפי התאריך העברי האמיתי (כולל הבדלי ארץ/חו"ל סביב פסח); kiosk.zmanimDiaspora הקיים קובע את inIsrael,
+    /// כדי להישאר עקבי עם חישוב כניסת/יציאת חג למעלה.
+    /// </summary>
+    private static string ParshaLine(DateTime now)
+    {
+        if (!Config.Get("kiosk.showParsha", false)) return null;
+        try
+        {
+            var jc = new global::Zmanim.JewishCalendar.JewishCalendar();
+            int diff = ((int)DayOfWeek.Saturday - (int)now.DayOfWeek + 7) % 7;
+            DateTime sat = now.Date.AddDays(diff);
+            bool inIsrael = !Config.Get("kiosk.zmanimDiaspora", false);
+            var parsha = jc.GetParshah(sat, inIsrael);
+            if (!ParshaNames.TryGetValue(parsha.ToString(), out var name)) return null; // NONE או פרשה לא ידועה בטבלה
+            return Lang.T("פרשת השבוע: " + name.he, "Parashat Hashavua: " + name.en);
+        }
+        catch (Exception ex) { Config.Log("parsha: " + ex.Message); return null; }
+    }
+
+    // ---------- דף יומי: YomiCalculator.GetDafYomiBavli + HebrewDateFormatter.FormatDafYomiBavli (שניהם API ציבורי של הספרייה) ----------
+
+    /// <summary>מסכת ודף של דף היומי הנוכחי, בעברית (עם גימטריה, "כ״ה") ובאנגלית, ישירות משני ה-API הציבוריים של הספרייה</summary>
+    private static string DafYomiLine(DateTime now)
+    {
+        if (!Config.Get("kiosk.showDafYomi", false)) return null;
+        try
+        {
+            var daf = global::Zmanim.JewishCalendar.YomiCalculator.GetDafYomiBavli(now.Date);
+            if (daf == null) return null;
+            string he = new global::Zmanim.JewishCalendar.HebrewDateFormatter { HebrewFormat = true }.FormatDafYomiBavli(daf);
+            string en = new global::Zmanim.JewishCalendar.HebrewDateFormatter { HebrewFormat = false }.FormatDafYomiBavli(daf);
+            return Lang.T("דף יומי: " + he, "Daf Yomi: " + en);
+        }
+        // לפני תחילת מחזור הדף היומי (י"א תשרי תרפ"ד / 11.9.1923) הספרייה זורקת — לא אמור לקרות בתאריך נוכחי
+        catch (Exception ex) { Config.Log("daf yomi: " + ex.Message); return null; }
     }
 
     private static (JsonElement dailyTimes, JsonElement jewishDate, JsonElement jewishDateTomorrow)? TryGetCache()

@@ -277,6 +277,8 @@ public static class Kiosk
         zmanimShow = Config.HasList("kiosk.zmanimShow") ? Config.GetList("kiosk.zmanimShow") : null,
         zmanimDiaspora = Config.Get("kiosk.zmanimDiaspora", false),
         candleLightingMinutes = Config.Get("kiosk.candleLightingMinutes", 18),
+        showParsha = Config.Get("kiosk.showParsha", false),
+        showDafYomi = Config.Get("kiosk.showDafYomi", false),
         yahrzeitMonth = Config.Get("kiosk.yahrzeitMonth", ""),
         yahrzeitDay = Config.Get("kiosk.yahrzeitDay", 0),
         yahrzeitLabel = Config.Get("kiosk.yahrzeitLabel", ""),
@@ -779,7 +781,7 @@ public static class Kiosk
         // אחרי האימות הדו-שלבי: הפתיחה הזמנית תלויה במצבו החדש
         ApplyTempUnlockSettings(b);
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
-        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs" })
+        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restIdleMinutes")) Config.Set("kiosk.restIdleMinutes", (int)Math.Clamp(b.Long("restIdleMinutes", 0), 0, 240));
         if (b.Has("zmanimLocation"))
@@ -1261,6 +1263,8 @@ public static class Kiosk
         try
         {
             int session = Process.GetCurrentProcess().SessionId;
+            // ממצא ביקורת אבטחה: מתעדכן כאן (חוט הטיימר, כל 2 שניות) ולא בתוך ה-hook עצמו — ר' הערה ב-ForegroundIsAllowedProgram
+            UpdateForegroundAllowedCache();
             foreach (var p in Process.GetProcessesByName("explorer"))
             {
                 try
@@ -1355,15 +1359,45 @@ public static class Kiosk
         _hook = IntPtr.Zero;
     }
 
-    private static bool ForegroundIsAllowedProgram()
+    /// <summary>
+    /// תמונת מצב של "האם התהליך הזה בחזית מותר", מחושבת מראש בחוט השומר (Watch, כל 2 שניות) ולא
+    /// בתוך ה-hook. אובייקט record יחיד: הקצאה/קריאה של הפניה הן אטומיות ב-.NET, כך שה-hook תמיד
+    /// רואה צמד (Pid, Allowed) עקבי מאותו עדכון, בלי צורך בנעילה.
+    /// </summary>
+    private sealed record FgAllowedCache(uint Pid, bool Allowed);
+    private static FgAllowedCache _fgAllowedCache = new(0, false);
+
+    /// <summary>
+    /// מחשב ושומר את המטמון של "התהליך בחזית מותר". נקרא רק מ-Watch() (חוט טיימר נפרד מה-hook),
+    /// ולכן מותר לו לקרוא ל-Process.GetProcessById/MainModule/WMI (Programs.ShouldYieldTo) שעלולות
+    /// להיות איטיות — זה בדיוק מה שאסור לעשות בתוך ה-hook הסינכרוני (ר' ForegroundIsAllowedProgram).
+    /// </summary>
+    private static void UpdateForegroundAllowedCache()
     {
         try
         {
             GetWindowThreadProcessId(GetForegroundWindow(), out uint pid);
-            if (pid == 0 || pid == (uint)Environment.ProcessId || IsOtzariaPid(pid)) return false;
-            return Programs.IsAllowedForeground(pid);
+            bool allowed = pid != 0 && pid != (uint)Environment.ProcessId && !IsOtzariaPid(pid) && Programs.IsAllowedForeground(pid);
+            _fgAllowedCache = new FgAllowedCache(pid, allowed);
         }
-        catch { return false; }
+        catch { _fgAllowedCache = new FgAllowedCache(0, false); }
+    }
+
+    /// <summary>
+    /// ביצועים (ממצא ביקורת אבטחה): נקרא מתוך HookCallback, שרץ כ-callback סינכרוני של WH_KEYBOARD_LL.
+    /// Windows "מנתק" hook מקלדת גלובלי שלא חוזר תוך כ-300ms (LowLevelHooksTimeout), ולכן אסור לקרוא כאן
+    /// ל-Process.GetProcessById/MainModule/WMI (כמו שהיה ב-Programs.IsAllowedForeground/ShouldYieldTo) —
+    /// אלה עלולות לקחת מילישניות עד שניות (עומס, AV), מה שהיה מאט הקלדה בזמן נעילה או מנתק את החסימה.
+    /// במקום זה: רק שתי קריאות user32 זולות (GetForegroundWindow/GetWindowThreadProcessId) כדי לדעת
+    /// איזה pid נמצא כרגע בחזית, והתשובה "מותר?" נלקחת מהמטמון שמתעדכן כל 2 שניות ב-Watch() (חוט אחר).
+    /// אם ה-pid בחזית השתנה מאז העדכון האחרון (עד 2 שניות פער) — ברירת המחדל היא "לא מותר" (הכיוון הבטוח).
+    /// </summary>
+    private static bool ForegroundIsAllowedProgram()
+    {
+        GetWindowThreadProcessId(GetForegroundWindow(), out uint pid);
+        if (pid == 0) return false;
+        var c = _fgAllowedCache;
+        return pid == c.Pid && c.Allowed;
     }
 
     private static bool IsOtzariaPid(uint pid)

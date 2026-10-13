@@ -499,6 +499,10 @@
     ZMAN_FIELDS.forEach(function (z) {
       fields.push({ name: 'zm_' + z.id, type: 'checkbox', label: z.label, value: zmanShow.indexOf(z.id) >= 0 });
     });
+    fields.push({ name: 'parsha', type: 'checkbox', label: 'פרשת השבוע בשומר המסך', value: !!st.showParsha,
+      hint: 'שם הפרשה הקרובה (השבת הנוכחית/הבאה), מחושב על ידי ספריית Zmanim/KosherJava' });
+    fields.push({ name: 'dafyomi', type: 'checkbox', label: 'דף יומי בשומר המסך', value: !!st.showDafYomi,
+      hint: 'מסכת ודף נוכחיים לפי לוח דף היומי הסטנדרטי' });
     fields.push({ name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' });
     fields.push({ name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' });
     fields.push({
@@ -597,6 +601,7 @@
           zmanimElevation: +String(x.zelev).trim() || 0, zmanimFallbackEngine: x.zengine,
           zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
           zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
+          showParsha: !!x.parsha, showDafYomi: !!x.dafyomi,
           yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim(),
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
           schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn },
