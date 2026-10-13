@@ -281,6 +281,7 @@ public static partial class Kiosk
         zmanimDiaspora = Config.Get("kiosk.zmanimDiaspora", false),
         candleLightingMinutes = Config.Get("kiosk.candleLightingMinutes", 18),
         showParsha = Config.Get("kiosk.showParsha", false),
+        restContent = Config.Get("kiosk.restContent", "full"),
         showDafYomi = Config.Get("kiosk.showDafYomi", false),
         yahrzeitMonth = Config.Get("kiosk.yahrzeitMonth", ""),
         yahrzeitDay = Config.Get("kiosk.yahrzeitDay", 0),
@@ -795,6 +796,7 @@ public static partial class Kiosk
         // אחרי האימות הדו-שלבי: הפתיחה הזמנית תלויה במצבו החדש
         ApplyTempUnlockSettings(b);
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
+        { string rcv = b.Str("restContent"); if (rcv is "full" or "zmanim" or "clock" or "verse") Config.Set("kiosk.restContent", rcv); }
         foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restIdleMinutes")) Config.Set("kiosk.restIdleMinutes", (int)Math.Clamp(b.Long("restIdleMinutes", 0), 0, 240));

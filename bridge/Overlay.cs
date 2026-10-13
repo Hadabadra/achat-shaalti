@@ -394,7 +394,9 @@ internal sealed class RestScreen : Form
         using var hintF = new Font("Segoe UI", 11f, GraphicsUnit.Point);
         // זמני היום בעמודה בצד (kiosk.restZmanimSide: right/left), כדי שלא יתנגשו בהקדשה ובשעה במרכז.
         // העמודה לא זזה עם dx (רק dy), והתוכן במרכז מוגבל לרוחב שנשאר בין שתי השוליים.
-        var zmItems = ZmanimItems(Zmanim.Sections(DateTime.Now));
+        // #57: בחירת תוכן — full (הכל), zmanim (בלי פסוק), clock (שעה ותאריך בלבד), verse (פסוק בלי זמנים)
+        string rc = Config.Get("kiosk.restContent", "full");
+        var zmItems = rc is "clock" or "verse" ? new List<string>() : ZmanimItems(Zmanim.Sections(DateTime.Now));
         bool zmLeft = Config.Get("kiosk.restZmanimSide", "right") == "left";
         float colW = zmItems.Count > 0 ? Math.Min(340 * s, r.Width * 0.24f) : 0;
         float colMargin = 28 * s;
@@ -412,7 +414,7 @@ internal sealed class RestScreen : Form
             g.FillEllipse(goldB, cx - 4 * s, y - 4 * s, 8 * s, 8 * s);
         }
         y += 14 * s;
-        g.DrawString("וְהָגִיתָ בּוֹ יוֹמָם וָלַיְלָה", verseF, dim, Line(y, 40 * s), rtl);
+        if (rc is "full" or "verse") g.DrawString("וְהָגִיתָ בּוֹ יוֹמָם וָלַיְלָה", verseF, dim, Line(y, 40 * s), rtl);
         y += 58 * s;
 
         var now = DateTime.Now;

@@ -747,6 +747,9 @@
     ZMAN_FIELDS.forEach(function (z) {
       fields.push({ name: 'zm_' + z.id, type: 'checkbox', label: z.label, value: zmanShow.indexOf(z.id) >= 0 });
     });
+    fields.push({ name: 'rcontent', type: 'select', label: 'תוכן שומר המסך', value: st.restContent || 'full',
+      options: [{ value: 'full', label: 'הכל: פסוק, שעה, תאריך וזמני היום' }, { value: 'zmanim', label: 'זמני היום (בלי פסוק)' },
+        { value: 'verse', label: 'פסוק, שעה ותאריך (בלי זמנים)' }, { value: 'clock', label: 'שעה ותאריך בלבד' }] });
     fields.push({ name: 'parsha', type: 'checkbox', label: 'פרשת השבוע בשומר המסך', value: !!st.showParsha,
       hint: 'שם הפרשה הקרובה (השבת הנוכחית/הבאה)' });
     fields.push({ name: 'dafyomi', type: 'checkbox', label: 'דף יומי בשומר המסך', value: !!st.showDafYomi,
@@ -761,7 +764,7 @@
   };
   SS.screensaverPayload = function (x) {
     return {
-      restScreen: !!x.rest, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi,
+      restScreen: !!x.rest, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, restContent: x.rcontent || 'full', showParsha: !!x.parsha, showDafYomi: !!x.dafyomi,
       zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
       zmanimElevation: +String(x.zelev).trim() || 0, zmanimAlert: x.zalert || '', zmanimAlertMinutes: +String(x.zalertmin).trim() || 10, zmanimFallbackEngine: x.zengine,
       zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
