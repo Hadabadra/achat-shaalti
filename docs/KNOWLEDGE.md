@@ -55,7 +55,7 @@
 - **CI:**
   - `.github/workflows/bridge.yml` בענף הזה בלבד, על `windows-latest`.
   - אורז את `system-settings/` ואת `file-explorer/` לקובצי `.otzplugin` בתוך `bridge/plugins/`. התיקייה ב-gitignore, ומשם הקבצים מוטמעים כמשאב.
-  - artifact נוצר בכל דחיפה. Release נוצר רק בתג `bridge-v*`.
+  - artifact נוצר בכל דחיפה. Release מתויג `vX.Y.Z` (לא `bridge-v*`).
 - **גודל ה-exe:** כ-89MB, עם `EnableCompressionInSingleFile`. אי אפשר לבצע trimming, כי הגשר משתמש ב-WinForms.
 - **שורת hit בחיפוש:** `{type:"hit", entryType:"dir"|"file", name, path, size, modified}`. ב-`bridge.js` הקוד כבר קורא את `entryType`.
 - **Wi-Fi דרך netsh:**
