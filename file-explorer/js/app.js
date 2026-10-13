@@ -75,6 +75,49 @@
     return ok;
   }
 
+  /* ---------- פתיחה זמנית של המחשב (מצב נעילה): חיווי קבוע בכותרת ----------
+     אותו שדה tempUnlock מ-/kiosk/status שמוצג בהגדרות מערכת ← נעילה. החיווי בכותרת, ולא באזור התוכן,
+     כדי שיישאר גלוי גם כשמסך הנעילה של הסייר מוצג. בתחילת הפתיחה ובסופה המדיניות נטענת מחדש,
+     כי בזמן הפתיחה גם הסייר פתוח לגמרי (הגשר אוכף; כאן רק משקפים) */
+  var TU = { end: 0, poll: null, tick: null, on: false };
+
+  function tempPoll() {
+    clearTimeout(TU.poll);
+    if (S.suspended || !S.prov || S.prov.kind !== 'bridge' || !window.Otzaria) { tempShow(0); return; }
+    FX.Bridge.call('/kiosk/status', {}).then(function (st) {
+      var tu = st && st.tempUnlock;
+      tempShow(tu && tu.active ? tu.secondsLeft : 0);
+    }, function () { /* גשר ישן או תקלה רגעית: לא משנים את החיווי */ }).then(function () {
+      TU.poll = setTimeout(tempPoll, TU.on ? 15000 : 30000);
+    });
+  }
+
+  function tempShow(secondsLeft) {
+    var was = TU.on;
+    TU.on = secondsLeft > 0;
+    TU.end = TU.on ? Date.now() + secondsLeft * 1000 : 0;
+    clearInterval(TU.tick); TU.tick = null;
+    var c = $('fx-temp');
+    if (!TU.on) {
+      c.hidden = true; c.innerHTML = '';
+    } else {
+      c.title = 'המחשב פתוח זמנית. בתום הזמן הנעילה תחזור מעצמה';
+      c.innerHTML = ic('clock') + '<span>פתוח זמנית</span> <bdi dir="ltr" id="fx-temp-left"></bdi>';
+      c.hidden = false;
+      tempTickOnce();
+      TU.tick = setInterval(tempTickOnce, 1000);
+    }
+    if (was !== TU.on && S.prov) afterPolicy();
+  }
+
+  function tempTickOnce() {
+    var left = Math.max(0, Math.ceil((TU.end - Date.now()) / 1000));
+    var el = $('fx-temp-left');
+    if (el) el.textContent = Math.floor(left / 60) + ':' + (left % 60 < 10 ? '0' : '') + (left % 60);
+    /* בתום הזמן: בודקים מול הגשר (הוא מקור האמת) במקום להסתמך על השעון כאן */
+    if (left <= 0) { clearInterval(TU.tick); TU.tick = null; setTimeout(tempPoll, 2500); }
+  }
+
   /* ---------- חיבור לגשר ומעבר אוטומטי ---------- */
   function setChip() {
     var c = $('fx-chip');
@@ -126,6 +169,7 @@
     S.back = []; S.fwd = []; S.clip = null; S.tabs = null; S.tab = 0;
     setChip();
     renderCmds();
+    tempPoll();
     var prefs = loadPrefs();
     $('fx-hidden').hidden = !p.caps.hidden;
     $('fx-add-folder').hidden = !p.caps.addFolder;
@@ -1631,9 +1675,10 @@
       window.Otzaria.on('plugin.boot', boot);
       window.Otzaria.on('theme.changed', ui.applyTheme);
       window.Otzaria.on('reader.toolbar_item_clicked', onToolbarItem);
-      window.Otzaria.on('plugin.suspended', function () { S.suspended = true; clearTimeout(S.probeTimer); cancelSearch(); });
+      window.Otzaria.on('plugin.suspended', function () { S.suspended = true; clearTimeout(S.probeTimer); clearTimeout(TU.poll); cancelSearch(); });
       window.Otzaria.on('plugin.resumed', function () {
         S.suspended = false;
+        tempPoll();
         if (!S.prov || S.prov.kind !== 'bridge') connect(false);
         else FX.Bridge.probe().then(function (h) { if (!h) connect(false); else afterPolicy(); });
       });
