@@ -112,23 +112,24 @@
         '<div class="setting-row"><div class="setting-text"><b>מה פתוח בזמן נעילה</b><span class="muted">' +
         ui.esc((st.openSections || []).map(function (id) { return SECTION_NAMES[id] || id; }).join(', ') || 'רק תוכנות לימוד ואודות') +
         (st.readOnly ? ' · קבצים לקריאה בלבד' : '') + (st.allowExcelDocs ? ' · Excel מותר בסייר' : '') + (st.clock !== false ? ' · שעון צף' : '') + '</span></div>' +
-        '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
+        '</div>' +
         '<div class="setting-row"><div class="setting-text"><b>תזמון נעילה לפי שעות</b><span class="muted">' +
         (st.schedule && st.schedule.enabled
           ? 'נעילה אוטומטית בכל יום <bdi dir="ltr">' + ui.esc(st.schedule.start) + '–' + ui.esc(st.schedule.end) + '</bdi>'
           : 'כבוי — נעילה ידנית בלבד') + '</span></div>' +
-        '<button class="btn btn-tonal" data-act="settings">' + ui.icon('edit') + 'עריכה</button></div>' +
+        '</div>' +
         '<div class="setting-row"><div class="setting-text"><b>פתיחה זמנית בסיסמה נפרדת</b><span class="muted">' + tempSummary(tu) + '</span></div>' +
-        '<button class="btn btn-tonal" data-act="settings4">' + ui.icon('edit') + 'עריכה</button></div>' +
+        '</div>' +
         '<div class="setting-row"><div class="setting-text"><b>קבצים שמותר לפתוח בזמן נעילה</b><span class="muted"><bdi dir="ltr">' +
         ui.esc((st.allowOpenExtensions || []).length ? st.allowOpenExtensions.map(function (x) { return '.' + x; }).join(', ') : '—') + '</bdi></span></div>' +
-        '<button class="btn btn-tonal" data-act="settings2">' + ui.icon('edit') + 'עריכה</button></div>' +
+        '</div>' +
         '<div class="setting-row"><div class="setting-text"><b>שומר מסך וזמני היום</b><span class="muted">' +
         ui.esc(st.zmanimCity || (st.zmanimLocation ? 'קואורדינטות מותאמות אישית' : 'לא הוגדר מיקום')) +
         (st.yahrzeitDay ? ' · יום השנה מוגדר' : '') + '</span></div>' +
         '<button class="btn btn-tonal" data-act="settings3">' + ui.icon('clock') + 'לטאב שומר מסך</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
+      html += '<div class="card"><div class="card-title">הגדרות נעילה</div><div data-slot="kset">' + ui.loading('טוען הגדרות…') + '</div></div>';
       html += programsCard(progs, found, !!st.autoTorah);
       html += fxCard();
       html += hardCard(st.hard || {});
@@ -173,10 +174,8 @@
     on('temp-unlock', function () { tempUnlock(body, st); });
     on('temp-end', function () { tempEnd(body); });
     on('chpw', function () { changePw(body); });
-    on('settings', function () { editSettings(body, st); });
-    on('settings2', function () { editSettings(body, st); });
+    editSettings(body, st); /* הגדרות הנעילה מוצגות ישירות בעמוד, לא מאחורי כפתור */
     on('settings3', function () { SS.show('screensaver'); });
-    on('settings4', function () { editSettings(body, st); });
     on('prog-add', function () { addProgram(body, {}); });
     on('prog-auto', function () { toggleAuto(body, !!st.autoTorah); });
     found.forEach(function (f, i) {
@@ -552,7 +551,8 @@
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
     fields.push({ name: 'pos', label: 'מיקום השעון (bottom-left / bottom-right / top-left / top-right)', value: st.clockPosition || 'bottom-left', dir: 'ltr' });
     fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
-    var ok = await ui.dialog({
+    var slot = body.querySelector('[data-slot=kset]'); if (!slot) return;
+    var ok = await ui.inlineForm(slot, {
       title: 'הגדרות נעילה', icon: 'edit',
       body: '<p class="muted">מה פתוח לתלמיד בזמן נעילה, ואיך נראה המסך. הגדרות שלא סומנו מוסתרות ונחסמות גם בגשר.</p>',
       fields: fields,

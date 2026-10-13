@@ -240,6 +240,7 @@
     'הסיסמאות החדשות אינן תואמות': 'The new passwords do not match',
     'הסיסמה עודכנה': 'Password updated',
     'הגדרות נעילה': 'Lock settings',
+    'טוען הגדרות…': 'Loading settings…',
     'תוכנות מותרות לפתיחה': 'Allowed programs',
     'תוכנות לימוד': 'Study programs',
     'פתיחת תוכנה': 'Open a program',

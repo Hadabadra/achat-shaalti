@@ -203,6 +203,28 @@
     return v;
   };
 
+  /* טופס בתוך עמוד (במקום דיאלוג מאחורי כפתור): אותן אפשרויות של ui.dialog — fields, body, validate, onOpen, onSubmit.
+     מחזיר Promise שמתקיים (true) אחרי שמירה מוצלחת. בסיס מינימלי — להרחבה בהמשך. */
+  ui.inlineForm = function (slot, opt) {
+    return new Promise(function (resolve) {
+      slot.innerHTML = (opt.body || '') + '<form class="ss-form" novalidate><div class="dlg-fields">' + ui.fieldsHtml(opt.fields) + '</div>' +
+        '<div class="form-msg" hidden></div>' +
+        '<div class="row-actions"><button class="btn btn-primary" type="submit">' + ui.icon('check') + 'שמירה</button></div></form>';
+      var form = slot.querySelector('form'), msg = form.querySelector('.form-msg'), btn = form.querySelector('button[type=submit]');
+      function say(m) { msg.textContent = m || ''; msg.hidden = !m; }
+      if (opt.onOpen) opt.onOpen(form);
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var v = ui.fieldValues(form, opt.fields);
+        var m = opt.validate ? opt.validate(v) : '';
+        if (m) { say(m); return; }
+        say(''); btn.disabled = true;
+        try { if (opt.onSubmit) await opt.onSubmit(v); resolve(true); }
+        catch (err) { say(ui.errText ? ui.errText(err) : String(err && err.message || err)); btn.disabled = false; }
+      });
+    });
+  };
+
   ui.dialog = function (opt) {
     return new Promise(function (resolve) {
       var host = document.getElementById('dialogs');
