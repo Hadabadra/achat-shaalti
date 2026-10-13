@@ -321,13 +321,13 @@
     var ok = await ui.dialog({
       title: 'שינוי סיסמת נעילה', icon: 'key',
       fields: [
-        { name: 'old', label: 'סיסמה נוכחית', type: 'password', dir: 'ltr' },
+        { name: 'old', label: 'סיסמה נוכחית', type: 'password', dir: 'ltr', hint: 'שכחתם? הקלידו כאן את קוד השחזור (12 תווים). הנעילה נשארת פעילה, וקוד שחזור חדש יוצג' },
         { name: 'n1', label: 'סיסמה חדשה', type: 'password', dir: 'ltr' },
         { name: 'n2', label: 'אימות סיסמה חדשה', type: 'password', dir: 'ltr' }
       ],
       actions: [{ label: 'ביטול', value: false }, { label: 'שמירה', value: true, kind: 'primary' }],
       validate: function (x) {
-        if (!x.old) return 'יש להקליד את הסיסמה הנוכחית';
+        if (!x.old) return 'יש להקליד את הסיסמה הנוכחית או את קוד השחזור';
         if (x.n1.length < MIN_PW) return 'הסיסמה החדשה חייבת להכיל לפחות ' + MIN_PW + ' תווים';
         if (x.n1 !== x.n2) return 'הסיסמאות החדשות אינן תואמות';
         return '';

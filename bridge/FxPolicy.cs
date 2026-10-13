@@ -195,6 +195,7 @@ public static class FxPolicy
         string pw = b.Str("password");
         if (allowRecovery) Kiosk.RequirePasswordOrRecovery(pw); else Kiosk.RequirePassword(pw);
         if (!Kiosk.IsRecoveryCode(pw)) TwoFactor.Require("שינוי מדיניות סייר הקבצים");
+        AdminLog.Add("שינוי מדיניות סייר הקבצים");
     }
 
     private static object Set(JsonElement b)

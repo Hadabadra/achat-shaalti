@@ -700,6 +700,13 @@ public static partial class Kiosk
             // שינוי סיסמה קיימת: אימות הישנה, וסנכרון לרכיב ההקשחה אם מותקן. קוד השחזור הקיים נשמר
             Verify(b.Str("oldPassword"), allowRecovery: true);
             if (HardLock.Available) HardLock.SetPassword(b.Str("oldPassword"), newPassword);
+            // #56: שחזור סיסמה שנשכחה בקוד השחזור — הנעילה נשארת פעילה, והקוד שנוצל מוחלף בחדש (חד-פעמי)
+            if (IsRecoveryCode(b.Str("oldPassword") ?? ""))
+            {
+                recovery = Secret.NewRecoveryCode();
+                StoreSecret(recovery, "kiosk.recoveryHash", "kiosk.recoverySalt");
+                AdminLog.Add("שחזור סיסמת מנהל בקוד שחזור");
+            }
         }
         else
         {
@@ -708,6 +715,7 @@ public static partial class Kiosk
             StoreSecret(recovery, "kiosk.recoveryHash", "kiosk.recoverySalt");
         }
         StoreSecret(newPassword, "kiosk.passwordHash", "kiosk.salt");
+        AdminLog.Add("עדכון סיסמת מנהל");
         Config.Save();
         return recovery == null ? new { ok = true } : new { ok = true, recoveryCode = recovery };
     }
@@ -716,6 +724,7 @@ public static partial class Kiosk
     {
         if (!HasPassword) throw BridgeException.BadRequest("יש להגדיר סיסמה לפני הפעלת הנעילה");
         Verify(b.Str("password"), allowRecovery: false);
+        AdminLog.Add("הפעלת נעילה");
 
         bool strict = b.Bool("strict", false); // כבוי כברירת מחדל
         bool blockTm = b.Bool("blockTaskManager", true);
@@ -752,6 +761,7 @@ public static partial class Kiosk
         string pw = b.Str("password");
         bool viaRecovery = IsRecoveryCode(pw);
         Verify(pw, allowRecovery: true);
+        AdminLog.Add("ביטול נעילה");
         // קוד שחזור פטור מ-2FA (ביטול חירום); סיסמה רגילה דורשת גם Windows Hello אם מופעל
         if (!viaRecovery) TwoFactor.Require("ביטול נעילת המחשב");
         if (HardLock.Available) HardLock.Disable(pw);
@@ -763,6 +773,7 @@ public static partial class Kiosk
     private static object Settings(JsonElement b)
     {
         Verify(b.Str("password"), allowRecovery: false);
+        AdminLog.Add("שינוי הגדרות נעילה");
         // שינוי הגדרות דורש Windows Hello כשהאימות הדו-שלבי כבר פעיל (הפעלה ראשונה מטופלת למטה)
         TwoFactor.Require("שינוי הגדרות הנעילה");
         if (b.Has("twoFactor"))
