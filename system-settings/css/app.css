@@ -70,3 +70,10 @@ select.input { appearance: auto; cursor: pointer; }
 .check-row.is-disabled .check-box { cursor: not-allowed; }
 /* פתיחה זמנית: הזמן שנותר בכרטיס המצב */
 .temp-left { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+/* #11: הסברי הנעילה מקופלים — לחיצה על הכותרת פותחת */
+details.card.explain > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: .5em; margin: 0; }
+details.card.explain > summary::-webkit-details-marker { display: none; }
+details.card.explain > summary::before { content: '◂'; transition: transform .15s; }
+details.card.explain[open] > summary::before { transform: rotate(-90deg); }
+details.card.explain[open] > summary { margin-bottom: .75em; }
