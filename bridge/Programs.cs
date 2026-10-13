@@ -228,6 +228,44 @@ public static class Programs
         return found;
     }
 
+    /// <summary>
+    /// כל החלונות הראשיים הגלויים (עם כותרת) של התוכנה, כולל הכותרת של כל אחד מהם — משמש את סרגל הצד
+    /// להציג רשימת חלונות לבחירה (למשל כמה מסמכי Word פתוחים), כתחליף בטוח ל-Alt+Tab שחסום בזמן נעילה.
+    /// </summary>
+    public static List<(IntPtr Handle, string Title)> ExistingWindows(Entry e)
+    {
+        int session = Process.GetCurrentProcess().SessionId;
+        var found = new List<(IntPtr, string)>();
+        try
+        {
+            EnumWindows((h, _) =>
+            {
+                if (!IsWindowVisible(h) || GetWindow(h, 4 /* GW_OWNER */) != IntPtr.Zero || GetWindowTextLength(h) == 0) return true;
+                GetWindowThreadProcessId(h, out uint pid);
+                try
+                {
+                    using var p = Process.GetProcessById((int)pid);
+                    if (p.SessionId != session || IsOwnOrBlocked(p)) return true;
+                    if (MatchesList(p, new[] { e })) found.Add((h, WindowTitle(h)));
+                }
+                catch { }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch { }
+        return found;
+    }
+
+    /// <summary>כותרת החלון (למשל שם הקובץ הפתוח); מחרוזת ריקה אם אין</summary>
+    private static string WindowTitle(IntPtr h)
+    {
+        int len = GetWindowTextLength(h);
+        if (len <= 0) return "";
+        var sb = new System.Text.StringBuilder(len + 1);
+        GetWindowText(h, sb, sb.Capacity);
+        return sb.ToString();
+    }
+
     private static object Add(JsonElement b)
     {
         Kiosk.RequirePassword(b.Str("password"));
@@ -661,6 +699,7 @@ public static class Programs
     [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr h, uint cmd);
     [DllImport("user32.dll")] private static extern int GetWindowTextLength(IntPtr h);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int max);
 
     /// <summary>
     /// מחפש חלון ראשי גלוי (עם כותרת, בלי בעלים) של תהליך שהוא התוכנה שנפתחה: מהרשימה, או חדש אחרי הפתיחה

@@ -166,7 +166,7 @@
       allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left',
       restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
       candleLightingMinutes: 18, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
-      sideBar: true, sideBarIconsOnly: false, resetOnShutdown: false,
+      sideBar: true, sideBarIconsOnly: false, sideBarPosition: 'right', resetOnShutdown: false,
       activatedBy: 'manual',
       /* פתיחה זמנית (תואם ל-Kiosk.TempUnlockStatus בגשר); active/secondsLeft/until מחושבים ב-/kiosk/status */
       tempUnlock: { enabled: false, configured: false, minutes: 30, maxMinutes: 60, twoFactorOn: false, usable: false,
@@ -357,6 +357,7 @@
       if (typeof b.yahrzeitDay === 'number') M.kiosk.yahrzeitDay = Math.max(0, Math.min(30, b.yahrzeitDay | 0));
       if (typeof b.yahrzeitLabel === 'string') M.kiosk.yahrzeitLabel = b.yahrzeitLabel;
       if (b.clockPosition) M.kiosk.clockPosition = b.clockPosition;
+      if (b.sideBarPosition) M.kiosk.sideBarPosition = b.sideBarPosition;
       if (Array.isArray(b.openSections)) M.kiosk.openSections = b.openSections.slice();
       if (b.schedule && typeof b.schedule === 'object') {
         if (typeof b.schedule.enabled === 'boolean') M.kiosk.schedule.enabled = b.schedule.enabled;
