@@ -64,3 +64,21 @@ select.input { appearance: auto; cursor: pointer; }
   outline: none;
   box-shadow: 0 0 0 0.1875em var(--color-surface), 0 0 0 0.3125em var(--color-primary);
 }
+
+/* שדה מושבת בדיאלוג (למשל פתיחה זמנית כשהאימות הדו-שלבי כבוי) */
+.check-row.is-disabled, .field.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.check-row.is-disabled .check-box { cursor: not-allowed; }
+/* פתיחה זמנית: הזמן שנותר בכרטיס המצב */
+.temp-left { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+/* #11: הסברי הנעילה מקופלים — לחיצה על הכותרת פותחת */
+details.card.explain > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: .5em; margin: 0; }
+details.card.explain > summary::-webkit-details-marker { display: none; }
+details.card.explain > summary::before { content: '◂'; transition: transform .15s; }
+details.card.explain[open] > summary::before { transform: rotate(-90deg); }
+details.card.explain[open] > summary { margin-bottom: .75em; }
+
+/* #13 (13.10.2026): מצב קומפקטי כמו באוצריא — תפריט צד של אייקונים בלבד */
+body.ss-compact .sidenav { width: auto; min-width: 0; padding-inline: 0.375em; }
+body.ss-compact .nav-item span, body.ss-compact .nav-group, body.ss-compact .nav-search { display: none; }
+body.ss-compact .nav-item { justify-content: center; padding-inline: 0.625em; }

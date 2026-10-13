@@ -415,12 +415,88 @@ a.btn { text-decoration: none; display: inline-flex; }
   .fx-set-navbtn { flex-shrink: 0; }
 }
 
-/* נגישות: טבעת פוקוס אחידה למקלדת (Tab) — אותה טבעת-בתוך-טבעת כמו app.css */
-.fx-cmd:focus-visible,
-.fx-crumb:focus-visible,
-.fx-seg-btn:focus-visible,
-.fx-tab:focus-visible,
-.fx-set-navbtn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 0.1875em var(--color-surface), 0 0 0 0.3125em var(--color-primary);
+/* ---------- כרטיסיות ---------- */
+.fx-tabs { display: flex; align-items: flex-end; gap: 0.25em; padding: 0.375em 0.75em 0; overflow-x: auto; flex: 0 0 auto; }
+.fx-tab {
+  display: flex; align-items: center; gap: 0.5em; max-width: 14em; min-width: 6em; padding: 0.4375em 0.75em;
+  border-radius: 0.625em 0.625em 0 0; color: var(--fx-muted); cursor: default; font-size: 0.8125em; background: transparent;
 }
+.fx-tab:hover { background: var(--fx-hover); }
+.fx-tab.on { background: var(--color-surface-container); color: var(--color-on-surface); }
+.fx-tab svg { width: 1.25em; height: 1.25em; flex: 0 0 auto; }
+.fx-tab-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+.fx-tab-x, .fx-tab-new { border: 0; background: none; color: inherit; cursor: pointer; border-radius: 0.375em; display: grid; place-items: center; padding: 0.1875em; }
+.fx-tab-x:hover, .fx-tab-new:hover { background: var(--fx-hover); }
+.fx-tab-x svg, .fx-tab-new svg { width: 1em; height: 1em; }
+.fx-tab-new { margin-bottom: 0.25em; }
+
+/* ---------- עמודות ---------- */
+.fx-col { position: relative; }
+.fx-col-rs { position: absolute; inset-block: 0.25em; inset-inline-end: -0.25em; width: 0.5em; cursor: col-resize; z-index: 2; }
+.fx-col-rs::after { content: ''; position: absolute; inset-block: 0.1em; inset-inline-start: 0.25em; width: 0.0625em; background: var(--fx-line); }
+.fx-col-rs:hover::after { background: var(--color-primary); }
+.fx-chk { display: inline-block; width: 1.25em; text-align: center; color: var(--color-primary); }
+
+/* ---------- שורות מצוילות וחיפוש עם קטעי תוכן (בסגנון Everything) ---------- */
+.fx-list.striped .fx-row:nth-child(even):not(.sel):not(:hover) { background: color-mix(in srgb, var(--color-on-surface) 4.5%, transparent); }
+.fx-name-wrap { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.fx-snip { color: var(--fx-muted); font-size: 0.8125em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-row.has-snip { height: auto; min-height: var(--fx-row-h); padding-block: 0.3125em; }
+.fx-row.sel .fx-snip { color: inherit; opacity: 0.85; }
+mark.fx-hit { background: color-mix(in srgb, #f6c445 55%, transparent); color: inherit; border-radius: 0.1875em; padding: 0 0.0625em; }
+mark.fx-hit.cur { background: #f6a21b; color: #1c1c1c; outline: 0.125em solid #f6a21b; }
+
+/* ---------- צופים נוספים ---------- */
+.fx-media { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1em; min-height: 100%; padding: 1.5em; }
+.fx-media video { max-width: 100%; max-height: 78vh; border-radius: 0.5em; background: #000; }
+.fx-media audio { width: min(32em, 100%); }
+.fx-media-ic svg { width: 5em; height: 5em; color: var(--color-primary); }
+.fx-sheet-tabs { display: flex; gap: 0.25em; padding: 0.5em; border-bottom: 0.0625em solid var(--fx-line); overflow-x: auto; position: sticky; top: 0; background: var(--color-surface-container); z-index: 1; }
+.fx-sheet-tabs .btn.on { background: var(--fx-sel); color: var(--fx-on-sel); }
+.fx-sheet-body { padding: 0.75em; overflow: auto; }
+.fx-xl { border-collapse: collapse; font-size: 0.875em; }
+.fx-xl td, .fx-xl th { border: 0.0625em solid var(--fx-line); padding: 0.25em 0.625em; white-space: nowrap; text-align: start; }
+.fx-slide { border: 0.0625em solid var(--fx-line); border-radius: 0.75em; padding: 0.75em 1em; margin: 0 0 0.75em; background: var(--color-surface); }
+.fx-slide h4 { margin: 0 0 0.5em; color: var(--color-primary); }
+.fx-unknown { gap: 0.5em; }
+.fx-unknown .fx-ic svg { width: 4em; height: 4em; }
+
+/* טבעת הפוקוס של .fx-cmd/.fx-crumb/.fx-seg-btn/.fx-tab/.fx-set-navbtn אוחדה לתוך base.css (issue #22) */
+
+/* ---------- נעילה והגבלה של הסייר ---------- */
+.fx-lock { display: none; flex: 1 1 auto; align-items: center; justify-content: center; padding: 1.5em; overflow: auto; }
+.fx-shell.is-locked .fx-lock { display: flex; }
+.fx-shell.is-locked .fx-tabs, .fx-shell.is-locked .fx-nav, .fx-shell.is-locked .fx-cmds,
+.fx-shell.is-locked .fx-body, .fx-shell.is-locked .fx-status { display: none; }
+.fx-lock-card {
+  display: flex; flex-direction: column; gap: 0.75em; width: min(24em, 100%); text-align: center;
+  background: var(--color-surface-container-lowest); border: 0.0625em solid var(--fx-line);
+  border-radius: 1.25em; padding: 1.5em 1.5em 1.75em;
+}
+.fx-lock-ic { display: inline-flex; align-self: center; align-items: center; justify-content: center; width: 3.5em; height: 3.5em; border-radius: 1em; background: var(--color-primary-container); color: var(--color-on-primary-container); }
+.fx-lock-ic .ic { width: 2em; height: 2em; }
+.fx-lock-form { display: flex; flex-direction: column; gap: 0.75em; text-align: start; margin-top: 0.25em; }
+.fx-lock-form .form-msg[hidden], .fx-pol .form-msg[hidden] { display: none; }
+
+.fx-pol form { display: flex; flex-direction: column; gap: 0.875em; margin-top: 0.5em; }
+.fx-pol-fs { border: 0.0625em solid var(--fx-line); border-radius: 0.75em; padding: 0.5em 0.875em 0.75em; margin: 0; min-width: 0; }
+.fx-pol-fs legend { padding: 0 0.375em; font-weight: 600; color: var(--fx-muted); font-size: 0.875em; }
+.fx-pol-mode, .fx-pol-root { display: flex; align-items: flex-start; gap: 0.625em; padding: 0.4375em 0; cursor: pointer; }
+.fx-pol-mode > span, .fx-pol-root > span { display: flex; flex-direction: column; gap: 0.125em; min-width: 0; }
+.fx-pol-mode input, .fx-pol-root input { accent-color: var(--color-primary); width: 1.125em; height: 1.125em; margin-top: 0.1875em; flex: 0 0 auto; }
+.fx-pol-mode input:focus-visible, .fx-pol-root input:focus-visible { outline: 0.1875em solid var(--color-primary); outline-offset: 0.125em; }
+.fx-pol-path { color: var(--fx-muted); font-size: 0.875em; overflow-wrap: anywhere; unicode-bidi: plaintext; }
+.fx-pol-add { display: flex; gap: 0.5em; flex-wrap: wrap; margin-top: 0.375em; }
+.fx-pol-add .input { flex: 1 1 14em; width: auto; }
+.fx-pol-min { max-width: 14em; }
+
+/* חבילה [ב]: פס מקום בכוננים */
+.fx-dbar { display: block; height: 6px; border-radius: 3px; background: var(--fx-line, rgba(127,127,127,.25)); overflow: hidden; margin-bottom: 2px; }
+.fx-dbar > i { display: block; height: 100%; background: var(--accent, #2b6cb0); }
+.fx-dbar.low > i { background: #c53030; }
+
+/* #18 (13.10.2026): סרגל הניווט (חזרה/רענון/נתיב/חיפוש) בתוך הסרגל העליון הקבוע — בלי שורה נוספת */
+.topbar .fx-nav { flex: 1 1 auto; min-width: 0; border-bottom: 0; padding: 0; gap: 0.125em; }
+.topbar .fx-nav .icon-btn { width: 2em; height: 2em; }
+.topbar .fx-crumbs, .topbar .fx-search .input { height: 2em; }
+.topbar .fx-search { flex-basis: 14em; }

@@ -163,8 +163,16 @@
     kiosk: {
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
-      allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left',
-      restScreen: true, fullscreenOtzaria: true, activatedBy: 'manual',
+      allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, allowExcelDocs: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left',
+      sideBar: true, sideBarIconsOnly: false, sideBarPosition: 'right', resetOnShutdown: false,
+      restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
+      zmanimElevation: 0, zmanimFallbackEngine: 'noaa',
+      candleLightingMinutes: 18, showParsha: false, showDafYomi: false, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
+      sideBar: true, sideBarIconsOnly: false, resetOnShutdown: false,
+      activatedBy: 'manual',
+      /* פתיחה זמנית (תואם ל-Kiosk.TempUnlockStatus בגשר); active/secondsLeft/until מחושבים ב-/kiosk/status */
+      tempUnlock: { enabled: false, configured: false, minutes: 30, maxMinutes: 60, twoFactorOn: false, usable: false,
+        active: false, secondsLeft: 0, until: '', service: false, serviceOutdated: false },
       schedule: { enabled: false, start: '20:00', end: '02:00', warn: true },
       openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer'],
       allSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth', 'airplane', 'usb']
@@ -361,6 +369,7 @@
         if (/^\d{1,2}:\d{2}$/.test(b.schedule.start || '')) M.kiosk.schedule.start = b.schedule.start;
         if (/^\d{1,2}:\d{2}$/.test(b.schedule.end || '')) M.kiosk.schedule.end = b.schedule.end;
       }
+      tempSync();
       return clone(M.kiosk);
     },
     '/kiosk/zmanim-cache': function () { return { ok: true }; },

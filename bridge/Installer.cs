@@ -51,8 +51,8 @@ public static class Installer
 
         if (showMessage)
         {
-            string msg = Lang.T("תורת אסתר (גשר אוצריא) הותקן ויעלה אוטומטית עם כניסה ל-Windows.",
-                "Otzaria Bridge is installed and will start automatically when you sign in to Windows.");
+            string msg = Lang.T(Program.AppFullName + " הותקן ויעלה אוטומטית עם כניסה ל-Windows.",
+                Program.AppFullNameEn + " is installed and will start automatically when you sign in to Windows.");
             if (canInstall)
                 msg += Lang.T("\n\nעכשיו אוצריא תיפתח ותציע להתקין את התוספים \"סייר קבצים\" ו\"הגדרות מערכת\" — אשרו בחלון ההתקנה של אוצריא.",
                        "\n\nOtzaria will now open and offer to install the \"File Explorer\" and \"System Settings\" plugins — confirm in Otzaria's install window.");

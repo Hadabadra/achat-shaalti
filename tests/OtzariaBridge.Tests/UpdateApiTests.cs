@@ -46,7 +46,7 @@ public class UpdateApiTests
 
 /// <summary>
 /// נורמליזציית קוד שחזור: המשתמש עשוי להקליד עם מקפים ("XXXX-XXXX-XXXX"), רווחים, או אותיות קטנות —
-/// חייבים כולם להצטמצם לאותו מחרוזת שנשמרה בזמן היצירה (ראו Secret.NewRecoveryCode).
+/// חייבים כולם להצטמצם לאותו מחרוזת שנשמרה בזמן היצירה (ראו NewRecoveryCode ב-Kiosk.cs).
 /// </summary>
 public class RecoveryNormalizationTests
 {

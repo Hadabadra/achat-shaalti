@@ -210,6 +210,49 @@ public static partial class Kiosk
         return GetLastInputInfo(ref lii) ? unchecked((uint)Environment.TickCount - lii.dwTime) : 0;
     }
 
+    [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    [DllImport("user32.dll")] private static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+    [DllImport("user32.dll")] private static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] private static extern bool IsHungAppWindow(IntPtr hWnd);
+
+    /// <summary>
+    /// מביא חלון לחזית באמת: משחזר חלון מוקטן, ועוקף את חסימת Windows להעברת פוקוס מתהליך רקע
+    /// (חיבור חוטי הקלט + לחיצת Alt שקטה + הצמדה זמנית למעלה). בלי זה התוכנה נפתחת מאחור ולא ניתן להשתמש בה.
+    /// </summary>
+    internal static void BringToFront(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero || !IsWindow(hwnd)) return;
+        if (IsIconic(hwnd)) ShowWindow(hwnd, 9 /* SW_RESTORE */);
+        else ShowWindow(hwnd, 5 /* SW_SHOW */);
+        uint cur = GetCurrentThreadId();
+        IntPtr fg = GetForegroundWindow();
+        uint fgThread = fg == IntPtr.Zero ? 0 : GetWindowThreadProcessId(fg, out _);
+        uint target = GetWindowThreadProcessId(hwnd, out _);
+        bool a1 = false, a2 = false;
+        try
+        {
+            // לא מתחברים לחוט של חלון תקוע: זה היה עלול לתקוע גם את הגשר
+            if (fgThread != 0 && fgThread != cur && !IsHungAppWindow(fg)) a1 = AttachThreadInput(cur, fgThread, true);
+            if (target != 0 && target != cur && !IsHungAppWindow(hwnd)) a2 = AttachThreadInput(cur, target, true);
+            // Alt למטה ולמעלה: Windows מתירה אז החלפת חזית. מקש לא מוקצה (0xE8) באמצע מונע מהתוכנה להפעיל את תפריט Alt שלה
+            keybd_event(0x12, 0, 0, UIntPtr.Zero);
+            keybd_event(0xE8, 0, 0, UIntPtr.Zero);
+            keybd_event(0xE8, 0, 2, UIntPtr.Zero);
+            keybd_event(0x12, 0, 2, UIntPtr.Zero);
+            SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); // TOPMOST, בלי שינוי גודל
+            SetWindowPos(hwnd, new IntPtr(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); // חזרה ל-NOTOPMOST (נשאר בחזית)
+            BringWindowToTop(hwnd);
+            if (!SetForegroundWindow(hwnd)) SwitchToThisWindow(hwnd, true);
+        }
+        catch (Exception ex) { Config.Log("bring to front: " + ex.Message); }
+        finally
+        {
+            if (a1) AttachThreadInput(cur, fgThread, false);
+            if (a2) AttachThreadInput(cur, target, false);
+        }
+    }
+
     // ---------- נקודות קצה ----------
 
     private static object Status() => new
@@ -278,6 +321,10 @@ public static partial class Kiosk
         _schedTimer ??= new System.Threading.Timer(
             _ => { try { WarnTick(); ScheduleTick(); } catch (Exception ex) { Config.Log("schedule: " + ex.Message); } },
             null, 3000, 15000);
+        // פתיחה זמנית: טיימר קצר יותר, כדי שהנעילה תחזור בזמן ושהבאנר יוצג/יוסתר מיד
+        _tempTimer ??= new System.Threading.Timer(
+            _ => { try { TempTick(); } catch (Exception ex) { Config.Log("temp unlock: " + ex.Message); } },
+            null, 3000, 2000);
     }
 
     /// <summary>הזמן הקרוב שבו חלון הנעילה מתחיל (מהיום אם עוד לא עבר, אחרת מחר)</summary>
@@ -290,13 +337,14 @@ public static partial class Kiosk
     }
 
     /// <summary>עד מתי לדלג על נעילה מתוזמנת (אחרי "ביטול הנעילה" באזהרה)</summary>
-    private static DateTime SkipUntil()
+    // מושווה כ-DateTimeOffset (רגע מוחלט) ולא כשעון קיר, כדי שמעבר שעון קיץ/חורף לא יקצר או יאריך את הדילוג
+    private static DateTimeOffset SkipUntil()
     {
         var s = Config.Get<string>("kiosk.schedule.skipUntil", null);
-        return DateTime.TryParse(s, null, System.Globalization.DateTimeStyles.RoundtripKind, out var d) ? d : DateTime.MinValue;
+        return DateTimeOffset.TryParse(s, null, System.Globalization.DateTimeStyles.RoundtripKind, out var d) ? d : DateTimeOffset.MinValue;
     }
 
-    private static bool Skipping => DateTime.Now < SkipUntil();
+    private static bool Skipping => DateTimeOffset.Now < SkipUntil();
 
     /// <summary>
     /// "ביטול הנעילה" מתוך אזהרת הספירה-לאחור (אחרי אימות סיסמה): מדלג על חלון הנעילה הקרוב
@@ -320,7 +368,8 @@ public static partial class Kiosk
 
     private static void WarnTick()
     {
-        if (!ScheduleEnabled || !ScheduleWarn || IsActive || Skipping) { Overlay.HideCountdown(); return; }
+        // בזמן פתיחה זמנית הנעילה לא תיכנס עד סוף הפתיחה, ולכן אזהרת "המחשב ננעל בעוד..." הייתה מטעה
+        if (!ScheduleEnabled || !ScheduleWarn || IsActive || Skipping || TempUnlockSecondsLeft() > 0) { Overlay.HideCountdown(); return; }
         DateTime start = NextStart();
         if (start != _warnOccurrence) { _warnOccurrence = start; _warned5 = _warned1 = false; }
         double secs = (start - DateTime.Now).TotalSeconds;
@@ -333,6 +382,8 @@ public static partial class Kiosk
         if (HardLock.Available) return; // כשיש שירות — הוא המתזמן
         // תזמון כבוי, או דילוג ידני, נחשבים כמו "מחוץ לחלון"
         bool inWindow = ScheduleEnabled && !Skipping && Sched.InWindow(ScheduleStart, ScheduleEnd, DateTime.Now);
+        // פתיחה זמנית ממתינה: הנעילה שוחררה רק עד סוף הפתיחה, ו-TempTick הוא שמחזיר אותה (או לא, אם החלון הסתיים)
+        if (TempUnlockPendingLocal) return;
         if (inWindow && !IsActive)
         {
             if (!HasPassword) { LogThrottled("schedNoPw", "schedule: אין סיסמת נעילה — התזמון לא הופעל", 3600); return; }
@@ -353,8 +404,257 @@ public static partial class Kiosk
         }
     }
 
-    /// <summary>האם הטקסט שהוקלד הוא קוד השחזור (פטור מאימות דו-שלבי בביטול חירום)</summary>
-    private static bool IsRecoveryCode(string s) =>
+    // ---------- פתיחה זמנית: כל הנעילה נפתחת לזמן קצוב, בסיסמה נפרדת מסיסמת הנעילה ----------
+    // מטרה: מנהל/הורה יכול לאפשר למישהו להשתמש במחשב לזמן קצר, בלי לגלות לו את סיסמת הנעילה.
+    // הסוד נשמר כמו סיסמת הנעילה (PBKDF2 דרך Secret.cs) ב-kiosk.tempUnlockHash/kiosk.tempUnlockSalt, ומשוכפל
+    // לרכיב ההקשחה (tempUnlockHash/tempUnlockSalt ב-hardlock.json) כשהוא מותקן. הוא לעולם אינו מתקבל כסיסמת
+    // הנעילה, וסיסמת הנעילה/קוד השחזור אינם מתקבלים כאן — אלה סודות נפרדים.
+    // תנאי קבוע: האימות הדו-שלבי (Windows Hello) פעיל. סוד משני שאפשר למסור לאחרים מקובל רק כשזהות המנהל
+    // עצמה מאומתת חזק. אם האימות הדו-שלבי כובה (או הפתיחה כובתה) — הפתיחה "רדומה": אי אפשר להשתמש בה,
+    // ופתיחה שרצה באותו רגע מסתיימת והנעילה חוזרת. הסיסמה, המשך והמתג נשמרים, וחוזרים לפעול כשמפעילים
+    // שוב את האימות הדו-שלבי.
+    // מקור האמת: כשרכיב ההקשחה מותקן — זמן הסיום נשמר רק אצלו (hardlock.json, לא כתיב למשתמש), והוא שמחזיר את
+    // הנעילה בתום הזמן (HardLockService.Tick). בלי רכיב הקשחה — הגשר עצמו (TempTick). זו נקודת תורפה ידועה,
+    // כמו בשאר המצב בלי רכיב הקשחה: config.json כתיב למשתמש, ומי שהמחשב פתוח לפניו יכול לערוך אותו.
+
+    private const string KTuHash = "kiosk.tempUnlockHash", KTuSalt = "kiosk.tempUnlockSalt",
+        KTuEnabled = "kiosk.tempUnlockEnabled", KTuMinutes = "kiosk.tempUnlockMinutes", KTuUntil = "kiosk.tempUnlockUntil";
+
+    private static readonly object TuGate = new();
+    private static System.Threading.Timer _tempTimer;
+    private static DateTimeOffset? _tuUntil;   // בלי רכיב הקשחה: זמן הסיום (הזיכרון קובע בזמן ריצה)
+    private static bool _tuLoaded;
+
+    private static bool TempUnlockEnabledLocal => Config.Get(KTuEnabled, false);
+    private static int TempUnlockMinutesLocal => TempUnlock.ClampMinutes(Config.Get(KTuMinutes, TempUnlock.DefaultMinutes));
+    private static bool TempUnlockConfiguredLocal => !string.IsNullOrEmpty(Config.Get<string>(KTuHash, null));
+
+    /// <summary>
+    /// זמן הסיום המקומי. נטען מ-config.json פעם אחת (כדי לשרוד הפעלה מחדש של הגשר), ומאז הזיכרון קובע —
+    /// עריכת הקובץ בזמן ריצה לא מאריכה את הפתיחה. ערך רחוק מ-60 דקות נחשב פג (TempUnlock.SecondsLeft).
+    /// </summary>
+    private static DateTimeOffset? LocalTempUntil
+    {
+        get
+        {
+            lock (TuGate)
+            {
+                if (!_tuLoaded) { _tuLoaded = true; _tuUntil = TempUnlock.ParseUntil(Config.Get<string>(KTuUntil, null)); }
+                return _tuUntil;
+            }
+        }
+    }
+
+    /// <summary>פתיחה זמנית מקומית שהנעילה עוד לא הוחזרה ממנה (גם אם הזמן כבר עבר — TempTick יחזיר אותה)</summary>
+    private static bool TempUnlockPendingLocal => LocalTempUntil != null;
+
+    /// <summary>תמונת מצב אחידה: מרכיב ההקשחה כשהוא מותקן (מקור האמת), אחרת מ-config.json</summary>
+    private sealed record TempView(bool Enabled, bool Configured, int Minutes, bool TwoFactor, DateTimeOffset? Until, bool Service, bool ServiceOutdated)
+    {
+        public bool Usable => Enabled && Configured && TwoFactor && !ServiceOutdated;
+        public int SecondsLeft(DateTimeOffset now) => Usable ? TempUnlock.SecondsLeft(Until, now) : 0;
+    }
+
+    private static TempView CurrentTemp()
+    {
+        if (HardLock.Available)
+        {
+            var t = HardLock.Temp;
+            if (t != null) return new TempView(t.Enabled, t.Configured, t.Minutes, t.TwoFactor, t.Until, true, false);
+            // רכיב הקשחה ישן שאינו מכיר פתיחה זמנית: אי אפשר להשתמש בה עד שיעודכן (אחרת הוא היה נועל מחדש תוך שניות)
+            return new TempView(TempUnlockEnabledLocal, TempUnlockConfiguredLocal, TempUnlockMinutesLocal, HardLock.ServiceTwoFactor, null, true, true);
+        }
+        return new TempView(TempUnlockEnabledLocal, TempUnlockConfiguredLocal, TempUnlockMinutesLocal, TwoFactor.Enabled, LocalTempUntil, false, false);
+    }
+
+    /// <summary>כמה שניות נשארו לפתיחה הזמנית (0 = לא פעילה)</summary>
+    public static int TempUnlockSecondsLeft() => CurrentTemp().SecondsLeft(DateTimeOffset.Now);
+
+    private static object TempUnlockStatus()
+    {
+        var v = CurrentTemp();
+        int left = v.SecondsLeft(DateTimeOffset.Now);
+        return new
+        {
+            enabled = v.Enabled,
+            configured = v.Configured,
+            minutes = v.Minutes,
+            maxMinutes = TempUnlock.MaxMinutes,
+            twoFactorOn = v.TwoFactor,
+            usable = v.Usable,
+            active = left > 0,
+            secondsLeft = left,
+            until = left > 0 ? v.Until.Value.ToString("o") : "",
+            service = v.Service,
+            serviceOutdated = v.ServiceOutdated,
+        };
+    }
+
+    /// <summary>
+    /// כל 2 שניות: מציג/מסתיר את באנר הספירה לאחור, ובלי רכיב הקשחה גם מחזיר את הנעילה בתום הזמן
+    /// (או מיד, אם הפתיחה הפכה לרדומה כי האימות הדו-שלבי כובה). עם רכיב הקשחה הוא שמחזיר את הנעילה,
+    /// והגשר ננעל דרך HardLock.StartSync.
+    /// </summary>
+    private static void TempTick()
+    {
+        var now = DateTimeOffset.Now;
+        var lu = LocalTempUntil;
+        if (lu != null)
+        {
+            bool usableLocal = TempUnlockEnabledLocal && TempUnlockConfiguredLocal && TwoFactor.Enabled;
+            if (!usableLocal) EndTempUnlockLocal("הפתיחה הזמנית כובתה או שהאימות הדו-שלבי כובה");
+            else if (TempUnlock.SecondsLeft(lu, now) == 0) EndTempUnlockLocal("הזמן הסתיים");
+        }
+        var v = CurrentTemp();
+        if (v.SecondsLeft(now) > 0) Overlay.ShowTempUnlock(v.Until.Value);
+        else Overlay.HideTempUnlock();
+    }
+
+    /// <summary>
+    /// סיום פתיחה זמנית מקומית. relock: מחזיר את הנעילה — נעילה ידנית תמיד, ונעילה שהתזמון הפעיל רק אם
+    /// עדיין בתוך חלון התזמון. בלי relock (הפעלה/ביטול ידני בסיסמה, קוד שחזור) רק מנקה.
+    /// </summary>
+    private static void EndTempUnlockLocal(string reason, bool relock = true)
+    {
+        _ = LocalTempUntil;
+        lock (TuGate)
+        {
+            if (_tuUntil == null) return;
+            _tuUntil = null;
+        }
+        Config.Set(KTuUntil, "");
+        Overlay.HideTempUnlock();
+        bool bySchedule = Config.Get<string>("kiosk.activatedBy", "manual") == "schedule";
+        bool inWindow = ScheduleEnabled && !Skipping && Sched.InWindow(ScheduleStart, ScheduleEnd, DateTime.Now);
+        if (relock && !IsActive && (!bySchedule || inWindow))
+        {
+            Config.Log("temp unlock: " + reason + " — הנעילה חוזרת");
+            Config.Set("kiosk.active", true);
+            Config.Set("kiosk.confirmed", true);
+            Config.Save();
+            // כשל סגור: גם אם חלק מההחלה נכשל, מצב הנעילה נשאר פעיל והשומר ממשיך (כמו ForceActivate)
+            try { Apply(); } catch (Exception ex) { Config.Log("temp unlock relock: " + ex.Message); }
+            return;
+        }
+        Config.Save();
+        Config.Log("temp unlock: " + reason + (relock && bySchedule && !inWindow ? " — חלון התזמון הסתיים בינתיים, המחשב נשאר פתוח" : ""));
+    }
+
+    /// <summary>בודק את סיסמת הפתיחה הזמנית בלבד (לא את סיסמת הנעילה), עם אותה השהיה אחרי 5 ניסיונות שגויים</summary>
+    private static void VerifyTempSecret(string secret)
+    {
+        lock (Gate)
+        {
+            ThrowIfLockedOut();
+            if (Matches(secret, KTuHash, KTuSalt)) { _failures = 0; return; }
+            Fail("סיסמת הפתיחה הזמנית שגויה");
+        }
+    }
+
+    /// <summary>POST /kiosk/temp-unlock {password}: הסיסמה כאן היא סיסמת הפתיחה הזמנית, לא סיסמת הנעילה</summary>
+    private static object TempUnlockStart(JsonElement b)
+    {
+        string secret = b.Str("password") ?? "";
+        if (secret.Length == 0) throw BridgeException.BadRequest("יש להקליד את סיסמת הפתיחה הזמנית");
+        var v = CurrentTemp();
+        if (v.ServiceOutdated)
+            throw new BridgeException("unsupported", "רכיב ההקשחה צריך עדכון כדי לתמוך בפתיחה זמנית (נעילה ← נעילה מוקשחת ← עדכון)", 503);
+        if (HardLock.Available)
+        {
+            // השירות מאמת מול הגיבוב שלו, בודק שהפתיחה והאימות הדו-שלבי פעילים ושהמחשב נעול, וקובע את זמן הסיום אצלו
+            HardLock.TempUnlockStart(secret);
+            if (IsActive) Release(keepStrict: true); // בלי להמתין לסנכרון (עד 5 שניות)
+        }
+        else
+        {
+            if (!v.TwoFactor) throw new BridgeException("forbidden", "פתיחה זמנית פועלת רק כשהאימות הדו-שלבי (Windows Hello) מופעל", 403);
+            if (!v.Enabled || !v.Configured) throw BridgeException.BadRequest("הפתיחה הזמנית כבויה או שלא הוגדרה לה סיסמה. אפשר להפעיל אותה בהגדרות הנעילה");
+            VerifyTempSecret(secret);
+            if (!IsActive) throw BridgeException.BadRequest("המחשב אינו נעול כרגע");
+            var until = TempUnlock.Until(DateTimeOffset.Now, v.Minutes);
+            lock (TuGate) { _tuLoaded = true; _tuUntil = until; }
+            Config.Set(KTuUntil, until.ToString("o"));
+            Release(keepStrict: true); // שומר גם את config.json
+        }
+        Config.Log($"temp unlock: המחשב נפתח זמנית ל-{v.Minutes} דקות" + (v.Service ? " (לפי רכיב ההקשחה)" : ""));
+        try { TempTick(); } catch (Exception ex) { Config.Log("temp unlock: " + ex.Message); }
+        return Status();
+    }
+
+    /// <summary>POST /kiosk/temp-unlock/end: סיום מוקדם. רק מחזיר את הנעילה (הכיוון הבטוח), ולכן אינו דורש סיסמה</summary>
+    private static object TempUnlockEnd(JsonElement _)
+    {
+        if (HardLock.Available)
+        {
+            HardLock.TempUnlockEnd();
+            if (HardLock.ServiceActive && !IsActive) ForceActivate(null);
+        }
+        else EndTempUnlockLocal("הפתיחה הזמנית הסתיימה ידנית");
+        try { TempTick(); } catch (Exception ex) { Config.Log("temp unlock: " + ex.Message); }
+        return Status();
+    }
+
+    /// <summary>
+    /// שדות הפתיחה הזמנית ב-/kiosk/settings (אחרי שהסיסמה הראשית ו-Hello כבר אומתו):
+    /// tempUnlockEnabled, tempUnlockMinutes (1–60), tempUnlockPassword (ריק = ללא שינוי).
+    /// הפעלה (מכבוי לדולק) נדחית כשהאימות הדו-שלבי כבוי; מתג שכבר דלוק נשמר כמו שהוא (רדום).
+    /// </summary>
+    private static void ApplyTempUnlockSettings(JsonElement b)
+    {
+        string secret = b.Str("tempUnlockPassword") ?? "";
+        bool hasEn = b.Has("tempUnlockEnabled"), hasMin = b.Has("tempUnlockMinutes"), hasSecret = secret.Length > 0;
+        if (!hasEn && !hasMin && !hasSecret) return;
+        var cur = CurrentTemp();
+        bool want = hasEn ? b.Bool("tempUnlockEnabled") : cur.Enabled;
+        int minutes = hasMin ? TempUnlock.ClampMinutes(b.Long("tempUnlockMinutes", TempUnlock.DefaultMinutes)) : cur.Minutes;
+        // הטופס שולח את כל השדות בכל שמירה; בלי שינוי לא נוגעים בכלום (גם לא ברכיב הקשחה ישן שאינו מכיר אותם)
+        if (want == cur.Enabled && minutes == cur.Minutes && !hasSecret) return;
+        if (cur.ServiceOutdated)
+            throw new BridgeException("unsupported", "רכיב ההקשחה צריך עדכון כדי לתמוך בפתיחה זמנית (נעילה ← נעילה מוקשחת ← עדכון)", 503);
+        if (hasSecret)
+        {
+            if (secret.Length < TempUnlock.MinSecretLength)
+                throw BridgeException.BadRequest($"סיסמת הפתיחה הזמנית חייבת להכיל לפחות {TempUnlock.MinSecretLength} תווים");
+            if (Matches(secret, "kiosk.passwordHash", "kiosk.salt") || Matches(Secret.NormalizeRecovery(secret), "kiosk.recoveryHash", "kiosk.recoverySalt"))
+                throw BridgeException.BadRequest("סיסמת הפתיחה הזמנית חייבת להיות שונה מסיסמת הנעילה ומקוד השחזור");
+        }
+        if (want && !cur.Enabled)
+        {
+            if (!TwoFactorOn)
+                throw BridgeException.BadRequest("פתיחה זמנית דורשת אימות דו-שלבי (Windows Hello) פעיל. הפעילו קודם את האימות הדו-שלבי ונסו שוב.");
+            if (!hasSecret && !cur.Configured) throw BridgeException.BadRequest("יש לבחור סיסמת פתיחה זמנית לפני ההפעלה");
+        }
+        string hash = null, salt = null;
+        if (hasSecret)
+        {
+            byte[] sb = RandomNumberGenerator.GetBytes(16);
+            salt = Convert.ToBase64String(sb);
+            hash = Secret.Hash(secret, sb);
+        }
+        // כשרכיב ההקשחה מותקן נשמר קודם אצלו (מקור האמת); כישלון שם עוצר גם את השמירה המקומית
+        if (HardLock.Available) HardLock.SetTempUnlock(b.Str("password"), want, minutes, hash, salt);
+        Config.Set(KTuEnabled, want);
+        Config.Set(KTuMinutes, minutes);
+        if (hasSecret) { Config.Set(KTuHash, hash); Config.Set(KTuSalt, salt); }
+    }
+
+    /// <summary>האימות הדו-שלבי בפועל: של רכיב ההקשחה כשהוא מותקן (config.json כתיב למשתמש), אחרת של הגשר</summary>
+    private static bool TwoFactorOn => HardLock.Available ? HardLock.ServiceTwoFactor : TwoFactor.Enabled;
+
+    /// <summary>
+    /// הגירה לרכיב ההקשחה (בהתקנה/עדכון שלו): אם עוד אין לו סיסמת פתיחה זמנית, מעבירים את הגיבוב מ-config.json.
+    /// המתג עובר דלוק רק אם האימות הדו-שלבי כבר פעיל בשירות (אחרת השירות היה דוחה את ההפעלה).
+    /// </summary>
+    internal static void SyncTempUnlockToService(string password)
+    {
+        var t = HardLock.Temp;
+        if (t == null || t.Configured || !TempUnlockConfiguredLocal) return;
+        HardLock.SetTempUnlock(password, TempUnlockEnabledLocal && HardLock.ServiceTwoFactor, TempUnlockMinutesLocal,
+            Config.Get<string>(KTuHash, null), Config.Get<string>(KTuSalt, null));
+    }
+
+    /// <summary>האם הטקסט שהוקלד הוא קוד השחזור (פטור מאימות דו-שלבי בביטול חירום) — internal כדי ש-FxPolicy ישתמש באותו כלל</summary>
+    internal static bool IsRecoveryCode(string s) =>
         Matches(Secret.NormalizeRecovery(s), "kiosk.recoveryHash", "kiosk.recoverySalt");
 
     /// <summary>רכיב ההקשחה אומר "נעול" (למשל אחרי עריכת config.json או בחשבון Windows אחר) — נועלים גם כאן</summary>
@@ -390,6 +690,8 @@ public static partial class Kiosk
     {
         string newPassword = b.Str("newPassword") ?? "";
         if (newPassword.Length < 6) throw BridgeException.BadRequest("הסיסמה חייבת להכיל לפחות 6 תווים");
+        // סיסמת הנעילה וסיסמת הפתיחה הזמנית חייבות להיות שונות, אחרת מי שקיבל את הזמנית היה יודע גם את הראשית
+        if (Matches(newPassword, KTuHash, KTuSalt)) throw BridgeException.BadRequest("סיסמת הנעילה חייבת להיות שונה מסיסמת הפתיחה הזמנית");
         string recovery = null;
         if (HasPassword)
         {
@@ -562,7 +864,7 @@ public static partial class Kiosk
             schedChanged = true;
         }
         Config.Save();
-        if (IsActive) Apply();
+        if (IsActive) { Apply(); Overlay.ShowSideBar(); }
         if (schedChanged)
         {
             // כשרכיב ההקשחה מותקן הוא המתזמן — מעבירים אליו את החלון; אחרת הגשר מתזמן מיד
@@ -572,6 +874,8 @@ public static partial class Kiosk
             else
                 try { ScheduleTick(); } catch (Exception ex) { Config.Log("schedule: " + ex.Message); }
         }
+        // פתיחה זמנית שרצה והפכה לרדומה (האימות הדו-שלבי או הפתיחה כובו) מסתיימת מיד
+        try { TempTick(); } catch (Exception ex) { Config.Log("temp unlock: " + ex.Message); }
         return Status();
     }
 
