@@ -450,3 +450,9 @@ mark.fx-hit.cur { background: #f6a21b; color: #1c1c1c; outline: 0.125em solid #f
 .fx-dbar { display: block; height: 6px; border-radius: 3px; background: var(--fx-line, rgba(127,127,127,.25)); overflow: hidden; margin-bottom: 2px; }
 .fx-dbar > i { display: block; height: 100%; background: var(--accent, #2b6cb0); }
 .fx-dbar.low > i { background: #c53030; }
+
+/* #18 (13.10.2026): סרגל הניווט (חזרה/רענון/נתיב/חיפוש) בתוך הסרגל העליון הקבוע — בלי שורה נוספת */
+.topbar .fx-nav { flex: 1 1 auto; min-width: 0; border-bottom: 0; padding: 0; gap: 0.125em; }
+.topbar .fx-nav .icon-btn { width: 2em; height: 2em; }
+.topbar .fx-crumbs, .topbar .fx-search .input { height: 2em; }
+.topbar .fx-search { flex-basis: 14em; }
