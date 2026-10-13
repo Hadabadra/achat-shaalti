@@ -47,22 +47,17 @@ Filename: "{app}\OtzariaBridge.exe"; Parameters: "--install --quiet"; StatusMsg:
 [Code]
 // ---- אישור בפועל שהתוספים הותקנו באוצריא (לא רק שהזרימה הופעלה) ----
 // otzaria://plugin/install-local הוא חד-כיווני, בלי ערוץ חזרה - אבל אוצריא עצמה
-// כן כותבת כל תוסף שהותקן בפועל ל-%APPDATA%\otzaria\plugins\installed\<id>\current
-// (ר' app_paths.dart: getPluginInstallPath). בודקים שם ישירות, כולל את גרסת
-// המניפסט בפועל (כדי לתפוס גם מקרה של תוסף ישן שהותקן בעבר ולא עודכן) - ורק אם
-// הבדיקה האוטומטית לא מצליחה תוך זמן סביר, שואלים את המשתמש כגיבוי.
+// כן מתקינה כל תוסף לתיקייה תחת %APPDATA%\otzaria\plugins\installed\<id>\ -
+// בשם תת-תיקייה אקראי כמו ".release-1538578c" (לא "current"; זה רק שם נתיב
+// מושגי בקוד הדארט של אוצריא - מה שבאמת "פעיל" נקבע ב-DB הפנימי שלה, לא לפי
+// השם בדיסק), אז סורקים את כל תת-התיקיות של <id>\ ובודקים את המניפסט של כל אחת.
+// רק אם הבדיקה האוטומטית לא מצליחה תוך זמן סביר, שואלים את המשתמש כגיבוי.
 const
   FxPluginId = 'com.chadbedera.fileexplorer';
   SettingsPluginId = 'com.chadbedera.systemsettings';
 
 var
   PluginsConfirmed: Boolean;
-
-function AppDataPluginDir(const PluginId: String): String;
-begin
-  // תואם ל-Windows בלבד את getDataRootPath() באוצריא (לא אוצריא פורטבילית - זו מגבלה ידועה)
-  Result := ExpandConstant('{userappdata}') + '\otzaria\plugins\installed\' + PluginId + '\current';
-end;
 
 // Inno Setup's Pascal Script אין בו PosEx מובנה - חיפוש תת-מחרוזת החל ממיקום נתון
 function FindFrom(const SubStr, S: String; Offset: Integer): Integer;
@@ -99,10 +94,23 @@ end;
 
 function PluginUpToDate(const PluginId: String): Boolean;
 var
-  dir: String;
+  parentDir, subDir: String;
+  rec: TFindRec;
 begin
-  dir := AppDataPluginDir(PluginId);
-  Result := DirExists(dir) and (ManifestVersion(dir) = '{#AppVersion}');
+  Result := False;
+  parentDir := ExpandConstant('{userappdata}') + '\otzaria\plugins\installed\' + PluginId;
+  if not DirExists(parentDir) then exit;
+  if not FindFirst(parentDir + '\*', rec) then exit;
+  try
+    repeat
+      if (rec.Attributes and FILE_ATTRIBUTE_DIRECTORY = 0) or (rec.Name = '.') or (rec.Name = '..') then
+        continue;
+      subDir := parentDir + '\' + rec.Name;
+      if ManifestVersion(subDir) = '{#AppVersion}' then begin Result := True; exit; end;
+    until not FindNext(rec);
+  finally
+    FindClose(rec);
+  end;
 end;
 
 function BothPluginsUpToDate(): Boolean;
