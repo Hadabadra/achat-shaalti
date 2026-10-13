@@ -1,7 +1,7 @@
 {
   "id": "com.chadbedera.systemsettings",
   "name": "הגדרות מערכת",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "description": "כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה, מקלדת, עכבר, מדפסות, USB, רשת, ומצב נעילה ללימוד. דורש את תוכנת חסימת אוצריא.",
   "author": "גמח תורת אסתר",
   "homepage": "https://github.com/e0548433917-gif/otzaria-system-tools",

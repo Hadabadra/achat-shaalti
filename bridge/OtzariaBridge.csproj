@@ -10,7 +10,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>OtzariaBridge</AssemblyName>
     <RootNamespace>OtzariaBridge</RootNamespace>
-    <Version>3.4.0</Version>
+    <Version>3.5.0</Version>
     <Product>תוכנת חסימת אוצריא</Product>
     <AssemblyTitle>תוכנת חסימת אוצריא - גמח תורת אסתר</AssemblyTitle>
     <Company>גמח תורת אסתר</Company>
