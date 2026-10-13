@@ -27,7 +27,9 @@
     "app.shortcuts",
     "clipboard.read",
     "fonts.local.read",
-    "library.books.provide"
+    "library.books.provide",
+    "library.books.read",
+    "reader.open"
   ],
   "network": {
     "enabled": true,

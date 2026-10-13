@@ -1382,12 +1382,38 @@
   }
 
   /* ---------- חיפוש זורם ---------- */
+  /* #56: חיפוש גם בספרייה של אוצריא עצמה (library.findBooks) — שורת ספרים מעל תוצאות הקבצים */
+  var libSeq = 0;
+  function libSearch(q) {
+    var host = $('fx-libhits'); if (!host) return;
+    var my = ++libSeq;
+    if (!q || !window.Otzaria || !window.Otzaria.call) { host.hidden = true; host.innerHTML = ''; return; }
+    window.Otzaria.call('library.findBooks', { query: q, limit: 12 }).then(function (r) {
+      if (my !== libSeq) return;
+      var list = (r && (r.data || r.result)) || (Array.isArray(r) ? r : []);
+      if (!list.length) { host.hidden = true; host.innerHTML = ''; return; }
+      host.innerHTML = '<span class="fx-libhits-title">' + ic('book') + 'בספריית אוצריא:</span>' + list.map(function (b, i) {
+        return '<button type="button" class="fx-libhit" data-i="' + i + '" title="פתיחה בקורא של אוצריא">' + ui.esc(b.title || b.bookId || '') + '</button>';
+      }).join('');
+      host.hidden = false;
+      host.onclick = function (e) {
+        var btn = e.target.closest('.fx-libhit'); if (!btn) return;
+        var b = list[+btn.dataset.i] || {};
+        var a = b.bookUid ? { bookUid: b.bookUid } : { bookId: b.bookId || b.title };
+        window.Otzaria.call('reader.openBook', a).then(function (x) {
+          if (x && x.success === false) ui.toast('לא ניתן לפתוח את הספר', 'error');
+        }, function () { ui.toast('לא ניתן לפתוח את הספר', 'error'); });
+      };
+    }, function () { if (my === libSeq) { host.hidden = true; host.innerHTML = ''; } });
+  }
+
   function cancelSearch() {
     if (S.search && !S.search.done) S.search.cancelled = true;
   }
   function exitSearch() {
     cancelSearch();
     S.search = null;
+    libSearch('');
     $('fx-search').value = '';
     renderCrumbs(); renderList(); markSide(); renderCmds();
   }
@@ -1396,6 +1422,7 @@
     if (!q) { if (S.search) exitSearch(); return; }
     if (S.recycle) { ui.toast('אין חיפוש בסל המיחזור', 'info'); return; }
     cancelSearch();
+    libSearch(q);
     var root = S.search ? S.search.root : S.path;
     var content = S.prov.caps.contentSearch && $('fx-content').checked;
     var query = content ? '*' : (/[*?]/.test(q) ? q : '*' + q + '*');
