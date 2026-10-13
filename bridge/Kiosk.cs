@@ -251,8 +251,108 @@ public static class Kiosk
         openSections = OpenSections,
         allSections = AllSections,
         warnings = Warnings(),
+        schedule = new { enabled = ScheduleEnabled, start = ScheduleStart, end = ScheduleEnd, warn = ScheduleWarn },
+        activatedBy = Config.Get<string>("kiosk.activatedBy", "manual"),
         hard = HardLock.Status(),
     };
+
+    // ---------- תזמון נעילה לפי שעות ----------
+
+    public static bool ScheduleEnabled => Config.Get("kiosk.schedule.enabled", false);
+    public static string ScheduleStart => Config.Get<string>("kiosk.schedule.start", "20:00");
+    public static string ScheduleEnd => Config.Get<string>("kiosk.schedule.end", "02:00");
+
+    public static bool ScheduleWarn => Config.Get("kiosk.schedule.warn", true);
+
+    private static System.Threading.Timer _schedTimer;
+    private static DateTime _warnOccurrence = DateTime.MinValue;
+    private static bool _warned5, _warned1;
+
+    /// <summary>
+    /// מתזמן את הנעילה לפי חלון שעות, ומציג אזהרת ספירה-לאחור לפני שהנעילה נכנסת.
+    /// התזמון עצמו (הפעלה/ביטול) רץ רק כשרכיב ההקשחה אינו זמין — כשהוא מותקן הוא מקור האמת
+    /// ומתזמן בעצמו (HardLockService.Tick). האזהרה מוצגת תמיד בחשבון המשתמש, כי זו הצגה למשתמש.
+    /// </summary>
+    public static void StartScheduler()
+    {
+        _schedTimer ??= new System.Threading.Timer(
+            _ => { try { WarnTick(); ScheduleTick(); } catch (Exception ex) { Config.Log("schedule: " + ex.Message); } },
+            null, 3000, 15000);
+    }
+
+    /// <summary>הזמן הקרוב שבו חלון הנעילה מתחיל (מהיום אם עוד לא עבר, אחרת מחר)</summary>
+    private static DateTime NextStart()
+    {
+        var t = Sched.ParseTime(ScheduleStart) ?? TimeSpan.FromHours(20);
+        var now = DateTime.Now;
+        var today = now.Date + t;
+        return today > now ? today : today.AddDays(1);
+    }
+
+    /// <summary>עד מתי לדלג על נעילה מתוזמנת (אחרי "ביטול הנעילה" באזהרה)</summary>
+    // מושווה כ-DateTimeOffset (רגע מוחלט) ולא כשעון קיר, כדי שמעבר שעון קיץ/חורף לא יקצר או יאריך את הדילוג
+    private static DateTimeOffset SkipUntil()
+    {
+        var s = Config.Get<string>("kiosk.schedule.skipUntil", null);
+        return DateTimeOffset.TryParse(s, null, System.Globalization.DateTimeStyles.RoundtripKind, out var d) ? d : DateTimeOffset.MinValue;
+    }
+
+    private static bool Skipping => DateTimeOffset.Now < SkipUntil();
+
+    /// <summary>
+    /// "ביטול הנעילה" מתוך אזהרת הספירה-לאחור (אחרי אימות סיסמה): מדלג על חלון הנעילה הקרוב
+    /// עד סופו, כך שהמחשב לא יינעל הפעם. החלון הבא (מחר) יחול כרגיל.
+    /// </summary>
+    public static void ScheduleSkipCurrent(string password)
+    {
+        RequirePassword(password);
+        DateTime start = NextStart();
+        var st = Sched.ParseTime(ScheduleStart) ?? TimeSpan.FromHours(20);
+        var en = Sched.ParseTime(ScheduleEnd) ?? TimeSpan.FromHours(2);
+        DateTime end = start.Date + en;
+        if (en <= st) end = end.AddDays(1); // חלון שחוצה חצות
+        Config.Set("kiosk.schedule.skipUntil", end.ToString("o"));
+        Config.Save();
+        if (HardLock.Available)
+            try { HardLock.Skip(password, end.ToString("o")); } catch (Exception ex) { Config.Log("hardlock skip: " + ex.Message); }
+        Overlay.HideCountdown();
+        Config.Log("schedule: הנעילה הקרובה בוטלה ידנית עד " + end);
+    }
+
+    private static void WarnTick()
+    {
+        if (!ScheduleEnabled || !ScheduleWarn || IsActive || Skipping) { Overlay.HideCountdown(); return; }
+        DateTime start = NextStart();
+        if (start != _warnOccurrence) { _warnOccurrence = start; _warned5 = _warned1 = false; }
+        double secs = (start - DateTime.Now).TotalSeconds;
+        if (secs <= 300 && secs > 60 && !_warned5) { _warned5 = true; Overlay.ShowCountdown(start); }
+        else if (secs <= 60 && secs > 0 && !_warned1) { _warned1 = true; Overlay.ShowCountdown(start); }
+    }
+
+    private static void ScheduleTick()
+    {
+        if (HardLock.Available) return; // כשיש שירות — הוא המתזמן
+        // תזמון כבוי, או דילוג ידני, נחשבים כמו "מחוץ לחלון"
+        bool inWindow = ScheduleEnabled && !Skipping && Sched.InWindow(ScheduleStart, ScheduleEnd, DateTime.Now);
+        if (inWindow && !IsActive)
+        {
+            if (!HasPassword) { LogThrottled("schedNoPw", "schedule: אין סיסמת נעילה — התזמון לא הופעל", 3600); return; }
+            string otz = OtzariaPath();
+            if (string.IsNullOrEmpty(otz) || !File.Exists(otz))
+            { LogThrottled("schedNoOtz", "schedule: אוצריא לא נמצאה — התזמון לא הופעל", 3600); return; }
+            Config.Log($"schedule: בתוך חלון הנעילה ({ScheduleStart}–{ScheduleEnd}) — הנעילה מופעלת");
+            Config.Set("kiosk.activatedBy", "schedule");
+            Config.Set("kiosk.active", true);
+            Config.Set("kiosk.confirmed", true);
+            Config.Save();
+            try { Apply(); } catch (Exception ex) { Config.Log("schedule apply: " + ex.Message); Release(); }
+        }
+        else if (!inWindow && IsActive && Config.Get<string>("kiosk.activatedBy", "manual") == "schedule")
+        {
+            Config.Log("schedule: מחוץ לחלון הנעילה — הנעילה מבוטלת אוטומטית");
+            Release();
+        }
+    }
 
     /// <summary>רכיב ההקשחה אומר "נעול" (למשל אחרי עריכת config.json או בחשבון Windows אחר) — נועלים גם כאן</summary>
     public static void ForceActivate(string servicePath)
@@ -316,6 +416,7 @@ public static class Kiosk
         Config.Set("kiosk.strict", strict);
         Config.Set("kiosk.blockTaskManager", blockTm);
         Config.Set("kiosk.active", true);
+        Config.Set("kiosk.activatedBy", "manual"); // נעילה ידנית לא תבוטל אוטומטית בסוף חלון התזמון
         Config.Save();
         try { Apply(); }
         catch
@@ -370,8 +471,36 @@ public static class Kiosk
             if (p.Length > 0 && !File.Exists(p)) throw BridgeException.NotFound("הקובץ לא נמצא: " + p);
             Config.Set("kiosk.otzariaPath", p);
         }
+        bool schedChanged = false;
+        if (b.TryGetProperty("schedule", out var sch) && sch.ValueKind == JsonValueKind.Object)
+        {
+            if (sch.Has("enabled")) Config.Set("kiosk.schedule.enabled", sch.Bool("enabled"));
+            if (sch.Has("warn")) Config.Set("kiosk.schedule.warn", sch.Bool("warn"));
+            string ss = sch.Str("start");
+            if (ss != null)
+            {
+                if (!Sched.IsValid(ss)) throw BridgeException.BadRequest("שעת התחלה אינה תקינה (HH:MM)");
+                Config.Set("kiosk.schedule.start", ss);
+            }
+            string se = sch.Str("end");
+            if (se != null)
+            {
+                if (!Sched.IsValid(se)) throw BridgeException.BadRequest("שעת סיום אינה תקינה (HH:MM)");
+                Config.Set("kiosk.schedule.end", se);
+            }
+            schedChanged = true;
+        }
         Config.Save();
         if (IsActive) { Apply(); Overlay.ShowSideBar(); }
+        if (schedChanged)
+        {
+            // כשרכיב ההקשחה מותקן הוא המתזמן — מעבירים אליו את החלון; אחרת הגשר מתזמן מיד
+            if (HardLock.Available)
+                try { HardLock.SetSchedule(b.Str("password"), ScheduleEnabled, ScheduleStart, ScheduleEnd); }
+                catch (Exception ex) { Config.Log("hardlock schedule: " + ex.Message); }
+            else
+                try { ScheduleTick(); } catch (Exception ex) { Config.Log("schedule: " + ex.Message); }
+        }
         return Status();
     }
 
