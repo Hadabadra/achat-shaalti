@@ -22,7 +22,7 @@
         '<div class="card"><div class="card-title">הפעלה וכיבוי</div><div class="power-grid">' +
         POWER.map(function (p) {
           return '<button class="power-btn' + (p.danger ? ' danger' : '') + '" data-a="' + p.action + '">' + ui.icon(p.icon) + '<span>' + p.label + '</span></button>';
-        }).join('') + '</div></div>'';
+        }).join('') + '</div></div>';
       body.querySelectorAll('[data-a]').forEach(function (b) {
         b.addEventListener('click', async function () {
           var p = POWER.find(function (x) { return x.action === b.dataset.a; });
