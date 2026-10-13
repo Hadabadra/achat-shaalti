@@ -301,7 +301,7 @@
     var val = res && (res.data !== undefined ? res.data : res);
     if (val === 'sent' || val === 'queued') {
       var ids = r.items.map(function (x) { return x.id; });
-      try { await SS.bridge.call('/diag/markSent', { ids: ids }, { timeoutMs: 15000 }); }
+      try { await SS.bridge.call('/diag/markSent', { ids: ids, details: details }, { timeoutMs: 15000 }); }
       catch (e) { try { await SS.bridge.call('/diag/ack', { ids: ids }, { timeoutMs: 15000 }); } catch (e2) { /* ננסה בפעם הבאה */ } }
     }
     reportsSent = false; /* מינימלי: מאפשר שליחה חוזרת בסבב הבא */

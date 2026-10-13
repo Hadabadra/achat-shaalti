@@ -60,9 +60,19 @@ internal static class Reports
     private static object Move(JsonElement b, string target)
     {
         int n = 0;
-        if (b.ValueKind == JsonValueKind.Object && b.TryGetProperty("ids", out var ids) && ids.ValueKind == JsonValueKind.Array)
+        var ids = default(JsonElement);
+        if (b.ValueKind == JsonValueKind.Object && b.TryGetProperty("ids", out ids) && ids.ValueKind == JsonValueKind.Array)
             foreach (var x in ids.EnumerateArray())
                 if (MoveOne(x.GetString(), target)) n++;
+        // אם התוסף שלח את הדיווח המאוחד (כולל היומן המקוצר) — הארכיון שומר אותו כמו שנשלח
+        if (target != null && n > 0 && b.TryGetProperty("details", out var d) && d.ValueKind == JsonValueKind.String)
+            try
+            {
+                Directory.CreateDirectory(SentDir);
+                File.WriteAllText(Path.Combine(SentDir, DateTime.Now.ToString("yyyyMMdd-HHmmss-fff") + "-report.txt"), d.GetString(), new UTF8Encoding(false));
+                foreach (var x in ids.EnumerateArray()) File.Delete(Path.Combine(SentDir, Path.GetFileName(x.GetString() ?? "") + ".txt"));
+            }
+            catch { }
         if (target != null) TrimSent();
         return new { done = n };
     }
