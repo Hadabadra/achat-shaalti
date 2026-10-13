@@ -396,23 +396,25 @@ public static class HardLock
             throw new BridgeException("cancelled", "ההתקנה בוטלה (לא אושרה הרשאת מנהל)", 400);
         }
 
-        // ממתינים שהשירות יעלה, ואז מעבירים לו את גיבובי הסיסמה וקוד השחזור (רק בהתקנה ראשונה)
+        // ממתינים שהשירות יעלה. "setup" כבר בוצע בפועל מתוך InstallService (תהליך מורם - רק הוא
+        // עובר את בדיקת ההרשאות של op=setup) - כאן זה רק רשת ביטחון, לא Must, כדי שגרסת שירות ישנה
+        // יותר (שעוד לא עשתה setup בעצמה) לא תישבר, ושקריאה כפולה (כבר מוגדר) לא תפיל את ההתקנה
         JsonObject st = null;
         for (int i = 0; i < 20 && st == null; i++) { st = Call(new JsonObject { ["op"] = "status" }, 1000); if (st == null) Thread.Sleep(500); }
         if (st == null) throw new BridgeException("internal", "השירות הותקן אבל לא עלה", 500);
         if (st["configured"]?.GetValue<bool>() != true)
         {
-            Must(Call(new JsonObject
+            var setupRes = Call(new JsonObject
             {
                 ["op"] = "setup",
                 ["passwordHash"] = Config.Get<string>("kiosk.passwordHash", ""),
                 ["salt"] = Config.Get<string>("kiosk.salt", ""),
                 ["recoveryHash"] = Config.Get<string>("kiosk.recoveryHash", ""),
                 ["recoverySalt"] = Config.Get<string>("kiosk.recoverySalt", ""),
-                // אם האימות הדו-שלבי כבר דלוק בגשר, יורש אותו מיד — אחרת ההתקנה הראשונה הייתה משאירה
-                // את הצינור בלי Hello עד שהמנהל היה נוגע שוב בהגדרות (ביקורת #30 ממצא 1)
                 ["twoFactor"] = Config.Get("kiosk.twoFactor", false),
-            }));
+            });
+            if (setupRes?["ok"]?.GetValue<bool>() != true)
+                Config.Log("hardlock install: setup (רשת ביטחון) נכשל: " + (setupRes?["message"]?.ToString() ?? "אין תשובה"));
         }
         if (Kiosk.IsActive) Enable(b.Str("password"), Kiosk.OtzariaPath());
         if (Kiosk.ScheduleEnabled)
@@ -499,6 +501,30 @@ public static class HardLock
 
     // ================= התקנת השירות (רץ בהרשאות מנהל) =================
 
+    /// <summary>
+    /// תיקון שריד: אם ניסיון התקנה קודם נעצר באמצע (אחרי שהשירות כתב DisableTaskMgr וכו' לחשבון
+    /// המשתמש, לפני שסיים), מפתח ה-Policies\System נשאר עם הרשאות SYSTEM/מנהל בלבד - גם המשתמש
+    /// הבעלים שלו עצמו לא יכול לכתוב/לנקות אותו יותר. מתוקן כאן כי התהליך הזה כן מורם (runas) -
+    /// מעניק בחזרה שליטה מלאה למשתמש הנוכחי (לא פותח יותר ממה שהיה ב-Windows רגיל ללא הקיוסק בכלל).
+    /// </summary>
+    private static void RepairUserPoliciesKeyAcl()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System",
+                RegistryKeyPermissionCheck.ReadWriteSubTree, System.Security.AccessControl.RegistryRights.ChangePermissions | System.Security.AccessControl.RegistryRights.FullControl);
+            if (k == null) return; // לא קיים כלל - שום ACL לתקן
+            var acl = k.GetAccessControl();
+            var user = System.Security.Principal.WindowsIdentity.GetCurrent().User;
+            if (user == null) return;
+            acl.SetAccessRule(new System.Security.AccessControl.RegistryAccessRule(user, System.Security.AccessControl.RegistryRights.FullControl,
+                System.Security.AccessControl.InheritanceFlags.None, System.Security.AccessControl.PropagationFlags.None, System.Security.AccessControl.AccessControlType.Allow));
+            k.SetAccessControl(acl);
+            SvcLog("install: הרשאות Policies\\System של המשתמש שוחזרו");
+        }
+        catch (Exception ex) { SvcLog("install: תיקון הרשאות Policies\\System נכשל (לא קריטי): " + ex.Message); }
+    }
+
     public static int InstallService()
     {
         try
@@ -506,6 +532,7 @@ public static class HardLock
             Directory.CreateDirectory(DataDir);
             SecureDir(DataDir);
             SvcLog("install: מתחיל, גרסה " + Program.Version);
+            RepairUserPoliciesKeyAcl();
 
             bool exists = ServiceInstalled();
             if (exists) StopService();
@@ -526,6 +553,27 @@ public static class HardLock
             sc.Start();
             sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
             SvcLog("install: השירות רץ");
+
+            // התקנה ראשונה (ביקורת #30 ממצא 2 דורשת מנהל ב-op=setup): התהליך הזה כן מורם (runas),
+            // אז מעבירים את הגיבובים מכאן ישירות, במקום להשאיר את זה לגשר הרגיל שקורא לנו אחר כך —
+            // הוא לעולם לא מורם (רץ בהרשאות משתמש רגילות, בכוונה), אז הקריאה שלו הייתה נכשלת תמיד
+            // עם "הגדרה ראשונה דורשת הרשאות מנהל" - גם בהתקנה לגיטימית לגמרי.
+            JsonObject st = null;
+            for (int i = 0; i < 20 && st == null; i++) { st = Call(new JsonObject { ["op"] = "status" }, 1000); if (st == null) Thread.Sleep(500); }
+            if (st != null && st["configured"]?.GetValue<bool>() != true)
+            {
+                var setupRes = Call(new JsonObject
+                {
+                    ["op"] = "setup",
+                    ["passwordHash"] = Config.Get<string>("kiosk.passwordHash", ""),
+                    ["salt"] = Config.Get<string>("kiosk.salt", ""),
+                    ["recoveryHash"] = Config.Get<string>("kiosk.recoveryHash", ""),
+                    ["recoverySalt"] = Config.Get<string>("kiosk.recoverySalt", ""),
+                    ["twoFactor"] = Config.Get("kiosk.twoFactor", false),
+                });
+                if (setupRes?["ok"]?.GetValue<bool>() != true)
+                    SvcLog("install: setup נכשל: " + (setupRes?["message"]?.ToString() ?? "אין תשובה מהשירות"));
+            }
             return 0;
         }
         catch (Exception ex)
