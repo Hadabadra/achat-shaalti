@@ -205,7 +205,7 @@ internal sealed class ClockBar : Form
     private void Refresh_()
     {
         var now = DateTime.Now;
-        _time = now.ToString("HH:mm");
+        _time = now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
         _date = now.ToString("d/M/yyyy");
         _heb = Overlay.HebrewDate(now);
         _bat = "";
@@ -382,7 +382,7 @@ internal sealed class RestScreen : Form
         y += 58 * s;
 
         var now = DateTime.Now;
-        g.DrawString(now.ToString("HH:mm"), timeF, Brushes.White, Line(y, 110 * s), center);
+        g.DrawString(now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture), timeF, Brushes.White, Line(y, 110 * s), center);
         y += 108 * s;
         // #2: התאריך הלועזי באותה שורה עם העברי (לא בשורה נפרדת שנופלת מתחת להקדשה)
         g.DrawString(Overlay.HebrewDate(now) + "   ·   " + now.ToString("d/M/yyyy"), dateF, Brushes.White, Line(y, 40 * s), rtl);

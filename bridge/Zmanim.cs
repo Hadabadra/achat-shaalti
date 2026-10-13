@@ -218,13 +218,34 @@ internal static class Zmanim
     private static string Hm(string v)
     {
         if (string.IsNullOrWhiteSpace(v)) return v;
-        v = v.Trim();
-        if (long.TryParse(v, out long ms) && ms > 100000000000L)
-            return DateTimeOffset.FromUnixTimeMilliseconds(ms).ToLocalTime().ToString("H:mm");
         var inv = System.Globalization.CultureInfo.InvariantCulture;
+        // באג #59: אותיות/סימנים באנגלית סביב השעה — מסירים סימני כיוון ותווי עיצוב (LRM/RLM/LRI…, קטגוריה Cf)
+        // ורווחים קשיחים לפני הפענוח, ומפענחים גם 12 שעות (AM/PM) כדי שהשעה תוצג תמיד כ-H:mm נקי.
+        var sb = new System.Text.StringBuilder(v.Length);
+        foreach (char c in v)
+        {
+            if (char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format) continue;
+            sb.Append(c is '\u00A0' or '\u202F' or '\u2009' ? ' ' : c);
+        }
+        v = sb.ToString().Trim();
+        if (long.TryParse(v, out long ms) && ms > 100000000000L)
+            return DateTimeOffset.FromUnixTimeMilliseconds(ms).ToLocalTime().ToString("H:mm", inv);
         bool tz = v.EndsWith("Z", StringComparison.OrdinalIgnoreCase) || System.Text.RegularExpressions.Regex.IsMatch(v, @"T.*[+-]\d\d:?\d\d$");
-        if (tz && DateTimeOffset.TryParse(v, inv, System.Globalization.DateTimeStyles.None, out var o)) return o.ToLocalTime().ToString("H:mm");
-        if (DateTime.TryParse(v, inv, System.Globalization.DateTimeStyles.None, out var d)) return d.ToString("H:mm");
+        if (tz && DateTimeOffset.TryParse(v, inv, System.Globalization.DateTimeStyles.None, out var o)) return o.ToLocalTime().ToString("H:mm", inv);
+        if (DateTime.TryParse(v, inv, System.Globalization.DateTimeStyles.None, out var d)) return d.ToString("H:mm", inv);
+        // "6:12 PM" / "6:12PM" / "18:12:05" וכו' בתוך טקסט: לוקחים רק את השעה ומתרגמים AM/PM ל-24 שעות
+        var m = System.Text.RegularExpressions.Regex.Match(v, @"(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp])?\.?\s*[Mm]?\.?");
+        if (m.Success)
+        {
+            int h = int.Parse(m.Groups[1].Value, inv), mi = int.Parse(m.Groups[2].Value, inv);
+            if (m.Groups[3].Success)
+            {
+                bool pm = m.Groups[3].Value is "P" or "p";
+                if (pm && h < 12) h += 12;
+                if (!pm && h == 12) h = 0;
+            }
+            if (h < 24 && mi < 60) return h.ToString(inv) + ":" + mi.ToString("00", inv);
+        }
         return System.Text.RegularExpressions.Regex.Replace(v, "[A-Za-z]", "").Trim();
     }
 
@@ -329,7 +350,7 @@ internal static class Zmanim
                 t = ParseTimeOnDate(sunset, now)?.AddMinutes(-minutes);
             if (t == null && TryPick(dailyTimes, out string cl, "candleLighting", "candleLightingTime", "hadlakatNerot", "candlelighting"))
                 t = ParseTimeOnDate(cl, now);
-            if (t != null) return Lang.T("הדלקת נרות ", "Candle lighting ") + t.Value.ToString("H:mm");
+            if (t != null) return Lang.T("הדלקת נרות ", "Candle lighting ") + t.Value.ToString("H:mm", System.Globalization.CultureInfo.InvariantCulture);
         }
         else if (todayHoly)
         {
@@ -338,7 +359,7 @@ internal static class Zmanim
                 t = ParseTimeOnDate(tz, now);
             if (t == null && TryPick(dailyTimes, out string hv, "havdalah", "havdala", "motzaeiShabbat"))
                 t = ParseTimeOnDate(hv, now);
-            if (t != null) return Lang.T("צאת שבת/חג (הבדלה) ", "Havdala ") + t.Value.ToString("H:mm");
+            if (t != null) return Lang.T("צאת שבת/חג (הבדלה) ", "Havdala ") + t.Value.ToString("H:mm", System.Globalization.CultureInfo.InvariantCulture);
         }
         return null;
     }
@@ -510,7 +531,7 @@ internal static class Zmanim
         var rise = T(true, 90.833); var set = T(false, 90.833);
         if (rise == null || set == null) return null;
         var alot = T(true, 90 + 16.1); var tzeit = T(false, 90 + 8.5);
-        string H(DateTime? d) => d?.ToString("H:mm") ?? "—";
+        string H(DateTime? d) => d?.ToString("H:mm", System.Globalization.CultureInfo.InvariantCulture) ?? "—";
         var chatzot = rise.Value + TimeSpan.FromTicks((set.Value - rise.Value).Ticks / 2);
         const string sep = "   ·   ";
         return
