@@ -36,6 +36,8 @@ public static class Installer
             File.Copy(Environment.ProcessPath!, InstalledExe, overwrite: true);
         }
 
+        HardLock.AutoUpdateServiceIfUnlocked(); // #21
+
         using (var k = Registry.CurrentUser.CreateSubKey(RunKey))
             k.SetValue(RunValue, "\"" + InstalledExe + "\" --background");
 

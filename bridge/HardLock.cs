@@ -499,6 +499,27 @@ public static class HardLock
 
     // ================= התקנת השירות (רץ בהרשאות מנהל) =================
 
+    /// <summary>#21: אחרי התקנה/עדכון — אם השירות מותקן והנעילה הקפדנית כבויה, מעדכנים את עותק השירות (UAC אחד).
+    /// כשהנעילה פעילה לא נוגעים: העדכון עובר דרך הגדרות מערכת עם סיסמה.</summary>
+    public static void AutoUpdateServiceIfUnlocked()
+    {
+        try
+        {
+            if (!ServiceInstalled() || !File.Exists(ServiceExe)) return;
+            var st = ServiceStatus(fresh: true);
+            if (st == null) { Config.Log("service-update: אין תשובה מהשירות — מדלגים (לא ידוע אם הנעילה פעילה)"); return; }
+            if (st["active"]?.GetValue<bool>() == true) { Config.Log("service-update: נעילה פעילה — נשאר עדכון עם סיסמה"); return; }
+            string cur = FileVersionInfo.GetVersionInfo(ServiceExe).FileVersion ?? "";
+            string mine = FileVersionInfo.GetVersionInfo(Environment.ProcessPath!).FileVersion ?? "";
+            if (cur == mine && new FileInfo(ServiceExe).Length == new FileInfo(Environment.ProcessPath!).Length) return;
+            using var p = Process.Start(new ProcessStartInfo(Installer.InstalledExe, "--install-service") { UseShellExecute = true, Verb = "runas" });
+            p?.WaitForExit(180_000);
+            Config.Log("service-update: הסתיים, קוד " + (p?.HasExited == true ? p.ExitCode : -1));
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223) { Config.Log("service-update: המשתמש ביטל את UAC"); }
+        catch (Exception ex) { Config.Log("service-update: " + ex.Message); }
+    }
+
     public static int InstallService()
     {
         try
