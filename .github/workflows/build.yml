@@ -229,5 +229,3 @@ jobs:
           if ($draft -ne 'true') { Write-Host "not a draft"; exit 0 }
           gh release upload ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --clobber out/OtzariaBridge.exe bridge/plugins/system-settings.otzplugin bridge/plugins/file-explorer.otzplugin SHA256SUMS.txt
           gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --draft=false --latest --target ${{ github.sha }}
-
-  plugins:
