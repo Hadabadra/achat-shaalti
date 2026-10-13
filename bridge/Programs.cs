@@ -396,7 +396,13 @@ public static class Programs
             {
                 System.IO.Path.Combine(r, "OtzarApp", "OtzarLocal", "launcher", "bin", "x64", "app", "otzar.exe"),
                 System.IO.Path.Combine(r, "אוצר החכמה.exe"),
-            })),
+                System.IO.Path.Combine(r, "OtzarApp", "OtzarLocal", "launcher", "otzar.exe"),
+            }).Concat(Portable("אוצר החכמה*.exe"))),
+        // #6: גשר חבורתא לאוצריא
+        new("חבורתא", new[] { "ChavrutaLauncher.exe" }, new[] { "ChavrutaLauncher", "Chavruta" }, () =>
+            new[] { System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Chavruta", "ChavrutaLauncher.exe") }),
+        // #7: הנקדן אופליין — תוכנה ניידת, איתור לפי שם הקובץ
+        new("הנקדן — אוצריא", new[] { "הנקדן - אוצריא - V1.0.exe" }, new[] { "הנקדן - אוצריא - V1.0" }, () => Portable("הנקדן*.exe")),
         // התקנה למשתמש בלבד (כמו VS Code/Electron) תחת %LOCALAPPDATA%\Programs — לא ב-Program Files
         new("זית", new[] { "zayit.exe" }, new[] { "zayit" }, () =>
             new[] { System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "zayit", "zayit.exe") }),

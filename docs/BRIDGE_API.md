@@ -224,6 +224,13 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 
 `/kiosk/status` כולל גם את השדה `hard`, באותו מבנה כמו `/kiosk/hard/status`.
 
+## דיווחים (Reports.cs — בסיס מינימלי, 13.10.2026)
+- `POST /diag/list` → `{enabled, items:[{id, sent, date, kind, text}]}` — ממתינים (outbox) ונשלחו (outbox/sent, 30 אחרונים).
+- `POST /diag/delete {ids}` — מחיקת ממתינים לפני שליחה.
+- `POST /diag/markSent {ids, details?}` — עם details: הארכיון שומר את הדיווח המאוחד כמו שנשלח (כולל היומן המקוצר) במקום הפריטים הבודדים.
+- `POST /diag/markSent {ids}` — העברה לארכיון "נשלחו" (במקום `/diag/ack` שמוחק; התוסף נופל ל-ack בגשר ישן).
+- `POST /diag/logTail` → `{text}` — 60 שורות אחרונות של bridge.log בלי שורות שנראות כסוד ובלי שם המשתמש.
+- `POST /diag/note {text}` — תיאור ידני לתור.
 ### הקשחת BIOS/UEFI מתוך תוכנה — /bios/*
 
 ניסיון להגדיר סיסמת BIOS ולחסום אתחול מהתקן USB/חיצוני דרך ממשקי WMI ספציפיים ליצרן (ר' `bridge/BiosHardening.cs`

@@ -12,7 +12,7 @@
 
 [Setup]
 AppId={{6F1C2B7E-4D0A-4B8E-9C53-0E2A7B5D91A4}
-AppName=תוכנת חסימת אוצריא - גמח תורת אסתר
+AppName=אחת שאלתי - גמח תורת אסתר
 AppVersion={#AppVersion}
 AppPublisher=גמח תורת אסתר
 DefaultDirName={localappdata}\OtzariaBridge
@@ -27,7 +27,7 @@ SolidCompression=yes
 OutputBaseFilename=OtzariaBridge-Setup-{#AppVersion}
 OutputDir=Output
 UninstallDisplayIcon={app}\OtzariaBridge.exe
-UninstallDisplayName=תוכנת חסימת אוצריא - גמח תורת אסתר
+UninstallDisplayName=אחת שאלתי
 
 WizardStyle=modern
 CloseApplications=no
@@ -203,7 +203,7 @@ var
 begin
   Form := CreateCustomForm(ScaleX(380), ScaleY(150), False, False);
   try
-    Form.Caption := 'הסרת תוכנת חסימת אוצריא';
+    Form.Caption := 'הסרת אחת שאלתי';
     Lbl := TNewStaticText.Create(Form);
     Lbl.Parent := Form;
     Lbl.Caption := 'הקלידו את סיסמת הנעילה (או קוד שחזור) כדי להסיר:';

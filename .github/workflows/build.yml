@@ -124,9 +124,72 @@ jobs:
             BRIDGE_VERSION.txt
           if-no-files-found: error
 
-      # Release חדש בכל push (תגית ייחודית, מספר הגרסה עולה כל פעם - make_latest מסמן תמיד את האחרון
-      # כ"Latest" כך שקישור ה-/releases/latest עדיין מצביע על הבנייה העדכנית ביותר).
-      # לא תלוי במיזוג ל-main/next ולא בשער "חובה לפני אריזה" - פורק אישי, בלי ההגבלות של הריפו המשותף.
+      - name: האם לשחרר גרסה?
+        id: rel
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ver = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $tag = "v$ver"
+          gh release view $tag -R ${{ github.repository }} *> $null
+          $exists = $LASTEXITCODE -eq 0
+          $global:LASTEXITCODE = 0
+          $do = ("${{ github.ref }}" -eq "refs/heads/main") -and (-not $exists)
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "do=$($do.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Host "version=$ver tag=$tag exists=$exists release=$do"
+
+      - name: הערות שחרור מתוך CHANGELOG.md
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          $ver = $env:TAG.TrimStart('v')
+          $lines = Get-Content CHANGELOG.md -Encoding UTF8
+          $start = [Array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -like "## $ver *" -or $l -eq "## $ver" })
+          $section = @()
+          if ($start -ge 0) {
+            for ($i = $start + 1; $i -lt $lines.Length; $i++) {
+              if ($lines[$i] -like '## *' -or $lines[$i] -like '# *' -or $lines[$i] -eq '---') { break }
+              $section += $lines[$i]
+            }
+          }
+          $notes = @(
+            "## מה חדש בגרסה $ver"
+            ($section -join "`n").Trim()
+            ""
+            "## התקנה"
+            "1. מורידים את **OtzariaBridge.exe** (למטה) ומפעילים פעם אחת: הגשר מותקן, עולה אוטומטית עם Windows, ופותח את תיקיית התוספים."
+            "2. באוצריא: התקנת תוסף מקובץ → **file-explorer.otzplugin** ו-**system-settings.otzplugin**."
+            ""
+            "> ⚠️ לפני הפעלת *נעילה קפדנית* — לרשום את קוד השחזור."
+            ""
+            "## אם Windows או האנטי-וירוס מזהירים"
+            "הגשר עדיין אינו חתום בחתימת קוד, ולכן SmartScreen עלול להציג 'Windows protected your PC'. לוחצים **More info / מידע נוסף** ← **Run anyway / הפעל בכל זאת**."
+            "הקוד פתוח כולו בריפו, והקובץ נבנה אוטומטית ב-GitHub Actions. לאימות: ב-PowerShell ``Get-FileHash OtzariaBridge.exe`` והשוואה ל-**SHA256SUMS.txt**."
+            "הגשר מאזין רק ל-127.0.0.1 (המחשב המקומי) ואינו נגיש מהרשת."
+            ""
+            "## קבצים"
+            "| קובץ | מה זה |"
+            "|---|---|"
+            "| ``OtzariaBridge.exe`` | אחת שאלתי — תוכנת הרקע ל-Windows |"
+            "| ``file-explorer.otzplugin`` | תוסף סייר קבצים |"
+            "| ``system-settings.otzplugin`` | תוסף הגדרות מערכת |"
+            "| ``SHA256SUMS.txt`` | טביעות SHA256 לאימות הקבצים (גם העדכון האוטומטי בודק אותן) |"
+            ""
+            "## שימושי"
+            "- אנגלית: תפריט המגש → English, או ``OtzariaBridge.exe --lang en``"
+            "- ביטול נעילה בחירום: ``OtzariaBridge.exe --unlock <קוד שחזור>``"
+            "- הסרה: ``OtzariaBridge.exe --uninstall``"
+            "- הערות ותקלות: כפתור **שליחת הערה** בשני התוספים"
+            "- כל הגרסאות: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)"
+          )
+          $notes -join "`n" | Set-Content release-notes.md -Encoding UTF8
+          Get-Content release-notes.md
+
+      # גרסה חדשה ב-OtzariaBridge.csproj (תג שעוד לא קיים) = Release אוטומטי
       - name: Release
         uses: softprops/action-gh-release@v2
         with:

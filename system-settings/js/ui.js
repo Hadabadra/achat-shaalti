@@ -182,8 +182,7 @@
             return '<option value="' + ui.esc(o.value) + '"' + (o.value === f.value ? ' selected' : '') + '>' + ui.esc(o.label) + '</option>';
           }).join('');
           return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
-            '<select class="input" name="' + f.name + '"' + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select>' +
-            (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
+            '<select class="input" name="' + f.name + '"' + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select>' + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
         }
         return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
           '<input class="input" name="' + f.name + '" type="' + (f.type || 'text') + '"' +
