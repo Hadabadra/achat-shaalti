@@ -449,8 +449,12 @@ public static class BiosHardening
                 "כניסה ל-BIOS (F10 באתחול) ← Security ← Setup Password.");
         try
         {
-            using var cls = new ManagementClass(@"root\hp\instrumentedBIOS:HP_BIOSSettingInterface");
-            foreach (ManagementObject o in cls.GetInstances())
+            // ManagementClass(...).GetInstances() החזיר ריק אצל כמה משתמשים גם כש-root\hp\instrumentedBIOS
+            // בהחלט זמין (ר' HpSettings/HpPasswordRequiresPhysicalPresence למטה, ששתיהן קוראות מאותו namespace
+            // בהצלחה) - ManagementObjectSearcher עם שאילתת WQL הוא הדפוס שכבר מוכח עובד כאן, אז משתמשים באותו
+            // דפוס גם לכתיבה, במקום לסמוך על GetInstances() שמתנהג אחרת מול ה-provider הספציפי הזה
+            using var s = new ManagementObjectSearcher(@"root\hp\instrumentedBIOS", "SELECT * FROM HP_BIOSSettingInterface");
+            foreach (ManagementObject o in s.Get())
             {
                 using (o)
                 {
@@ -505,8 +509,9 @@ public static class BiosHardening
 
         try
         {
-            using var cls = new ManagementClass(@"root\hp\instrumentedBIOS:HP_BIOSSettingInterface");
-            foreach (ManagementObject o in cls.GetInstances())
+            // ר' הערה זהה ב-HpSetPassword: ManagementObjectSearcher הוא הדפוס המוכח-עובד כאן, לא GetInstances()
+            using var s = new ManagementObjectSearcher(@"root\hp\instrumentedBIOS", "SELECT * FROM HP_BIOSSettingInterface");
+            foreach (ManagementObject o in s.Get())
             {
                 using (o)
                 {
