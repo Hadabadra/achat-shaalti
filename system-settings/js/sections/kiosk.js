@@ -801,7 +801,7 @@
       { name: 'venue', label: 'שם המחשב/בית הכנסת (אופציונלי)', value: st.venueName || '', placeholder: '', hint: 'מוצג במרכז המסך מתחת לשעון, במסך המנוחה. ריק = מוצגת רק השעה' },
     ];
     fields.push({ name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' });
-    fields.push({ name: 'barProgs', type: 'checkbox', label: 'תוכנות מותרות בשורת המשימות של הנעילה', value: st.barPrograms != null ? !!st.barPrograms : st.sideBar === false, hint: 'כשמיקום השעון הוא "שורה מלאה": סמלי התוכנות מוצגים בשורה, ליד השם "אחת שאלתי" (במקום או בנוסף לסרגל הצד)' });
+    fields.push({ name: 'barProgs', type: 'checkbox', label: 'תוכנות מותרות בשורת המשימות של הנעילה', value: st.barPrograms != null ? !!st.barPrograms : st.sideBar === false, hint: 'כשנבחרה "שורת משימות" בשדה "שעון / שורת משימות": סמלי התוכנות מוצגים בשורה, ליד השם "אחת שאלתי" (במקום או בנוסף לסרגל הצד)' });
     fields.push({ name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' });
     fields.push({ name: 'sidePos', type: 'select', label: 'מיקום סרגל התוכנות', value: st.sideBarPosition || 'right', hint: 'לאיזה צד מסך הסרגל מוצמד', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }, { value: 'top', label: 'למעלה' }, { value: 'bottom', label: 'למטה' }] });
     fields.push({ name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' });
@@ -849,14 +849,14 @@
       hint: 'כל זמן בתבנית התחלה-סיום, מופרדים בפסיק. חלים בנוסף לזמן הראשי (בנעילה הרכה; רכיב ההקשחה אוכף רק את הראשי)' });
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
     fields.push({
-      name: 'pos', type: 'select', label: 'מיקום השעון', value: st.clockPosition || 'bottom-left',
+      name: 'pos', type: 'select', label: 'שעון / שורת משימות', value: st.clockPosition || 'bottom-left',
       options: [
         { value: 'bottom-left', label: 'למטה-שמאל' },
         { value: 'bottom-right', label: 'למטה-ימין' },
         { value: 'top-left', label: 'למעלה-שמאל' },
         { value: 'top-right', label: 'למעלה-ימין' },
-        { value: 'bar-bottom', label: 'שורת משימות מלאה למטה (לוגו, הנצחה, שעון ותאריך)' },
-        { value: 'bar-top', label: 'שורת משימות מלאה למעלה' }
+        { value: 'bar-bottom', label: 'שורת משימות למטה (אחת שאלתי, תוכנות, שעון ותאריך)' },
+        { value: 'bar-top', label: 'שורת משימות למעלה' }
       ]
     });
     fields.push({ name: 'pw', label: st.hasPassword ? 'סיסמת נעילה' : 'סיסמת נעילה (עוד לא הוגדרה — אפשר להשאיר ריק)', type: 'password', dir: 'ltr' });
