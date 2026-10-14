@@ -39,6 +39,7 @@ public static class SelfTest
         T("גישה לרישום (HKCU)", () => { using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"); return k != null; });
         T("אוצריא נמצאה", () => !string.IsNullOrEmpty(Kiosk.OtzariaPath()) && File.Exists(Kiosk.OtzariaPath()));
         if (HardLock.ServiceInstalled()) T("שירות ההקשחה עונה", () => HardLock.Available);
+        SelfTestMore.AddTo(T); // E1/E4
         int failed = res.Count(r => !r.ok);
         Config.Log($"selftest {Program.Version}: {res.Count - failed}/{res.Count} עברו" +
             (failed > 0 ? " — נכשלו: " + string.Join(", ", res.Where(r => !r.ok).Select(r => r.name)) : ""));

@@ -274,7 +274,7 @@ public static class DialogGuard
     /// "1000" (תצוגת רשימת הקבצים/התיקיות המשותפת) או "1001" (סרגל הניווט/breadcrumb). לא נבדק
     /// אינטראקטיבית מול דיאלוג חי בסביבת הפיתוח הזו — ר' מגבלה #2 בתיעוד המחלקה.
     /// </summary>
-    private static bool LooksLikeFileDialog(IUIAutomation ui, IntPtr hwnd)
+    internal static bool LooksLikeFileDialog(IUIAutomation ui, IntPtr hwnd)
     {
         try
         {

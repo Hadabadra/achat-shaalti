@@ -521,6 +521,10 @@ public static class HardLock
             string cur = FileVersionInfo.GetVersionInfo(ServiceExe).FileVersion ?? "";
             string mine = FileVersionInfo.GetVersionInfo(Environment.ProcessPath!).FileVersion ?? "";
             if (cur == mine && new FileInfo(ServiceExe).Length == new FileInfo(Environment.ProcessPath!).Length) return;
+            // E2: קודם מבקשים מהשירות לעדכן את עצמו מההוצאה הרשמית (בלי UAC על קובץ ניתן-לכתיבה)
+            var su = Call(new JsonObject { ["op"] = "self-update", ["version"] = Program.Version }, 120_000);
+            if (su?["ok"]?.GetValue<bool>() == true) { Config.Log("service-update: השירות עודכן מההוצאה הרשמית"); return; }
+            Config.Log("service-update: עדכון עצמי לא זמין (" + (su?["message"]?.ToString() ?? "שירות ישן") + ") — חוזרים ל-UAC");
             using var p = Process.Start(new ProcessStartInfo(Installer.InstalledExe, "--install-service") { UseShellExecute = true, Verb = "runas" });
             p?.WaitForExit(180_000);
             Config.Log("service-update: הסתיים, קוד " + (p?.HasExited == true ? p.ExitCode : -1));
@@ -1105,6 +1109,9 @@ public class HardLockService : ServiceBase
                         ["policy"] = PolicyNode(),
                         ["tempUnlock"] = TempNode(),
                     };
+
+                case "self-update": // E2/#30 ממצא 8 — ר' SvcUpdate.cs
+                    return SvcUpdate.Run(q["version"]?.ToString(), Enforced);
 
                 case "setup":
                     if (Configured) return Err("bad_request", "כבר הוגדר");

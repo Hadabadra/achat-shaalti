@@ -34,6 +34,7 @@ public static class Program
             return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         }
         bool Has(string name) => Array.IndexOf(args, name) >= 0;
+        var stc = SelfTestMore.Child(args); if (stc != null) return stc.Value; // E1/E4
 
         try
         {
