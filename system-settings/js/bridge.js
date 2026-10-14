@@ -314,6 +314,7 @@
       M.recovery = code;
       return { ok: true, recoveryCode: code };
     },
+    '/kiosk/recovery/keep': function () { return { ok: true, path: 'Documents\\אחת שאלתי - קוד שחזור.txt' }; },
     '/kiosk/enable': function (b) {
       if (!M.kiosk.hasPassword) throw mockErr('bad_request', 'יש להגדיר סיסמה תחילה');
       checkPw(b.password, false);

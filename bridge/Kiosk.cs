@@ -298,7 +298,7 @@ public static partial class Kiosk
         openSections = OpenSections,
         allSections = AllSections,
         warnings = Warnings(),
-        schedule = new { enabled = ScheduleEnabled, start = ScheduleStart, end = ScheduleEnd, warn = ScheduleWarn, extra = SchedMulti.Extra },
+        schedule = new { enabled = ScheduleEnabled, start = ScheduleStart, end = ScheduleEnd, warn = ScheduleWarn, extra = SchedMulti.Extra, days = PackG.Days }, recoverySaved = PackG.RecoverySaved,
         activatedBy = Config.Get<string>("kiosk.activatedBy", "manual"),
         twoFactor = TwoFactor.Enabled,
         twoFactorAvailable = TwoFactor.Available(),
@@ -340,7 +340,9 @@ public static partial class Kiosk
         var t = Sched.ParseTime(ScheduleStart) ?? TimeSpan.FromHours(20);
         var now = DateTime.Now;
         var today = now.Date + t;
-        return today > now ? today : today.AddDays(1);
+        var next = today > now ? today : today.AddDays(1);
+        for (int i = 0; i < 7 && !PackG.DayAllowed(next.Date); i++) next = next.AddDays(1);   // סבב G (6): ימי שבוע
+        return next;
     }
 
     /// <summary>עד מתי לדלג על נעילה מתוזמנת (אחרי "ביטול הנעילה" באזהרה)</summary>
@@ -706,10 +708,11 @@ public static partial class Kiosk
             Verify(b.Str("oldPassword"), allowRecovery: true);
             if (HardLock.Available) HardLock.SetPassword(b.Str("oldPassword"), newPassword);
             // #56: שחזור סיסמה שנשכחה בקוד השחזור — הנעילה נשארת פעילה, והקוד שנוצל מוחלף בחדש (חד-פעמי)
-            if (IsRecoveryCode(b.Str("oldPassword") ?? ""))
+            if (IsRecoveryCode(b.Str("oldPassword") ?? "") || !PackG.RecoverySaved)   // סבב G: קוד שלא נשמר — מקבלים קוד חדש
             {
                 recovery = Secret.NewRecoveryCode();
                 StoreSecret(recovery, "kiosk.recoveryHash", "kiosk.recoverySalt");
+                PackG.MarkNewCode();
                 AdminLog.Add("שחזור סיסמת מנהל בקוד שחזור");
             }
         }
@@ -718,6 +721,7 @@ public static partial class Kiosk
             // הגדרה ראשונה: יוצרים קוד שחזור חד-פעמי
             recovery = Secret.NewRecoveryCode();
             StoreSecret(recovery, "kiosk.recoveryHash", "kiosk.recoverySalt");
+            PackG.MarkNewCode();
         }
         StoreSecret(newPassword, "kiosk.passwordHash", "kiosk.salt");
         AdminLog.Add("עדכון סיסמת מנהל");
@@ -728,6 +732,8 @@ public static partial class Kiosk
     private static object Enable(JsonElement b)
     {
         if (!HasPassword) throw BridgeException.BadRequest("יש להגדיר סיסמה לפני הפעלת הנעילה");
+        // סבב G (9): קוד השחזור חייב להישמר לקובץ או להדפסה לפני ההפעלה הראשונה
+        if (!PackG.RecoverySaved) throw BridgeException.BadRequest("יש לשמור את קוד השחזור לקובץ או להדפיס אותו לפני הפעלת הנעילה (הגדרות ← נעילה ← שמירת קוד השחזור)");
         Verify(b.Str("password"), allowRecovery: false);
         AdminLog.Add("הפעלת נעילה");
 
@@ -889,6 +895,7 @@ public static partial class Kiosk
             if (sch.Has("enabled")) Config.Set("kiosk.schedule.enabled", sch.Bool("enabled"));
             if (sch.Has("warn")) Config.Set("kiosk.schedule.warn", sch.Bool("warn"));
             SchedMulti.Apply(sch);
+            PackG.ApplyDays(sch);
             string ss = sch.Str("start");
             if (ss != null)
             {

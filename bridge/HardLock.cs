@@ -356,6 +356,7 @@ public static class HardLock
         {
             ["op"] = "settings", ["password"] = password ?? "",
             ["scheduleEnabled"] = enabled, ["scheduleStart"] = start ?? "", ["scheduleEnd"] = end ?? "",
+            ["scheduleDays"] = string.Join(",", PackG.Days),   // סבב G: ימי שבוע ("" = כל הימים)
         }, password));
 
     /// <summary>
@@ -1181,6 +1182,7 @@ public class HardLockService : ServiceBase
                     if (q["scheduleEnabled"] is JsonValue se) _state["scheduleEnabled"] = se.GetValue<bool>();
                     if (q["scheduleStart"]?.ToString() is string ss && Sched.IsValid(ss)) _state["scheduleStart"] = ss;
                     if (q["scheduleEnd"]?.ToString() is string ee && Sched.IsValid(ee)) _state["scheduleEnd"] = ee;
+                    if (q["scheduleDays"]?.ToString() is string sd && System.Text.RegularExpressions.Regex.IsMatch(sd, "^[0-6]?(,[0-6])*$")) _state["scheduleDays"] = sd;
                     foreach (var kv in policy) _state[kv.Key] = kv.Value;
                     Save();
                     if (policy.Count > 0) HardLock.SvcLog("service: עודכנה מדיניות הנעילה (" + string.Join(", ", policy.Keys) + ")");
@@ -1345,6 +1347,17 @@ public class HardLockService : ServiceBase
     /// בתוך החלון מפעיל נעילה (activatedBy=schedule); בסוף החלון מבטל רק נעילה שהתזמון הפעיל
     /// (נעילה ידנית נשמרת). נעילה ידנית שבוטלה בתוך החלון תחזור בטיק הבא — זו מהות התזמון.
     /// </summary>
+
+    /// <summary>סבב G: ימי שבוע לחלון התזמון ברכיב ההקשחה (חלון אחרי חצות שייך ליום שהתחיל בו)</summary>
+    private bool SvcDayOk(string start)
+    {
+        string days = _state["scheduleDays"]?.ToString() ?? "";
+        if (days.Length == 0) return true;
+        var t = Sched.ParseTime(start); var now = DateTime.Now;
+        var day = t == null || now.TimeOfDay >= t.Value ? now.Date : now.Date.AddDays(-1);
+        return days.Split(',').Contains(((int)day.DayOfWeek).ToString());
+    }
+
     private void EvaluateSchedule()
     {
         string start = _state["scheduleStart"]?.ToString();
@@ -1353,7 +1366,7 @@ public class HardLockService : ServiceBase
         // מושווה כרגע מוחלט (DateTimeOffset) — חסין למעבר שעון קיץ/חורף ולסוג ה-Kind
         bool skip = DateTimeOffset.TryParse(_state["skipUntil"]?.ToString(), null,
             System.Globalization.DateTimeStyles.RoundtripKind, out var su) && DateTimeOffset.Now < su;
-        bool inWindow = _state["scheduleEnabled"]?.GetValue<bool>() == true && !skip && Sched.InWindow(start, end, DateTime.Now);
+        bool inWindow = _state["scheduleEnabled"]?.GetValue<bool>() == true && !skip && Sched.InWindow(start, end, DateTime.Now) && SvcDayOk(start);
         bool active = Active;
         string by = _state["activatedBy"]?.ToString() ?? "manual";
         if (inWindow && !active)

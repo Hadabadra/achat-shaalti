@@ -430,6 +430,20 @@ public static class Programs
         }
     }
 
+    /// <summary>קבצי exe ניידים ששמם שונה: התאמה לפי פרטי הגרסה המוטבעים בקובץ (לא משתנים בשינוי שם)</summary>
+    private static IEnumerable<string> ByInfo(string[] keys)
+    {
+        foreach (var f in Portable("*.exe"))
+        {
+            System.Diagnostics.FileVersionInfo vi = null;
+            try { vi = System.Diagnostics.FileVersionInfo.GetVersionInfo(f); } catch { }
+            if (vi == null) continue;
+            var fields = new[] { vi.OriginalFilename, vi.InternalName, vi.ProductName, vi.FileDescription };
+            if (fields.Any(x => !string.IsNullOrEmpty(x) && keys.Any(k => x.Contains(k, StringComparison.OrdinalIgnoreCase))))
+                yield return f;
+        }
+    }
+
     private static IEnumerable<string> Under(string dir, string pattern, string tail)
     {
         string[] dirs;
@@ -462,6 +476,12 @@ public static class Programs
             new[] { System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Chavruta", "ChavrutaLauncher.exe") }),
         // #7: הנקדן אופליין — תוכנה ניידת, איתור לפי שם הקובץ
         new("הנקדן — אוצריא", new[] { "הנקדן - אוצריא - V1.0.exe" }, new[] { "הנקדן - אוצריא - V1.0" }, () => Portable("הנקדן*.exe")),
+        // עדכוני אוצריא — מזוהה גם אחרי שינוי שם הקובץ, לפי פרטי הגרסה המוטבעים (OriginalFilename/ProductName)
+        new("עדכוני אוצריא", new[] { "עדכוני אוצריא.exe" }, new[] { "עדכוני אוצריא" }, () =>
+            Portable("עדכוני אוצריא*.exe").Concat(ByInfo(new[] { "עדכוני אוצריא", "OtzariaUpdate", "Otzaria Update" }))),
+        // עדכון ספרים אישיים — תוכנה ניידת
+        new("עדכון ספרים אישיים", new[] { "BooksOfflineUpdate.exe" }, new[] { "BooksOfflineUpdate" }, () =>
+            Portable("BooksOfflineUpdate*.exe").Concat(ByInfo(new[] { "BooksOfflineUpdate" }))),
         // התקנה למשתמש בלבד (כמו VS Code/Electron) תחת %LOCALAPPDATA%\Programs — לא ב-Program Files
         new("זית", new[] { "zayit.exe" }, new[] { "zayit" }, () =>
             new[] { System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "zayit", "zayit.exe") }),

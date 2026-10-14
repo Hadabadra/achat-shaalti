@@ -1,5 +1,7 @@
 # תוכנת חסימת אוצריא (Otzaria Blocking Software) — חוזה API v1
 
+> 3.8.0: `POST /kiosk/recovery/keep {code, mode:"file"|"print"}` — שמירת קוד השחזור לקובץ במסמכים/הדפסה; `/kiosk/status` מחזיר `recoverySaved` ו-`schedule.days`; `/kiosk/settings` מקבל `schedule.days` (מערך 0–6, ריק=כל הימים). `/kiosk/enable` נדחה כל עוד `recoverySaved=false`.
+
 שירות Windows מקומי שהתוספים "סייר קבצים" ו"הגדרות מערכת" פונים אליו דרך
 `Otzaria.call('network.fetchStream', ...)` עם ההרשאה `network.localhost`.
 

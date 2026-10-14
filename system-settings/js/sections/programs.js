@@ -21,7 +21,7 @@
     found = found.filter(function (f) { return !progs.some(function (p) { return p.path.toLowerCase() === f.path.toLowerCase(); }); });
     var auto = !!r.autoTorah, K = SS.kioskProg;
     var html = K ? K.card(progs, found, auto) : '';
-    html += '<div class="card"><div class="setting-row"><div class="setting-text"><b>זיהוי אוטומטי של תוכנות תורניות</b><span class="muted">אוצר החכמה, בר אילן, כתבי הקודש, חבורתא, הנקדן ו-Word שנמצאים במחשב נוספים לרשימה מעצמם</span></div>' +
+    html += '<div class="card"><div class="setting-row"><div class="setting-text"><b>זיהוי אוטומטי של תוכנות תורניות</b><span class="muted">אוצר החכמה, בר אילן, כתבי הקודש, חבורתא, הנקדן, עדכוני אוצריא, עדכון ספרים אישיים ו-Word שנמצאים במחשב נוספים לרשימה מעצמם</span></div>' +
       ui.switchHtml('sw-auto', auto, 'זיהוי אוטומטי') + '</div></div>';
     body.innerHTML = html;
     body.querySelector('#sw-auto').addEventListener('click', function () { if (SS.kioskToggleAuto) SS.kioskToggleAuto(body, auto, load); });

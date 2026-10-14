@@ -60,6 +60,7 @@ public static class Server
         MoreApi.Register();
         BiosHardening.Register();
         Kiosk.Register();
+        PackG.Register();
         Pairing.Register();
         HardLock.Register();
         Zmanim.Register();

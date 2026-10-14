@@ -300,9 +300,19 @@ internal sealed class ClockBar : Form
             int sz = h - ScaleX(12), gap = ScaleX(6), x = startRight;
             using var f = new Font("Segoe UI", 9f, GraphicsUnit.Point);
             using var b = new SolidBrush(ForeColor);
-            foreach (var (entry, icon, name) in _progs)
+            _more.Clear(); _moreRect = Rectangle.Empty;
+            for (int i = 0; i < _progs.Count; i++)
             {
+                var (entry, icon, name) = _progs[i];
                 x -= sz;
+                if (x - sz - gap < ScaleX(420) && i < _progs.Count - 1)
+                {   // אין מקום לכולן: כפתור "עוד" שפותח תפריט עם שאר התוכנות
+                    _moreRect = new Rectangle(x, (h - sz) / 2, sz, sz);
+                    using var mf = new Font("Segoe UI", 14f, FontStyle.Bold, GraphicsUnit.Point);
+                    g.DrawString("⋯", mf, b, _moreRect, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+                    for (int j = i; j < _progs.Count; j++) _more.Add((_progs[j].Item1, _progs[j].Item3));
+                    break;
+                }
                 if (x < ScaleX(420)) break; // לא לדרוס את השעה והתאריך משמאל
                 var rc = new Rectangle(x, (h - sz) / 2, sz, sz);
                 if (icon != null) g.DrawImage(icon, rc);
@@ -314,8 +324,22 @@ internal sealed class ClockBar : Form
         catch (Exception ex) { Config.Log("bar programs: " + ex.Message); }
     }
 
+    private readonly List<(Programs.Entry entry, string name)> _more = new();
+    private Rectangle _moreRect = Rectangle.Empty;
+
     private bool BarProgramClick(Point p)
     {
+        if (!_moreRect.IsEmpty && _moreRect.Contains(p) && _more.Count > 0)
+        {
+            var m = new ContextMenuStrip { RightToLeft = RightToLeft.Yes };
+            foreach (var (entry, name) in _more.ToList())
+            {
+                var e = entry;
+                m.Items.Add(name, SideBar.IconOf(e.Path), (_, _) => { try { Programs.Activate(e); } catch (Exception ex) { Config.Log("bar more: " + ex.Message); } });
+            }
+            m.Show(this, new Point(_moreRect.Left, _moreRect.Top), ToolStripDropDownDirection.AboveLeft);
+            return true;
+        }
         foreach (var (rect, entry) in _hits)
             if (rect.Contains(p)) { try { Programs.Activate(entry); } catch (Exception ex) { Config.Log("bar program: " + ex.Message); } return true; }
         return false;

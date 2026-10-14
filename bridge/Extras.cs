@@ -27,6 +27,7 @@ internal sealed class SideBar : Form
     private bool _horizontal;
     private string _edge = "right";
     private Flyout _flyout;
+    private int _scroll, _maxScroll;   // גלילה כשיש יותר תוכנות מאורך המסך
 
     public SideBar()
     {
@@ -42,6 +43,7 @@ internal sealed class SideBar : Form
         MouseMove += (_, e) => { _hover = HitTest(e.Location); Invalidate(); };
         MouseLeave += (_, _) => { _hover = -1; Invalidate(); };
         MouseClick += (_, e) => Click_(HitTest(e.Location));
+        MouseWheel += (_, e) => ScrollBy(-e.Delta / 120 * (_horizontal ? ColW : RowH));
     }
 
     protected override bool ShowWithoutActivation => true;
@@ -103,18 +105,21 @@ internal sealed class SideBar : Form
         int x, y, w, h;
         if (_horizontal)
         {
-            w = _items.Count * ColW + (int)(16 * S);
+            int full = _items.Count * ColW + (int)(16 * S);
+            w = Math.Min(full, b.Width - (int)(40 * S)); _maxScroll = full - w;
             h = _expanded ? FullH : StripW;
             x = b.Left + (b.Width - w) / 2;
             y = _edge == "top" ? b.Top : b.Bottom - h;
         }
         else
         {
-            h = _items.Count * RowH + (int)(16 * S);
+            int full = _items.Count * RowH + (int)(16 * S);
+            h = Math.Min(full, b.Height - (int)(40 * S)); _maxScroll = full - h;
             w = _expanded ? FullW : StripW;
             x = _edge == "left" ? b.Left : b.Right - w;
             y = b.Top + (b.Height - h) / 2;
         }
+        _scroll = Math.Clamp(_scroll, 0, Math.Max(0, _maxScroll));
         SetBounds(x, y, w, h);
         Region = new Region(Overlay.Round(new Rectangle(0, 0, Width, Height), (int)(10 * S)));
         Invalidate();
@@ -127,6 +132,11 @@ internal sealed class SideBar : Form
         bool overFlyout = _flyout is { Visible: true } && _flyout.Bounds.Contains(Cursor.Position);
         bool want = overBar || overFlyout;
         if (want != _expanded) { _expanded = want; Place(); }
+        if (overBar && _maxScroll > 0)
+        {   // גלילה אוטומטית כשהעכבר בקצה הסרגל
+            var c = PointToClient(Cursor.Position); int pos = _horizontal ? c.X : c.Y, len = _horizontal ? Width : Height, edge = (int)(28 * S);
+            if (pos < edge) ScrollBy(-(int)(12 * S)); else if (pos > len - edge) ScrollBy((int)(12 * S));
+        }
         if (!want) _flyout?.Hide();
         else if (overBar) UpdateFlyout(HitTest(PointToClient(Cursor.Position)));
         if ((DateTime.UtcNow - _lastScan).TotalSeconds >= 2) Scan();
@@ -172,14 +182,20 @@ internal sealed class SideBar : Form
     {
         var r = ClientRectangle;
         return _horizontal
-            ? new Rectangle((int)(8 * S) + i * ColW, (int)(6 * S), ColW - (int)(4 * S), r.Height - (int)(12 * S))
-            : new Rectangle((int)(6 * S), (int)(8 * S) + i * RowH, r.Width - (int)(12 * S), RowH - (int)(4 * S));
+            ? new Rectangle((int)(8 * S) + i * ColW - _scroll, (int)(6 * S), ColW - (int)(4 * S), r.Height - (int)(12 * S))
+            : new Rectangle((int)(6 * S), (int)(8 * S) + i * RowH - _scroll, r.Width - (int)(12 * S), RowH - (int)(4 * S));
+    }
+
+    private void ScrollBy(int d)
+    {
+        int n = Math.Clamp(_scroll + d, 0, Math.Max(0, _maxScroll));
+        if (n != _scroll) { _scroll = n; _flyout?.Hide(); Invalidate(); }
     }
 
     private int HitTest(Point p)
     {
         if (!_expanded) return -1;
-        int i = _horizontal ? (p.X - (int)(8 * S)) / ColW : (p.Y - (int)(8 * S)) / RowH;
+        int i = _horizontal ? (p.X + _scroll - (int)(8 * S)) / ColW : (p.Y + _scroll - (int)(8 * S)) / RowH;
         return i >= 0 && i < _items.Count ? i : -1;
     }
 

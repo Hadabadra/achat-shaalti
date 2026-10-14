@@ -17,8 +17,8 @@ internal static class SchedMulti
         .Select(p => (object)new { start = p[0], end = p[1] }).ToArray();
 
     public static bool InAnyWindow(DateTime now) =>
-        Sched.InWindow(Kiosk.ScheduleStart, Kiosk.ScheduleEnd, now) ||
-        Config.GetList(Key).Select(s => s.Split('-')).Any(p => p.Length == 2 && Sched.InWindow(p[0], p[1], now));
+        (Sched.InWindow(Kiosk.ScheduleStart, Kiosk.ScheduleEnd, now) && PackG.WindowDayAllowed(Kiosk.ScheduleStart, now)) ||
+        Config.GetList(Key).Select(s => s.Split('-')).Any(p => p.Length == 2 && Sched.InWindow(p[0], p[1], now) && PackG.WindowDayAllowed(p[0], now));
 
     public static void Apply(JsonElement sch)
     {

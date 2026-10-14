@@ -100,8 +100,12 @@
       '<li>' + ui.icon('lock') + '<span><b>Safe Mode:</b> במצב בטוח הגשר אינו עולה והנעילה אינה חלה. סיסמת BIOS שחוסמת את תפריט האתחול סוגרת גם את זה.</span></li>' +
       '</ul></details>';
 
+    if (st.hasPassword && st.recoverySaved === false) {
+      html += '<div class="card"><div class="card-title">' + ui.icon('key') + ' קוד השחזור עוד לא נשמר</div>' +
+        '<p class="muted">לפני הפעלת הנעילה יש לשמור את קוד השחזור לקובץ או להדפיס אותו. אם הקוד לא נרשם — אפשר ליצור קוד חדש דרך „שינוי סיסמה” עם הסיסמה הנוכחית.</p></div>';
+    }
     if (!st.hasPassword) {
-      html += '<div class="card"><div class="card-title">שלב ראשון: הגדרת סיסמה</div>' +
+      html += '<div class="card"><div class="card-title">אשף הגדרה ראשונה · שלב 1 מתוך 3: סיסמה</div>' +
         '<p class="muted">לפני הפעלת הנעילה צריך לבחור סיסמה. רק מי שיודע אותה יוכל לבטל את הנעילה או לשנות הגדרות.</p>' +
         '<form class="form-grid" data-form="setpw" novalidate>' +
         '<label class="field"><span class="field-label">סיסמה</span><input class="input" type="password" name="pw" autocomplete="new-password" dir="ltr"></label>' +
@@ -178,6 +182,7 @@
           var r = await SS.bridge.call('/kiosk/set-password', { newPassword: pw });
           if (r && r.recoveryCode) await showRecovery(r.recoveryCode);
           else ui.toast('הסיסמה נשמרה', 'success');
+          await wizardRest(pw);
           load(body);
         } catch (err) {
           msg.textContent = ui.errText(err); msg.hidden = false; btn.disabled = false;
@@ -212,6 +217,7 @@
   }
 
   function showRecovery(code) {
+    var kept = false;
     var pretty = code.replace(/(.{4})(?=.)/g, '$1-');
     return ui.dialog({
       title: 'קוד השחזור שלכם', icon: 'key', tone: 'recovery', dismissible: false,
@@ -220,15 +226,28 @@
         '<div class="recovery-code" dir="ltr">' + ui.esc(pretty) +
         '<button type="button" class="btn btn-text" data-copy-code title="העתקת הקוד">' + ui.icon('copy') + '</button></div>' +
         '<p>רשמו אותו על דף ושמרו במקום בטוח, <b>לא ליד המחשב</b>. אם תשכחו את הסיסמה, אפשר לבטל את הנעילה עם הקוד הזה בחלון „ביטול נעילה”, או מחלון פקודה:</p>' +
-        '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock ' + ui.esc(code) + '</code>',
-      fields: [{ name: 'ack', type: 'checkbox', label: 'רשמתי את הקוד' }],
+        '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock ' + ui.esc(code) + '</code>' +
+        '<p><b>חובה לשמור את הקוד לפני הפעלת הנעילה:</b></p><div class="row-actions">' +
+        '<button type="button" class="btn btn-tonal" data-keep="file">' + ui.icon('download') + 'שמירה לקובץ</button>' +
+        '<button type="button" class="btn btn-tonal" data-keep="print">' + ui.icon('edit') + 'הדפסה</button></div>',
+      fields: [{ name: 'ack', type: 'checkbox', label: 'שמרתי/הדפסתי את הקוד והוא במקום בטוח' }],
       actions: [{ label: 'סיום', value: true, kind: 'primary' }],
-      validate: function (v) { return v.ack ? '' : 'יש לסמן „רשמתי את הקוד” לפני הסגירה'; },
+      validate: function (v) { return !kept ? 'יש לשמור את הקוד לקובץ או להדפיס אותו' : v.ack ? '' : 'יש לסמן שהקוד נשמר לפני הסגירה'; },
       onOpen: function (form) {
         var btn = form.querySelector('button[type=submit]');
         var cb = form.querySelector('input[name=ack]');
-        btn.disabled = true;
-        cb.addEventListener('change', function () { btn.disabled = !cb.checked; });
+        btn.disabled = true; cb.disabled = true;
+        cb.addEventListener('change', function () { btn.disabled = !(cb.checked && kept); });
+        /* סבב G (9): שמירה לקובץ או הדפסה — חובה לפני שאפשר לסיים (וגם לפני הפעלת נעילה, נאכף בגשר) */
+        form.querySelectorAll('[data-keep]').forEach(function (kb) {
+          kb.addEventListener('click', function () {
+            var mode = kb.getAttribute('data-keep');
+            SS.bridge.call('/kiosk/recovery/keep', { code: code, mode: mode }).then(function (r) {
+              kept = true; cb.disabled = false;
+              ui.toast(mode === 'print' ? 'נשלח להדפסה' : 'נשמר: ' + ((r && r.path) || 'מסמכים'), 'success');
+            }, function (err) { ui.toast(ui.errText(err), 'error'); });
+          });
+        });
         var copyBtn = form.querySelector('[data-copy-code]');
         if (copyBtn) copyBtn.addEventListener('click', function () {
           SS.copyText(code).then(function (ok) { ui.toast(ok ? 'הקוד הועתק' : 'ההעתקה נכשלה', ok ? 'success' : 'error'); });
@@ -366,6 +385,28 @@
     beitmidrash: { label: 'בית מדרש', desc: 'גישה רחבה יותר: שמע, מסך, מדפסות, שעה; קבצים פתוחים לעריכה', p: { readOnly: false, fullscreenOtzaria: true, sideBar: true, clock: true, allowExcelDocs: true, openSections: ['audio', 'display', 'printer', 'time'] } },
     admin: { label: 'מנהל', desc: 'כמעט הכל פתוח, בלי מסך מלא', p: { readOnly: false, fullscreenOtzaria: false, sideBar: true, clock: true, allowExcelDocs: true, openSections: ['audio', 'display', 'energy', 'keyboard', 'mouse', 'printer', 'time', 'wifi', 'bluetooth'] } }
   };
+  /* סבב G (8): אשף הגדרה ראשונה — אחרי סיסמה וקוד שחזור: פרופיל, ואז תוכנות */
+  async function wizardRest(pw) {
+    var prof = await ui.dialog({
+      title: 'שלב 2 מתוך 3: פרופיל נעילה', icon: 'lock',
+      body: '<p class="muted">סט הגדרות מוכן. אפשר לשנות כל הגדרה אחר כך.</p>',
+      fields: [{ name: 'prof', type: 'select', label: 'פרופיל', value: 'student', options: Object.keys(PROFILES).map(function (k) { return { value: k, label: PROFILES[k].label + ' — ' + PROFILES[k].desc }; }) }],
+      actions: [{ label: 'דילוג', value: false }, { label: 'החלה', value: true, kind: 'primary' }],
+      onSubmit: async function (x) {
+        var pr = PROFILES[x.prof]; if (!pr) return false;
+        await SS.bridge.call('/kiosk/settings', Object.assign({ password: pw }, pr.p));
+        return pr.label;
+      }
+    });
+    if (prof) ui.toast('הוחל פרופיל: ' + prof, 'success');
+    var go = await ui.dialog({
+      title: 'שלב 3 מתוך 3: תוכנות לימוד', icon: 'computer',
+      body: '<p>בטאב „תוכנות לימוד” אפשר לבחור אילו תוכנות (אוצר החכמה, בר אילן, כתבי הקודש, Word ועוד) יהיו פתוחות בזמן נעילה. תוכנות מוכרות מזוהות אוטומטית.</p><p>בסיום — חוזרים לכאן ולוחצים „הפעלת נעילה”.</p>',
+      actions: [{ label: 'אחר כך', value: false }, { label: 'לתוכנות לימוד', value: true, kind: 'primary' }]
+    });
+    if (go) setTimeout(function () { SS.show('programs'); }, 50);
+  }
+
   async function applyProfile(body) {
     var ok = await ui.dialog({
       title: 'פרופיל נעילה מוכן', icon: 'lock',
@@ -847,6 +888,18 @@
     fields.push({ name: 'schedExtra', label: 'זמני נעילה נוספים (הוסף זמן)', dir: 'ltr', placeholder: '08:00-13:00, 15:00-19:00',
       value: (sc.extra || []).map(function (w) { return w.start + '-' + w.end; }).join(', '),
       hint: 'כל זמן בתבנית התחלה-סיום, מופרדים בפסיק. חלים בנוסף לזמן הראשי (בנעילה הרכה; רכיב ההקשחה אוכף רק את הראשי)' });
+    /* סבב G (6): ימי שבוע לזמני הנעילה (ריק = כל הימים) */
+    var DAYN = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+    fields.push({ name: 'schedDays', label: 'ימים בשבוע לנעילה המתוזמנת', placeholder: 'א ב ג ד ה ו ש',
+      value: (sc.days && sc.days.length ? sc.days : [0, 1, 2, 3, 4, 5, 6]).map(function (d) { return DAYN[d]; }).join(' '),
+      hint: 'אותיות הימים מופרדות ברווח, למשל „א ב ג ד ה” — בלי שבת ויום שישי. חל על כל זמני הנעילה. חלון שנמשך אחרי חצות שייך ליום שבו התחיל' });
+    function parseDays(t) {
+      var out = []; var ok = true;
+      String(t || '').replace(/[׳'",]/g, ' ').split(/\s+/).filter(Boolean).forEach(function (w) {
+        var i = DAYN.indexOf(w); if (i < 0) ok = false; else if (out.indexOf(i) < 0) out.push(i);
+      });
+      return ok && out.length ? out.sort() : null;
+    }
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
     fields.push({
       name: 'pos', type: 'select', label: 'שעון / שורת משימות', value: st.clockPosition || 'bottom-left',
@@ -881,6 +934,7 @@
         if (['right', 'left', 'top', 'bottom'].indexOf(x.sidePos) < 0) return 'מיקום סרגל לא תקין';
         if (x.sched && (!/^\d{1,2}:\d{2}$/.test(x.schedStart || '') || !/^\d{1,2}:\d{2}$/.test(x.schedEnd || ''))) return 'יש להזין שעת התחלה ושעת סיום לתזמון';
         if (x.sched && x.schedStart === x.schedEnd) return 'שעת ההתחלה והסיום של התזמון זהות';
+        if (parseDays(x.schedDays) === null) return 'ימים בשבוע: יש להקליד אותיות ימים (א–ש) מופרדות ברווח';
         if (parseExtraSched(x.schedExtra) === null) return 'זמני נעילה נוספים: יש להקליד בתבנית 08:00-13:00, מופרדים בפסיק';
         if (!/^\d{1,2}$/.test(String(x.tuMin).trim()) || +x.tuMin < 1 || +x.tuMin > 60) return 'פתיחה זמנית: משך בדקות בין 1 ל-60';
         if (x.tuPw && x.tuPw.length < 6) return 'סיסמת הפתיחה הזמנית חייבת להכיל לפחות 6 תווים';
@@ -910,7 +964,7 @@
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
           readOnly: !!x.ro, twoFactor: !!x.tfa, clock: !!x.clock, venueName: (x.venue || '').trim(), fullscreenOtzaria: !!x.fs, sideBar: !!x.side, barPrograms: !!x.barProgs, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos,
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
-          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn, extra: parseExtraSched(x.schedExtra) || [] },
+          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn, extra: parseExtraSched(x.schedExtra) || [], days: parseDays(x.schedDays) || [] },
           tempUnlockEnabled: !!x.tu, tempUnlockMinutes: +String(x.tuMin).trim() || 30, tempUnlockPassword: x.tuPw || ''
         });
         return true;
