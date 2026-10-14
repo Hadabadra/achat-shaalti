@@ -42,15 +42,33 @@ public static class Saver
     /// <summary>D3: בעלייה במצב נעילה — מסך המנוחה מיד, עד שלאוצריא יש חלון (Kiosk.Watch מסתיר אותו אז), או 60 שניות.</summary>
     private static void BootCover()
     {
-        if (!Kiosk.IsActive || !Config.Get("kiosk.bootCover", true)) return;
+        // #8: אותם תנאים בדיוק כמו BootGuard — רק נעילה מאושרת, ולעולם לא במצב בטוח
+        if (System.Windows.Forms.SystemInformation.BootMode != System.Windows.Forms.BootMode.Normal) return;
+        if (!Kiosk.IsActive || !Config.Get("kiosk.confirmed", false) || !Config.Get("kiosk.bootCover", true)) return;
+        // #8: מתג הגנה — אם הכיסוי בעלייה הקודמת לא הסתיים (קריסה/כיבוי באמצעו), מכבים אותו לצמיתות
+        if (Config.Get("kiosk.bootCoverRunning", false))
+        {
+            Config.Set("kiosk.bootCover", false); Config.Set("kiosk.bootCoverRunning", false); Config.Save();
+            Config.Log("boot cover: לא הסתיים בעלייה הקודמת — כובה אוטומטית (הגנה מ-#8)");
+            return;
+        }
+        // אוצריא חייבת להיות קיימת, אחרת אין למה לחכות
+        string otzPath = Kiosk.OtzariaPath();
+        if (string.IsNullOrEmpty(otzPath) || !File.Exists(otzPath)) return;
         if (Environment.TickCount64 > 5 * 60_000) return; // רק סמוך להדלקה, לא בהפעלה ידנית של הגשר
         if (OtzariaWindow() != IntPtr.Zero) return;
+        Config.Set("kiosk.bootCoverRunning", true); Config.Save();
         Overlay.ShowRest(IntPtr.Zero);
         new Thread(() =>
         {
-            for (int i = 0; i < 120 && OtzariaWindow() == IntPtr.Zero; i++) Thread.Sleep(500);
-            Thread.Sleep(1500);
-            Overlay.HideRest(); // אם אוצריא ממוזערת, Watch יחזיר את המסך בעצמו
+            try { for (int i = 0; i < 120 && OtzariaWindow() == IntPtr.Zero; i++) Thread.Sleep(500); Thread.Sleep(1500); }
+            catch { }
+            finally
+            {
+                // תמיד נסגר — גם בשגיאה. הכיסוי לא נוגע ב-shell/explorer ולא חוסם קלט; לחיצה/מקש סוגרים אותו מיד
+                try { Overlay.HideRest(); } catch { }
+                try { Config.Set("kiosk.bootCoverRunning", false); Config.Save(); } catch { }
+            }
         }) { IsBackground = true }.Start();
     }
 
