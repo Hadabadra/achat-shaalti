@@ -394,7 +394,10 @@ public static class Programs
         string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var list = new (string name, string[] procs, string[] candidates)[]
         {
-            ("כלי חיתוך (צילום מסך)", new[] { "SnippingTool" }, new[] { System.IO.Path.Combine(sys32, "SnippingTool.exe"), System.IO.Path.Combine(winApps, "SnippingTool.exe") }),
+            // "חדש" (צילום אזור) פותח שכבת-גרירה במסך מלא דרך תהליך-עזר נפרד (ScreenClippingHost/ScreenSketch),
+            // לא תחת SnippingTool.exe עצמו - בלעדי זה השומר (Kiosk.Watch) לא מזהה את שכבת הגרירה כ"מותר"
+            // ומחזיר את אוצריא לחזית תוך רגע, עוד לפני שהמשתמש הספיק לגרור/לבחור אזור (נראה כמו "תקוע בטעינה")
+            ("כלי חיתוך (צילום מסך)", new[] { "SnippingTool", "ScreenClippingHost", "ScreenSketch" }, new[] { System.IO.Path.Combine(sys32, "SnippingTool.exe"), System.IO.Path.Combine(winApps, "SnippingTool.exe") }),
             ("פתקים דביקים", new[] { "Microsoft.Notes" }, new[] { System.IO.Path.Combine(winApps, "StickyNotes.exe"), System.IO.Path.Combine(winApps, "Microsoft.MicrosoftStickyNotes.exe") }),
             ("שעון וטיימר", new[] { "Time", "ApplicationFrameHost" }, new[] { System.IO.Path.Combine(winApps, "Time.exe") }),
             // משוב 15.10: עוד כלים מובנים (נתיבים קבועים של Windows 10/11)

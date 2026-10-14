@@ -18,20 +18,27 @@
     try { st = await SS.bridge.call('/kiosk/status'); }
     catch (e) { body.innerHTML = ui.errorBox(e, function () { load(body); }); return; }
     if (SS.bridge.health) { SS.bridge.health.kioskActive = !!st.active; SS.setStatus(true); if (SS.syncLock) SS.syncLock(SS.bridge.health); }
-    var progs = [], found = [];
-    try {
-      var pr = await SS.bridge.call('/kiosk/programs');
-      progs = pr.programs || [];
-      st.autoTorah = !!pr.autoTorah;
-    } catch (e) { progs = []; }
-    try { found = (await SS.bridge.call('/kiosk/programs/detect')).found || []; } catch (e) { found = []; }
+
+    /* ארבע הקריאות האלה בלתי תלויות זו בזו (ולא ב-st) - היו רצות ברצף (await אחד אחרי השני), כך
+       שזמן הטעינה הכולל היה סכום הזמנים של כל חמש הקריאות ביחד. "זיהוי תוכנות" (סריקת כוננים) ו-
+       "מצב BIOS" (שאילתות WMI) הן הכי איטיות, ולכן הרגישו שהכל "תקוע". עכשיו רצות במקביל - הזמן
+       הכולל הוא רק הזמן של האיטית מביניהן, לא הסכום */
+    var results = await Promise.all([
+      SS.bridge.call('/kiosk/programs').catch(function () { return null; }),
+      SS.bridge.call('/kiosk/programs/detect').catch(function () { return null; }),
+      SS.bridge.call('/pair/list', {}).catch(function () { return null; }),
+      SS.bridge.call('/bios/status', {}).catch(function () { return null; })
+    ]);
+    var pr = results[0], det = results[1], pairsRes = results[2], bios = results[3];
+
+    var progs = (pr && pr.programs) || [];
+    st.autoTorah = !!(pr && pr.autoTorah);
+    var found = (det && det.found) || [];
     found = found.filter(function (f) {
       return !progs.some(function (p) { return p.path.toLowerCase() === f.path.toLowerCase(); });
     });
-    var pairs = [];
-    try { pairs = (await SS.bridge.call('/pair/list', {})).clients || []; } catch (e) { pairs = []; }
-    var bios = null;
-    try { bios = await SS.bridge.call('/bios/status', {}); } catch (e) { bios = null; }
+    var pairs = (pairsRes && pairsRes.clients) || [];
+
     render(body, st, progs, found, pairs, bios);
   }
 
@@ -498,13 +505,48 @@
         ui.esc((c.created || '').replace('T', ' ')) + ' · שימוש אחרון: ' + ui.esc((c.lastUsed || '').replace('T', ' ')) + '</span></div>' +
         '<button class="btn btn-tonal" data-act="unpair-' + ui.esc(c.id) + '">' + ui.icon('close') + 'ניתוק</button></div>';
     }).join('');
+    /* סטטוס פשוט למעלה (כמה תוספים מחוברים) - הרשימה המלאה עם זמנים/ניתוק רק למי שבאמת צריך,
+       מאחורי "פרטים נוספים". אם יש כפילויות (למשל אחרי שינוי מזהה תוסף - הישן נשאר מחובר כ"יתום"
+       עד שמנתקים אותו ידנית), זה בדיוק המקום לנקות אותן */
+    var status = pairs.length
+      ? '<span class="chip ok">' + ui.icon('check') + pairs.length + ' תוספים מחוברים</span>'
+      : '<span class="chip warn">' + ui.icon('warning') + 'אין תוספים מחוברים</span>';
     return '<div class="card"><div class="card-title">תוספים מחוברים לגשר</div>' +
       '<p class="muted">מגרסה 3.0 רק תוסף שאושר בחלון של הגשר יכול להשתמש בו. תוכנה אחרת במחשב לא יכולה לגשת לקבצים ולהגדרות בלי אישור כזה.</p>' +
-      (rows || '<p class="muted">אין תוספים מחוברים.</p>') + '</div>';
+      status +
+      '<details class="more-details"><summary>פרטים נוספים (' + pairs.length + ')</summary><div class="more-details-body">' +
+      (rows || '<p class="muted">אין תוספים מחוברים.</p>') +
+      '<p class="muted small">רואים כפילות (אותו שם פעמיים)? כנראה חיבור ישן משארית התקנה קודמת - אפשר לנתק אותו בבטחה, השני ימשיך לעבוד.</p>' +
+      '</div></details></div>';
   }
 
   /* ---------- הקשחת BIOS/UEFI מתוך תוכנה (ניסיון אוטומטי, ללא כניסה ידנית לתפריט ה-BIOS) ---------- */
   var BIOS_VENDOR_NAMES = { lenovo: 'Lenovo', hp: 'HP', dell: 'Dell', asus: 'Asus', other: 'לא זוהה' };
+  /* ר' bridge/BiosHardening.cs DisableWords/EnableWords - אותה רשימת מילים, כדי שהמשמעות (נעול/פתוח)
+     תתאים בדיוק לפעולה שהשרת באמת מבצע */
+  var BIOS_DISABLE_WORDS = ['disable', 'off', 'no', 'block'];
+  var BIOS_ENABLE_WORDS = ['enable', 'on', 'yes', 'require', 'prompt'];
+
+  /* הערך הגולמי מ-WMI לפעמים מגיע כ"Enable,*Disable" (כל הערכים האפשריים, עם * לפני הנוכחי) -
+     ולפעמים כערך יחיד נקי כמו "Disable". שתי הצורות נתמכות */
+  function biosCurrentWord(raw) {
+    raw = String(raw || '');
+    var marked = raw.split(',').filter(function (p) { return p.charAt(0) === '*'; })[0];
+    return (marked ? marked.slice(1) : raw).trim().toLowerCase();
+  }
+  function biosStatusChip(setting, wantWords, lockedLabel, openLabel) {
+    if (!setting) return '<span class="chip">לא נמצאה הגדרה מתאימה</span>';
+    var cur = biosCurrentWord(setting.currentValue);
+    var locked = wantWords.some(function (w) { return cur.indexOf(w) >= 0; });
+    return '<span class="chip ' + (locked ? 'ok' : 'warn') + '">' + ui.icon(locked ? 'lock' : 'unlock') + (locked ? lockedLabel : openLabel) + '</span>';
+  }
+  function biosDetailsHtml(setting) {
+    if (!setting) return '';
+    return '<details class="more-details"><summary>פרטים נוספים</summary><div class="more-details-body">' +
+      '<span class="muted small">שם ההגדרה במחשב: „' + ui.esc(setting.name) + '”</span>' +
+      '<span class="muted small">ערך נוכחי בפועל: <bdi dir="ltr">' + ui.esc(setting.currentValue || '—') + '</bdi></span>' +
+      '</div></details>';
+  }
 
   function biosCard(bios) {
     if (!bios) return '';
@@ -521,13 +563,13 @@
     }
 
     var usb = bios.usbBootSetting;
-    head += '<div class="setting-row"><div class="setting-text"><b>חסימת אתחול מהתקן USB/חיצוני</b><span class="muted">' +
-      (usb ? 'נמצאה הגדרה במחשב זה: „' + ui.esc(usb.name) + '” (ערך נוכחי: ' + ui.esc(usb.currentValue || '—') + ')'
-           : 'לא נמצאה הגדרה מתאימה במחשב זה') + '</span></div></div>';
+    head += '<div class="setting-row"><div class="setting-text"><b>חסימת אתחול ממדיה חיצונית (USB)</b>' +
+      biosStatusChip(usb, BIOS_DISABLE_WORDS, 'נעול — אי אפשר לאתחל מ-USB', 'פתוח — עדיין אפשר לאתחל מ-USB') +
+      biosDetailsHtml(usb) + '</div></div>';
     var bootMenu = bios.bootMenuAuthSetting;
-    head += '<div class="setting-row"><div class="setting-text"><b>נעילת תפריט האתחול (F9/F12) בסיסמת BIOS</b><span class="muted">' +
-      (bootMenu ? 'נמצאה הגדרה במחשב זה: „' + ui.esc(bootMenu.name) + '” (ערך נוכחי: ' + ui.esc(bootMenu.currentValue || '—') + ')'
-           : 'לא נמצאה הגדרה מתאימה במחשב זה') + '</span></div></div>';
+    head += '<div class="setting-row"><div class="setting-text"><b>נעילת תפריט האתחול (F9/F12) בסיסמה</b>' +
+      biosStatusChip(bootMenu, BIOS_ENABLE_WORDS, 'נעול — תפריט האתחול דורש סיסמה', 'פתוח — אפשר להיכנס לתפריט האתחול בלי סיסמה') +
+      biosDetailsHtml(bootMenu) + '</div></div>';
     if (bios.wmiReachable === false) {
       head += '<div class="state-box error"><div><b>לא ניתן לקרוא את הגדרות ה-BIOS כרגע</b><span class="muted">' +
         ui.esc(bios.wmiError || '') + '</span></div></div>';
