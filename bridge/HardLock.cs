@@ -830,11 +830,17 @@ public class HardLockService : ServiceBase
         _state ??= new JsonObject();
     }
 
+    // TypeInfoResolver מפורש הכרחי כאן (לא רק WriteIndented): נצפה בפועל ש-JsonNode.ToJsonString(options)
+    // עם JsonSerializerOptions "ריקות" זורק "JsonSerializerOptions instance must specify a TypeInfoResolver"
+    // בתוך תהליך השירות (HardLockService) - ללא זה, כל שמירת מצב (כולל disable/enable) נכשלת בפועל
+    private static readonly JsonSerializerOptions SaveOptions =
+        new() { WriteIndented = true, TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver() };
+
     private void Save()
     {
         Directory.CreateDirectory(HardLock.DataDir);
         string tmp = StateFile + ".tmp";
-        File.WriteAllText(tmp, _state.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(tmp, _state.ToJsonString(SaveOptions));
         File.Move(tmp, StateFile, true);
     }
 

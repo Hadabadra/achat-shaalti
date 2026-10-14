@@ -579,7 +579,12 @@ internal static class Diagnostics_
         {
             var node = System.Text.Json.Nodes.JsonNode.Parse(json);
             Strip(node);
-            return node?.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }) ?? "{}";
+            // TypeInfoResolver מפורש הכרחי - ר' הערה ב-HardLock.cs.Save
+            return node?.ToJsonString(new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
+            }) ?? "{}";
         }
         catch { return "{}"; }
     }

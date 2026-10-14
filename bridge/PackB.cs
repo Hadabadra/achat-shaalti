@@ -148,7 +148,12 @@ public static class PackB
             root["plugins"] = JsonNode.Parse(pl.GetRawText());
         string desk = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         string path = Unique(Path.Combine(desk, "גיבוי הגדרות אוצריא " + DateTime.Now.ToString("yyyy-MM-dd") + ".json"));
-        File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = Server.Json.Encoder }));
+        // TypeInfoResolver מפורש הכרחי - ר' הערה ב-HardLock.cs.Save
+        File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions
+        {
+            WriteIndented = true, Encoder = Server.Json.Encoder,
+            TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
+        }));
         return new { path, keys = bridge.Count };
     }
 

@@ -201,13 +201,18 @@ public static class Config
         lock (Gate) { _data = null; }
     }
 
+    // TypeInfoResolver מפורש הכרחי (ר' הערה זהה ב-HardLock.cs.Save) - בלעדיו JsonNode.ToJsonString(options)
+    // עלול לזרוק "JsonSerializerOptions instance must specify a TypeInfoResolver" בתהליך השירות
+    private static readonly JsonSerializerOptions SaveOptions =
+        new() { WriteIndented = true, TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver() };
+
     public static void Save()
     {
         lock (Gate)
         {
             Directory.CreateDirectory(Dir);
             string tmp = FilePath + ".tmp";
-            File.WriteAllText(tmp, Data.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(tmp, Data.ToJsonString(SaveOptions));
             File.Move(tmp, FilePath, true);
         }
     }
