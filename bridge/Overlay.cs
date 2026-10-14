@@ -267,7 +267,6 @@ internal sealed class ClockBar : Form
         float right = r.Right - pad - logo - ScaleX(8);
         var brand = new RectangleF(right - ScaleX(480), 0, ScaleX(480), h);
         g.DrawString(Lang.T(Program.AppFullName, Program.AppFullNameEn), mf, fore, brand, rtl);
-        g.DrawString(Program.Dedication, small, accent, new RectangleF(r.Width / 2f - ScaleX(220), 0, ScaleX(440), h), mid);
         string left = _time + "   " + _heb + "   " + _date + (_bat.Length > 0 ? "   " + _bat : "");
         var sz = g.MeasureString(left, mf);
         g.DrawString(left, mf, fore, new RectangleF(pad, 0, sz.Width + ScaleX(8), h), new StringFormat { LineAlignment = StringAlignment.Center });
