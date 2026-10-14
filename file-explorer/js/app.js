@@ -662,7 +662,7 @@
   /* ---------- סרגל פעולות ---------- */
   var CMDS = [
     { id: 'newFolder', icon: 'newFolder', label: 'תיקייה חדשה', cap: 'mkdir' },
-    { id: 'newFile', icon: 'newFile', label: 'קובץ טקסט חדש', cap: 'newFile' },
+    { id: 'newFile', icon: 'newFile', label: 'קובץ חדש', cap: 'newFile' },
     { sep: true },
     { id: 'cut', icon: 'cut', label: 'גזירה', cap: 'move', key: 'Ctrl+X' },
     { id: 'copy', icon: 'copy', label: 'העתקה', cap: 'copy', key: 'Ctrl+C' },
@@ -799,6 +799,12 @@
     if (/^\.+$/.test(s)) return 'שם לא תקין';
     return '';
   }
+  /* A5: סוגי קבצים חדשים (קובץ ריק; Word/RTF/HTML פותחים קובץ ריק כמסמך חדש) */
+  var NEW_TYPES = [
+    { value: 'txt', label: 'מסמך טקסט (.txt)' }, { value: 'docx', label: 'מסמך Word (.docx)' },
+    { value: 'rtf', label: 'מסמך RTF (.rtf)' }, { value: 'md', label: 'Markdown (.md)' },
+    { value: 'csv', label: 'טבלה CSV (.csv)' }, { value: 'html', label: 'דף HTML (.html)' }, { value: 'json', label: 'JSON (.json)' }
+  ];
   async function newItem(isDir) {
     var base = FX.t(isDir ? 'תיקייה חדשה' : 'מסמך חדש.txt');
     var names = {}; S.entries.forEach(function (e) { names[e.name.toLowerCase()] = 1; });
@@ -806,11 +812,13 @@
     while (names[name.toLowerCase()]) name = isDir ? base + ' (' + (n++) + ')' : base.replace(/\.txt$/, '') + ' (' + (n++) + ').txt';
     var made = null;
     var r = await ui.dialog({
-      title: isDir ? 'תיקייה חדשה' : 'קובץ טקסט חדש', icon: 'info',
-      fields: [{ name: 'name', label: 'שם', value: name }],
+      title: isDir ? 'תיקייה חדשה' : 'קובץ חדש', icon: 'info',
+      fields: isDir ? [{ name: 'name', label: 'שם', value: name }] : [{ name: 'name', label: 'שם', value: name.replace(/\.txt$/, '') },
+        { name: 'ext', type: 'select', label: 'סוג', value: 'txt', options: NEW_TYPES }],
       validate: function (v) { return validName(v.name); },
       onSubmit: async function (v) {
         var nm = v.name.trim();
+        if (!isDir && v.ext && !/\.[^.]+$/.test(nm)) nm += '.' + v.ext; // A5: כל הסוגים
         if (!isDir && !/\.[^.]+$/.test(nm)) nm += '.txt';
         made = isDir ? await S.prov.mkdir(S.path, nm) : await S.prov.newTextFile(S.path, nm);
         return nm;

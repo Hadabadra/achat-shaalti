@@ -699,7 +699,7 @@
 
   /* שדות שומר המסך — משותפים לטאב "שומר מסך" (sections/screensaver.js) */
   SS.screensaverFields = async function (st) {
-    var zmanShow = st.zmanimShow || DEFAULT_ZMAN_SHOW;
+    var zmanShow = (st.zmanimShow || DEFAULT_ZMAN_SHOW).map(function (x) { return String(x).toLowerCase(); }); // A4: הגשר שומר באותיות קטנות
     /* רשימת ערים מלוח השנה של אוצריא עצמה (calendar.getCities) — אם זמינה. קואורדינטות
        נשארות תמיד כאפשרות מתקדמת ("מותאם אישית") גם כשיש רשימת ערים */
     var cities = [];
@@ -745,7 +745,7 @@
     fields.push({ name: 'candle', label: 'הדלקת נרות: דקות לפני השקיעה', value: String(st.candleLightingMinutes != null ? st.candleLightingMinutes : 18), dir: 'ltr', placeholder: '18' });
     fields.push({ name: 'zshowHead', type: 'note', label: 'אילו זמנים להציג בשומר המסך:' });
     ZMAN_FIELDS.forEach(function (z) {
-      fields.push({ name: 'zm_' + z.id, type: 'checkbox', label: z.label, value: zmanShow.indexOf(z.id) >= 0 });
+      fields.push({ name: 'zm_' + z.id, type: 'checkbox', label: z.label, value: zmanShow.indexOf(z.id.toLowerCase()) >= 0 });
     });
     fields.push({ name: 'rcontent', type: 'select', label: 'תוכן שומר המסך', value: st.restContent || 'full',
       options: [{ value: 'full', label: 'הכל: פסוק, שעה, תאריך וזמני היום' }, { value: 'zmanim', label: 'זמני היום (בלי פסוק)' },

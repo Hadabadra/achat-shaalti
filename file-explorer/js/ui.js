@@ -170,6 +170,11 @@
             '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label +
             (f.hint ? '<small>' + f.hint + '</small>' : '') + '</span></label>';
         }
+        if (f.type === 'select') {
+          return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span><select class="input" name="' + f.name + '">' +
+            (f.options || []).map(function (o) { return '<option value="' + ui.esc(o.value) + '"' + (o.value === f.value ? ' selected' : '') + '>' + ui.esc(o.label) + '</option>'; }).join('') +
+            '</select></label>';
+        }
         return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
           '<input class="input" name="' + f.name + '" type="' + (f.type || 'text') + '"' +
           (f.placeholder ? ' placeholder="' + ui.esc(f.placeholder) + '"' : '') +

@@ -22,9 +22,14 @@ internal static class Outbox
         Server.Route("/diag/ack", b => Ack(b));
     }
 
+    private static bool IsNetworkNoise(string t) =>
+        System.Text.RegularExpressions.Regex.IsMatch(t, @"HttpRequestException|SocketException|WebException|TaskCanceledException|No such host|UpdateApi",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     public static void Add(string kind, string text)
     {
         if (!Config.Get("diag.autoReport", true) || string.IsNullOrWhiteSpace(text)) return;
+        if (IsNetworkNoise(text)) return; // A7: אין רשת / בדיקת עדכונים — לא תקלה
         try
         {
             string firstLine = text.Split('\n')[0].Trim();
