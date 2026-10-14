@@ -46,6 +46,8 @@ public static class FsApi
         Server.Route("/fs/delete", Delete);
         Server.Route("/fs/read", Read);
         Server.Route("/fs/write-text", WriteText);
+        Server.Route("/fs/write-binary", WriteBinary);
+        Server.Route("/fs/pick-save-file", PickSaveFile);
         Server.Route("/fs/open", Open);
         Server.Route("/fs/reveal", Reveal);
         Server.Route("/fs/clipboard-get", _ => ClipboardGet());
@@ -541,6 +543,90 @@ public static class FsApi
         }
     }
 
+    /// <summary>חלון "שמירה בשם" של Windows (ללא מגבלת גודל של אוצריא). גוף: { suggestedName, initialDir?, title?, filter? } →
+    /// { cancelled, path }. לאחר מכן כותבים את הקובץ עם /fs/write-binary (overwrite — החלון כבר שאל על דריסה).</summary>
+    private static object PickSaveFile(JsonElement b)
+    {
+        Kiosk.EnsureFileWriteAllowed();
+        string name = b.Str("suggestedName", "document.pdf");
+        string initial = b.Str("initialDir", "");
+        string title = b.Str("title", "שמירה");
+        string filter = b.Str("filter", "PDF (*.pdf)|*.pdf");
+        string result = null;
+        Exception error = null;
+        var t = new Thread(() =>
+        {
+            try
+            {
+                // חלון בעלים בלתי נראה וקבוע-מלמעלה, כדי שחלון השמירה יופיע מעל אוצריא
+                using var owner = new Form
+                {
+                    TopMost = true, ShowInTaskbar = false, FormBorderStyle = FormBorderStyle.None,
+                    StartPosition = FormStartPosition.Manual, Location = new System.Drawing.Point(-32000, -32000), Size = new System.Drawing.Size(1, 1),
+                };
+                owner.Show();
+                using var dlg = new SaveFileDialog
+                {
+                    Title = title, FileName = name, Filter = filter, OverwritePrompt = true,
+                    AddExtension = true, DefaultExt = "pdf", CheckPathExists = true, RestoreDirectory = true,
+                };
+                if (!string.IsNullOrEmpty(initial) && Directory.Exists(initial)) dlg.InitialDirectory = initial;
+                if (dlg.ShowDialog(owner) == DialogResult.OK) result = dlg.FileName;
+                owner.Close();
+            }
+            catch (Exception ex) { error = ex; }
+        });
+        t.SetApartmentState(ApartmentState.STA);
+        t.IsBackground = true;
+        t.Start();
+        if (!t.Join(115000)) throw new BridgeException("timeout", "חלון השמירה לא נסגר בזמן", 408);
+        if (error != null) throw error;
+        if (result == null) return new { cancelled = true, path = (string)null };
+        EnsureNotProtected(result);
+        return new { cancelled = false, path = result };
+    }
+
+    /// <summary>כתיבת קובץ בינארי בחתיכות. גוף: { path, content (base64), append?, overwrite?, unique?, makeDirs? }.
+    /// unique = אם הקובץ קיים — "שם (2).סיומת" (לא דורס). החתיכה הראשונה מחזירה את הנתיב הסופי; הבאות מצרפות אליו עם append.</summary>
+    private static object WriteBinary(JsonElement b)
+    {
+        string path = FullPath(b.Req("path"));
+        Kiosk.EnsureFileWriteAllowed();
+        EnsureNotProtected(path);
+        bool append = b.Bool("append"), overwrite = b.Bool("overwrite"), unique = b.Bool("unique"), makeDirs = b.Bool("makeDirs");
+        if (Directory.Exists(path)) throw BridgeException.Exists("קיימת תיקייה בשם זה");
+        string dir = Path.GetDirectoryName(path);
+        if (!Directory.Exists(dir))
+        {
+            if (!makeDirs) throw BridgeException.NotFound("התיקייה לא נמצאה: " + dir);
+            Directory.CreateDirectory(dir); // יוצר גם תתי-תיקיות חסרות (מבנה תיקיות משוכפל)
+        }
+        byte[] data;
+        try { data = Convert.FromBase64String(b.Str("content", "")); }
+        catch (FormatException) { throw BridgeException.BadRequest("התוכן אינו base64 תקין"); }
+
+        if (!append)
+        {
+            if (File.Exists(path))
+            {
+                if (unique)
+                {
+                    string stem = Path.GetFileNameWithoutExtension(path), ext = Path.GetExtension(path);
+                    int n = 2;
+                    do { path = Path.Combine(dir, stem + " (" + n + ")" + ext); n++; } while (File.Exists(path));
+                }
+                else if (!overwrite) throw BridgeException.Exists("הקובץ כבר קיים: " + path);
+            }
+            File.WriteAllBytes(path, data);
+        }
+        else
+        {
+            if (!File.Exists(path)) throw BridgeException.NotFound("הקובץ לא נמצא להמשך כתיבה: " + path);
+            using var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
+            fs.Write(data, 0, data.Length);
+        }
+        return new { path, size = new FileInfo(path).Length };
+    }
     private static object WriteText(JsonElement b)
     {
         string path = FullPath(b.Req("path"));
