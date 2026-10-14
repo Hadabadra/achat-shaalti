@@ -857,7 +857,11 @@ public static partial class Kiosk
         if (b.Has("zmanimDiaspora")) Config.Set("kiosk.zmanimDiaspora", b.Bool("zmanimDiaspora"));
         if (b.Has("zmanimShow"))
         {
-            var ids = b.StrArray("zmanimShow").Select(x => x.Trim().ToLowerInvariant()).Where(x => x.Length > 0).Distinct().Take(20).ToArray();
+            // לא עושים ToLowerInvariant: המזהים (למשל "shemaGra", "minchaGedola") הם camelCase מצד
+            // הלקוח, וקריאתם חזרה שם משווה באותיות-רישיות מדויקות (indexOf). הקטנת האותיות כאן שינתה
+            // את הערך השמור כך שלא תאם יותר לשדות שהמשתמש סימן, והם נראו "חוזרים לברירת המחדל" אחרי
+            // כל שמירה. הסינון בפועל (ZmanimLine) כבר משווה case-insensitive, אז אין צורך בנרמול כאן
+            var ids = b.StrArray("zmanimShow").Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().Take(20).ToArray();
             Config.Set("kiosk.zmanimShow", new JsonArray(ids.Select(x => (JsonNode)x).ToArray()));
         }
         if (b.Has("candleLightingMinutes")) Config.Set("kiosk.candleLightingMinutes", (int)Math.Clamp(b.Long("candleLightingMinutes", 18), 0, 90));

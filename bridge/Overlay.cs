@@ -631,7 +631,7 @@ internal sealed class RestScreen : Form
         for (float size = 18f; ; size -= 1f) // #1: גופן ברור ככל האפשר
         {
             f?.Dispose();
-            f = new Font("Segoe UI Semibold", size, GraphicsUnit.Point);
+            f = new Font("David", size, FontStyle.Bold, GraphicsUnit.Point); // ba639f5 (יאיר): כיסוי גרש/גרשיים — בלי ריבועים
             lineH = f.GetHeight(g) * 1.2f;
             float widest = 0;
             foreach (var it in items) if (it.Length > 0) widest = Math.Max(widest, g.MeasureString(it, f).Width);
