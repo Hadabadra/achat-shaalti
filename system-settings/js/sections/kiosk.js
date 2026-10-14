@@ -540,7 +540,7 @@
   function showBiosResult(r) {
     var rows = (r.steps || []).map(function (s) {
       var label = s.id === 'password' ? 'סיסמת BIOS' : s.id === 'bootMenuAuth' ? 'נעילת תפריט האתחול' : 'חסימת אתחול USB';
-      return '<li>' + ui.icon(s.success ? 'check' : 'warning') + '<span><b>' + label + (s.success ? ' — הצליח.' : ' — לא הצליח.') +
+      return '<li' + (s.success ? '' : ' class="bios-fail"') + '>' + ui.icon(s.success ? 'check' : 'warning') + '<span><b>' + label + (s.success ? ' — הצליח.' : ' — לא הצליח.') +
         '</b> ' + ui.esc(s.message || '') + '</span></li>';
     }).join('');
     return ui.dialog({
@@ -705,48 +705,65 @@
     var all = st.allSections || Object.keys(SECTION_NAMES);
     var open = st.openSections || [];
 
-    var fields = [
-      { name: 'ext', label: 'סיומות קבצים שמותר לפתוח בתוכנות אחרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
-      { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
-      { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
-      { name: 'venue', label: 'שם המחשב/בית הכנסת (אופציונלי)', value: st.venueName || '', placeholder: '', hint: 'מוצג במרכז המסך מתחת לשעון, במסך המנוחה. ריק = מוצגת רק השעה' },
-    ];
-    fields.push({ name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' });
-    fields.push({ name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' });
-    fields.push({ name: 'sidePos', type: 'select', label: 'מיקום סרגל התוכנות', value: st.sideBarPosition || 'right', hint: 'לאיזה צד מסך הסרגל מוצמד', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }, { value: 'top', label: 'למעלה' }, { value: 'bottom', label: 'למטה' }] });
-    fields.push({ name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' });
-    fields.push({ name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' });
-    fields.push({ name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' });
-    fields.push({ name: 'xls', type: 'checkbox', label: 'אפשור צפייה בקובצי Excel (xlsx) בסייר הקבצים', value: !!st.allowExcelDocs, hint: 'ברירת מחדל: בסייר הקבצים אפשר לצפות ולפתוח רק מסמכי Word. מצגות PowerPoint חסומות תמיד ואין אפשרות להתיר אותן; סימון כאן מתיר גם גיליונות Excel' });
-    fields.push({ name: 'tfa', type: 'checkbox', label: 'אימות דו-שלבי (Windows Hello)', value: !!st.twoFactor,
-      hint: (st.twoFactorAvailable ? 'ביטול הנעילה ושינוי ההגדרות ידרשו גם זיהוי פנים/טביעת אצבע/PIN, בנוסף לסיסמה. קוד השחזור ימשיך לעבוד לחירום.' : '⚠ Windows Hello אינו מוגדר במחשב הזה — הגדירו אותו ב-Windows כדי להפעיל') });
-    /* פתיחה זמנית: אפשר להפעיל רק כשהאימות הדו-שלבי פעיל (או מסומן עכשיו בטופס הזה) */
+    /* הטופס מחולק לקבוצות מתקפלות לפי נושא (ר' ui.fieldsHtml) - לפני זה הכל הוצג פרוש ביחד
+       (כ-25 שדות), כבד מדי לדפדוף. כל קבוצה סגורה כברירת מחדל חוץ מהראשונה */
     var tu = st.tempUnlock || {};
     var tfaNow = !!(tu.twoFactorOn != null ? tu.twoFactorOn : st.twoFactor);
     var TU_HINT_ON = 'סיסמה נפרדת, שאפשר למסור למי שצריך את המחשב לזמן קצר, בלי לגלות את סיסמת הנעילה. כל הנעילה (גם סייר הקבצים) נפתחת לזמן שנקבע כאן, ואז חוזרת מעצמה. לא מתקבלת כסיסמת נעילה.';
     var TU_HINT_OFF = 'זמין רק כשהאימות הדו-שלבי (Windows Hello) מופעל — סמנו קודם את האימות הדו-שלבי. אם הוא יכובה, הפתיחה הזמנית תיעצר עד שיופעל שוב (ההגדרות נשמרות).';
-    fields.push({ name: 'tu', type: 'checkbox', label: 'פתיחה זמנית בסיסמה נפרדת', value: !!tu.enabled,
-      disabled: !tfaNow && !tu.enabled, hint: '<span data-tu-hint>' + (tfaNow ? TU_HINT_ON : TU_HINT_OFF) + '</span>' });
-    fields.push({ name: 'tuMin', label: 'פתיחה זמנית: משך בדקות (1–60)', value: String(tu.minutes || 30), dir: 'ltr', placeholder: '30' });
-    fields.push({ name: 'tuPw', label: tu.configured ? 'סיסמת פתיחה זמנית חדשה (ריק = ללא שינוי)' : 'סיסמת פתיחה זמנית', type: 'password', dir: 'ltr' });
-    fields.push({ name: 'tuPw2', label: 'אימות סיסמת הפתיחה הזמנית', type: 'password', dir: 'ltr' });
-    all.forEach(function (id) {
-      fields.push({ name: 'sec_' + id, type: 'checkbox', label: 'פתוח בנעילה: ' + (SECTION_NAMES[id] || id), value: open.indexOf(id) >= 0 });
-    });
     var sc = st.schedule || {};
-    fields.push({ name: 'sched', type: 'checkbox', label: 'תזמון נעילה לפי שעות', value: !!sc.enabled, hint: 'נעילה אוטומטית בכל יום בין שעה לשעה (למשל 20:00 עד 02:00, כולל אחרי חצות). מחוץ לטווח המחשב פועל רגיל. ביטול ידני בתוך הטווח יחזור לנעילה' });
-    fields.push({ name: 'schedStart', label: 'שעת התחלה', type: 'time', value: sc.start || '20:00', dir: 'ltr' });
-    fields.push({ name: 'schedEnd', label: 'שעת סיום', type: 'time', value: sc.end || '02:00', dir: 'ltr' });
-    fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
-    fields.push({
-      name: 'pos', type: 'select', label: 'מיקום השעון', value: st.clockPosition || 'bottom-left',
-      options: [
-        { value: 'bottom-left', label: 'למטה-שמאל' },
-        { value: 'bottom-right', label: 'למטה-ימין' },
-        { value: 'top-left', label: 'למעלה-שמאל' },
-        { value: 'top-right', label: 'למעלה-ימין' }
-      ]
+
+    var fields = [
+      { type: 'group', icon: 'display', label: 'תצוגה ושולחן עבודה', open: true,
+        hint: 'שעון, שם המחשב, סרגל התוכנות ומסך מלא' },
+      { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
+      {
+        name: 'pos', type: 'select', label: 'מיקום השעון', value: st.clockPosition || 'bottom-left',
+        options: [
+          { value: 'bottom-left', label: 'למטה-שמאל' },
+          { value: 'bottom-right', label: 'למטה-ימין' },
+          { value: 'top-left', label: 'למעלה-שמאל' },
+          { value: 'top-right', label: 'למעלה-ימין' }
+        ]
+      },
+      { name: 'venue', label: 'שם המחשב/בית הכנסת (אופציונלי)', value: st.venueName || '', placeholder: '', hint: 'מוצג במרכז המסך מתחת לשעון, במסך המנוחה. ריק = מוצגת רק השעה' },
+      { name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' },
+      { name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' },
+      { name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' },
+      { name: 'sidePos', type: 'select', label: 'מיקום סרגל התוכנות', value: st.sideBarPosition || 'right', hint: 'לאיזה צד מסך הסרגל מוצמד', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }, { value: 'top', label: 'למעלה' }, { value: 'bottom', label: 'למטה' }] },
+
+      { type: 'group', icon: 'edit', label: 'קבצים ותוכן', hint: 'נתיב אוצריא, סיומות מותרות, קריאה-בלבד, Excel' },
+      { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
+      { name: 'ext', label: 'סיומות קבצים שמותר לפתוח בתוכנות אחרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
+      { name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' },
+      { name: 'xls', type: 'checkbox', label: 'אפשור צפייה בקובצי Excel (xlsx) בסייר הקבצים', value: !!st.allowExcelDocs, hint: 'ברירת מחדל: בסייר הקבצים אפשר לצפות ולפתוח רק מסמכי Word. מצגות PowerPoint חסומות תמיד ואין אפשרות להתיר אותן; סימון כאן מתיר גם גיליונות Excel' },
+
+      { type: 'group', icon: 'shield', label: 'אבטחה', hint: 'אימות דו-שלבי, ביטול נעילה בכיבוי' },
+      { name: 'tfa', type: 'checkbox', label: 'אימות דו-שלבי (Windows Hello)', value: !!st.twoFactor,
+        hint: (st.twoFactorAvailable ? 'ביטול הנעילה ושינוי ההגדרות ידרשו גם זיהוי פנים/טביעת אצבע/PIN, בנוסף לסיסמה. קוד השחזור ימשיך לעבוד לחירום.' : '⚠ Windows Hello אינו מוגדר במחשב הזה — הגדירו אותו ב-Windows כדי להפעיל') },
+      { name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' },
+
+      { type: 'group', icon: 'key', label: 'פתיחה זמנית בסיסמה נפרדת', hint: 'לתת למישהו את המחשב לזמן קצר בלי לגלות את הסיסמה הראשית' },
+      { name: 'tu', type: 'checkbox', label: 'פתיחה זמנית בסיסמה נפרדת', value: !!tu.enabled,
+        disabled: !tfaNow && !tu.enabled, hint: '<span data-tu-hint>' + (tfaNow ? TU_HINT_ON : TU_HINT_OFF) + '</span>' },
+      { name: 'tuMin', label: 'פתיחה זמנית: משך בדקות (1–60)', value: String(tu.minutes || 30), dir: 'ltr', placeholder: '30' },
+      { name: 'tuPw', label: tu.configured ? 'סיסמת פתיחה זמנית חדשה (ריק = ללא שינוי)' : 'סיסמת פתיחה זמנית', type: 'password', dir: 'ltr' },
+      { name: 'tuPw2', label: 'אימות סיסמת הפתיחה הזמנית', type: 'password', dir: 'ltr' },
+
+      { type: 'group', icon: 'unlock', label: 'מה פתוח בזמן נעילה', hint: 'אילו מסכי הגדרות נגישים לתלמיד בזמן נעילה' },
+
+      { type: 'group', icon: 'clock', label: 'תזמון נעילה לפי שעות', hint: 'נעילה אוטומטית מתחילה ונגמרת בשעה קבועה כל יום' },
+      { name: 'sched', type: 'checkbox', label: 'תזמון נעילה לפי שעות', value: !!sc.enabled, hint: 'נעילה אוטומטית בכל יום בין שעה לשעה (למשל 20:00 עד 02:00, כולל אחרי חצות). מחוץ לטווח המחשב פועל רגיל. ביטול ידני בתוך הטווח יחזור לנעילה' },
+      { name: 'schedStart', label: 'שעת התחלה', type: 'time', value: sc.start || '20:00', dir: 'ltr' },
+      { name: 'schedEnd', label: 'שעת סיום', type: 'time', value: sc.end || '02:00', dir: 'ltr' },
+      { name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' },
+    ];
+    /* "מה פתוח בזמן נעילה" מוכנס בתוך הקבוצה שלו למעלה - לא ב-push נפרד, כדי שישאר באותו field-group-body */
+    var secIdx = fields.findIndex(function (f) { return f.label === 'מה פתוח בזמן נעילה'; });
+    var secFields = all.map(function (id) {
+      return { name: 'sec_' + id, type: 'checkbox', label: 'פתוח בנעילה: ' + (SECTION_NAMES[id] || id), value: open.indexOf(id) >= 0 };
     });
+    fields.splice.apply(fields, [secIdx + 1, 0].concat(secFields));
     fields.push({ name: 'pw', label: st.hasPassword ? 'סיסמת נעילה' : 'סיסמת נעילה (עוד לא הוגדרה — אפשר להשאיר ריק)', type: 'password', dir: 'ltr' });
     var slot = body.querySelector('[data-slot=kset]'); if (!slot) return;
     var ok = await ui.inlineForm(slot, {

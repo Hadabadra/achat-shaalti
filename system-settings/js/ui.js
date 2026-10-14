@@ -168,37 +168,54 @@
   /* options: title, body (html), icon, tone (danger|primary), actions [{label, value, kind}], fields [{name,label,type,placeholder,value,disabled}],
      onSubmit(values) -> may throw to keep dialog open (shows message), dismissible.
      disabled: השדה מושבת (data-locked) ונשאר מושבת גם אחרי מצב "שומר…"; onOpen יכול לשנות זאת עם ui.lockField */
+  /* f.type === 'group': כותרת קבוצה מתקפלת (<details>/<summary>) - כל השדות שאחריה נכנסים
+     לתוכה עד הקבוצה הבאה (או סוף הרשימה). שימושי לטפסים ארוכים (למשל הגדרות נעילה) כדי
+     שלא כל השדות יוצגו פרושים ביחד - ר' kiosk.js editSettings */
+  function fieldHtml(f) {
+    if (f.type === 'note') {
+      return '<div class="field-note muted small">' + f.label + '</div>';
+    }
+    if (f.type === 'checkbox') {
+      return '<label class="check-row' + (f.disabled ? ' is-disabled' : '') + '"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + (f.disabled ? ' disabled data-locked' : '') + '>' +
+        '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label +
+        (f.hint ? '<small>' + f.hint + '</small>' : '') + '</span></label>';
+    }
+    if (f.type === 'select') {
+      var opts = (f.options || []).map(function (o) {
+        return '<option value="' + ui.esc(o.value) + '"' + (o.value === f.value ? ' selected' : '') + '>' + ui.esc(o.label) + '</option>';
+      }).join('');
+      return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
+        '<select class="input" name="' + f.name + '"' + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select>' +
+        (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
+    }
+    return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
+      '<input class="input" name="' + f.name + '" type="' + (f.type || 'text') + '"' +
+      (f.placeholder ? ' placeholder="' + ui.esc(f.placeholder) + '"' : '') +
+      (f.value ? ' value="' + ui.esc(f.value) + '"' : '') +
+      (f.dir ? ' dir="' + f.dir + '"' : '') + (f.disabled ? ' disabled data-locked' : '') + ' autocomplete="off"></label>';
+  }
   ui.fieldsHtml = function (fields) {
-    return (fields || []).map(function (f) {
-        if (f.type === 'note') {
-          return '<div class="field-note muted small">' + f.label + '</div>';
-        }
-        if (f.type === 'checkbox') {
-          return '<label class="check-row' + (f.disabled ? ' is-disabled' : '') + '"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + (f.disabled ? ' disabled data-locked' : '') + '>' +
-            '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label +
-            (f.hint ? '<small>' + f.hint + '</small>' : '') + '</span></label>';
-        }
-        if (f.type === 'select') {
-          var opts = (f.options || []).map(function (o) {
-            return '<option value="' + ui.esc(o.value) + '"' + (o.value === f.value ? ' selected' : '') + '>' + ui.esc(o.label) + '</option>';
-          }).join('');
-          return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
-            '<select class="input" name="' + f.name + '"' + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select>' +
-            (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
-        }
-        return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
-          '<input class="input" name="' + f.name + '" type="' + (f.type || 'text') + '"' +
-          (f.placeholder ? ' placeholder="' + ui.esc(f.placeholder) + '"' : '') +
-          (f.value ? ' value="' + ui.esc(f.value) + '"' : '') +
-          (f.dir ? ' dir="' + f.dir + '"' : '') + (f.disabled ? ' disabled data-locked' : '') + ' autocomplete="off"></label>';
-    }).join('');
+    var out = '', inGroup = false;
+    (fields || []).forEach(function (f) {
+      if (f.type === 'group') {
+        if (inGroup) out += '</div></details>';
+        out += '<details class="field-group"' + (f.open ? ' open' : '') + '><summary>' +
+          (f.icon ? ui.icon(f.icon) : '') + '<span>' + ui.esc(f.label) + '</span>' +
+          (f.hint ? '<small>' + f.hint + '</small>' : '') + '</summary><div class="field-group-body">';
+        inGroup = true;
+        return;
+      }
+      out += fieldHtml(f);
+    });
+    if (inGroup) out += '</div></details>';
+    return out;
   };
 
   /* ערכי שדות מתוך טופס (גם בתוך עמוד, לא רק בדיאלוג) */
   ui.fieldValues = function (form, fields) {
     var v = {};
     (fields || []).forEach(function (f) {
-      if (f.type === 'note') return;
+      if (f.type === 'note' || f.type === 'group') return;
       var inp = form.querySelector('[name="' + f.name + '"]');
       if (inp) v[f.name] = f.type === 'checkbox' ? inp.checked : inp.value;
     });
@@ -261,7 +278,7 @@
       function values() {
         var v = {};
         (opt.fields || []).forEach(function (f) {
-          if (f.type === 'note') return;
+          if (f.type === 'note' || f.type === 'group') return;
           var inp = form.querySelector('[name="' + f.name + '"]');
           v[f.name] = f.type === 'checkbox' ? inp.checked : inp.value;
         });
