@@ -120,9 +120,9 @@
         '<div class="setting-row"><div class="setting-text"><b>תזמון נעילה לפי שעות</b><span class="muted">' +
         (st.schedule && st.schedule.enabled
           ? 'נעילה אוטומטית בכל יום <bdi dir="ltr">' + ui.esc(st.schedule.start) + '–' + ui.esc(st.schedule.end) + '</bdi>'
-          : 'כבוי — נעילה ידנית בלבד') + '</span></div>' +
+          : 'כבוי — נעילה ידנית בלבד') + ' · סטטוס נוכחי, לשינוי ראו „הגדרות נעילה” למטה</span></div>' +
         '</div>' +
-        '<div class="setting-row"><div class="setting-text"><b>פתיחה זמנית בסיסמה נפרדת</b><span class="muted">' + tempSummary(tu) + '</span></div>' +
+        '<div class="setting-row"><div class="setting-text"><b>פתיחה זמנית בסיסמה נפרדת</b><span class="muted">' + tempSummary(tu) + ' · סטטוס נוכחי, לשינוי ראו „הגדרות נעילה” למטה</span></div>' +
         '</div>' +
         '<div class="setting-row"><div class="setting-text"><b>קבצים שמותר לפתוח בזמן נעילה</b><span class="muted"><bdi dir="ltr">' +
         ui.esc((st.allowOpenExtensions || []).length ? st.allowOpenExtensions.map(function (x) { return '.' + x; }).join(', ') : '—') + '</bdi></span></div>' +
