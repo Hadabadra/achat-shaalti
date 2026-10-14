@@ -506,10 +506,12 @@ internal sealed class RestScreen : Form
         using (var wickP = new Pen(Color.FromArgb(200, 60, 45, 30), 1.4f * s))
             g.DrawLine(wickP, cx, bodyTop, flameX, flameY + flameH * 0.7f);
 
-        using (var flamePath = new GraphicsPath())
+        // PathGradientBrush חייב להיבנות מ-GraphicsPath שכבר יש בו נקודות - בניה מנתיב ריק זורקת
+        // חריגה (GDI+ generic error) שמפילה את כל OnPaint ומשאירה את מסך המנוחה לבן עם X אדום
+        using var flamePath = new GraphicsPath();
+        flamePath.AddEllipse(flameX - flameW / 2f, flameY, flameW, flameH);
         using (var flameB = new PathGradientBrush(flamePath))
         {
-            flamePath.AddEllipse(flameX - flameW / 2f, flameY, flameW, flameH);
             flameB.CenterColor = Color.FromArgb(255, 255, 244, 214);
             flameB.SurroundColors = new[] { Color.FromArgb(0, gold.R, gold.G, gold.B) };
             g.FillPath(flameB, flamePath);
