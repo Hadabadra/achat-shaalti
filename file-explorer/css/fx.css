@@ -233,7 +233,7 @@ body.fx-busy .fx-list { pointer-events: none; opacity: 0.7; }
 @media (max-width: 45em) { .fx-doc.two { column-count: 1; } .fx-doc { padding: 1em; } }
 
 /* אייקוני הקו של הסייר */
-svg.ic { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+svg.ic { fill: none; stroke: currentColor; stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; }
 svg.ic .fill { fill: currentColor; fill-opacity: 0.16; }
 /* נתיבי Windows נקראים משמאל לימין גם בממשק עברי */
 .fx-crumbs { direction: ltr; }

@@ -6,49 +6,52 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --color-primary: #3A5F94;
+  /* מיתוג עצמאי (לא של "אחת שאלתי"): אשכולית-ברונזה, Assistant. ראו docs/BRANDING.md.
+     הצבעים האלה הם ברירת מחדל בלבד - אוצריא יכול לדרוס אותם בזמן ריצה (theme.changed),
+     ולכן הם לא הבדל-עיצוב אמין; שפת הצורות למטה (--radius-*) כן, כי אוצריא לא נוגע בה */
+  --color-primary: #B3473F;
   --color-on-primary: #FFFFFF;
-  --color-primary-container: #D6E3FF;
-  --color-on-primary-container: #001B3D;
-  --color-secondary: #555F71;
+  --color-primary-container: #F3CDC5;
+  --color-on-primary-container: #5C1F1A;
+  --color-secondary: #7A5C52;
   --color-on-secondary: #FFFFFF;
-  --color-secondary-container: #D9E3F8;
-  --color-on-secondary-container: #121C2B;
-  --color-tertiary: #6E5676;
-  --color-tertiary-container: #F7D8FF;
-  --color-on-tertiary-container: #27132F;
-  --color-surface: #F9F9FF;
-  --color-on-surface: #191C20;
-  --color-on-surface-variant: #43474E;
+  --color-secondary-container: #F0DDD5;
+  --color-on-secondary-container: #2B1710;
+  --color-tertiary: #8A6D1F;
+  --color-tertiary-container: #F3E3B8;
+  --color-on-tertiary-container: #2B2100;
+  --color-surface: #FBF6F3;
+  --color-on-surface: #2B1F1C;
+  --color-on-surface-variant: #8F7A74;
   --color-surface-container-lowest: #FFFFFF;
-  --color-surface-container-low: #F3F3FA;
-  --color-surface-container: #EDEDF4;
-  --color-surface-container-high: #E7E8EE;
-  --color-surface-container-highest: #E2E2E9;
+  --color-surface-container-low: #F8F1EE;
+  --color-surface-container: #FFFFFF;
+  --color-surface-container-high: #F3E3DF;
+  --color-surface-container-highest: #ECD6D0;
   --color-error: #BA1A1A;
   --color-on-error: #FFFFFF;
   --color-error-container: #FFDAD6;
   --color-on-error-container: #410002;
-  --color-outline: #74777F;
-  --color-outline-variant: #C4C6CF;
-  --color-inverse-surface: #2E3036;
-  --color-on-inverse-surface: #F0F0F7;
-  --color-primary-subtle: rgba(58, 95, 148, 0.12);
-  --color-secondary-subtle: rgba(85, 95, 113, 0.12);
+  --color-outline: #B9958D;
+  --color-outline-variant: #ECDBD5;
+  --color-inverse-surface: #3A2420;
+  --color-on-inverse-surface: #FBF1EE;
+  --color-primary-subtle: rgba(179, 71, 63, 0.12);
+  --color-secondary-subtle: rgba(122, 92, 82, 0.12);
   --color-ok: #2E7D32;
   --color-shadow-18: rgba(0, 0, 0, 0.18);
   --color-shadow-25: rgba(0, 0, 0, 0.25);
   --color-shadow-28: rgba(0, 0, 0, 0.28);
   --color-shadow-4: rgba(0, 0, 0, 0.4);
 
-  --font-ui: 'Rubik', 'Segoe UI', system-ui, sans-serif;
-  --font-main: 'FrankRuhlCLM', 'David', serif;
+  --font-ui: 'Assistant', 'Segoe UI', system-ui, sans-serif;
+  --font-main: 'Assistant', 'Segoe UI', system-ui, sans-serif;
   --font-mono: Consolas, 'Cascadia Mono', monospace;
   --font-size-base: 1rem;
   --line-height: 1.5;
-  --radius-sm: 0.5em;
-  --radius-md: 0.75em;
-  --radius-lg: 1em;
+  --radius-sm: 0.375em;
+  --radius-md: 0.5em;
+  --radius-lg: 0.625em;
   --radius-pill: 62.4375em;
   /* יעד מגע מינימלי: 2.75rem (44px ביחס לגופן השורש) גם כשאלמנט נמצא בתוך הקשר עם גופן מוקטן (לדוגמה הזום הפנימי 0.9 של סייר הקבצים) */
   --touch: max(3em, 2.75rem);
@@ -56,19 +59,19 @@
 
 /* dark defaults for the browser preview only (in Otzaria the host theme sets every role) */
 body.preview.dark-mode {
-  --color-primary: #A8C8FF; --color-on-primary: #05305F;
-  --color-primary-container: #1F4677; --color-on-primary-container: #D6E3FF;
-  --color-secondary: #BDC7DC; --color-on-secondary: #273141;
-  --color-secondary-container: #3E4759; --color-on-secondary-container: #D9E3F8;
-  --color-surface: #111318; --color-on-surface: #E2E2E9; --color-on-surface-variant: #C4C6CF;
-  --color-surface-container-lowest: #0C0E13; --color-surface-container-low: #191C20;
-  --color-surface-container: #1D2024; --color-surface-container-high: #282A2F;
-  --color-surface-container-highest: #33353A;
+  --color-primary: #FFB4A8; --color-on-primary: #5E1510;
+  --color-primary-container: #7D2D23; --color-on-primary-container: #FFDAD2;
+  --color-secondary: #E7BFB1; --color-on-secondary: #442B22;
+  --color-secondary-container: #5D4036; --color-on-secondary-container: #FFDBCB;
+  --color-surface: #1C1411; --color-on-surface: #F0DFD9; --color-on-surface-variant: #D6C0B8;
+  --color-surface-container-lowest: #140D0A; --color-surface-container-low: #221815;
+  --color-surface-container: #261C18; --color-surface-container-high: #312520;
+  --color-surface-container-highest: #3C2E28;
   --color-error: #FFB4AB; --color-on-error: #690005; --color-error-container: #93000A; --color-on-error-container: #FFDAD6;
-  --color-outline: #8E9099; --color-outline-variant: #43474E;
-  --color-inverse-surface: #E2E2E9; --color-on-inverse-surface: #2E3036;
-  --color-primary-subtle: rgba(168, 200, 255, 0.14);
-  --color-secondary-subtle: rgba(189, 199, 220, 0.12);
+  --color-outline: #A08880; --color-outline-variant: #53413A;
+  --color-inverse-surface: #F0DFD9; --color-on-inverse-surface: #3A2420;
+  --color-primary-subtle: rgba(255, 180, 168, 0.14);
+  --color-secondary-subtle: rgba(231, 191, 177, 0.12);
   --color-ok: #81C784;
 }
 body.dark-mode { --color-ok: #81C784; }
@@ -78,19 +81,19 @@ body.dark-mode { --color-ok: #81C784; }
    גוברים על כלל זה תמיד, בלי קשר לסלקטור, כך שאין התנגשות בתוך אוצריא עצמה. */
 @media (prefers-color-scheme: dark) {
   body:not(.preview) {
-    --color-primary: #A8C8FF; --color-on-primary: #05305F;
-    --color-primary-container: #1F4677; --color-on-primary-container: #D6E3FF;
-    --color-secondary: #BDC7DC; --color-on-secondary: #273141;
-    --color-secondary-container: #3E4759; --color-on-secondary-container: #D9E3F8;
-    --color-surface: #111318; --color-on-surface: #E2E2E9; --color-on-surface-variant: #C4C6CF;
-    --color-surface-container-lowest: #0C0E13; --color-surface-container-low: #191C20;
-    --color-surface-container: #1D2024; --color-surface-container-high: #282A2F;
-    --color-surface-container-highest: #33353A;
+    --color-primary: #FFB4A8; --color-on-primary: #5E1510;
+    --color-primary-container: #7D2D23; --color-on-primary-container: #FFDAD2;
+    --color-secondary: #E7BFB1; --color-on-secondary: #442B22;
+    --color-secondary-container: #5D4036; --color-on-secondary-container: #FFDBCB;
+    --color-surface: #1C1411; --color-on-surface: #F0DFD9; --color-on-surface-variant: #D6C0B8;
+    --color-surface-container-lowest: #140D0A; --color-surface-container-low: #221815;
+    --color-surface-container: #261C18; --color-surface-container-high: #312520;
+    --color-surface-container-highest: #3C2E28;
     --color-error: #FFB4AB; --color-on-error: #690005; --color-error-container: #93000A; --color-on-error-container: #FFDAD6;
-    --color-outline: #8E9099; --color-outline-variant: #43474E;
-    --color-inverse-surface: #E2E2E9; --color-on-inverse-surface: #2E3036;
-    --color-primary-subtle: rgba(168, 200, 255, 0.14);
-    --color-secondary-subtle: rgba(189, 199, 220, 0.12);
+    --color-outline: #A08880; --color-outline-variant: #53413A;
+    --color-inverse-surface: #F0DFD9; --color-on-inverse-surface: #3A2420;
+    --color-primary-subtle: rgba(255, 180, 168, 0.14);
+    --color-secondary-subtle: rgba(231, 191, 177, 0.12);
     --color-ok: #81C784;
   }
 }
