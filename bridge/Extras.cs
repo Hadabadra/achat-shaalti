@@ -504,7 +504,7 @@ internal sealed class EmergencyForm : Form
 /// </summary>
 internal static class Diagnostics_
 {
-    public const string IssuesUrl = "https://github.com/e0548433917-gif/otzaria-system-tools/issues/new";
+    public const string IssuesUrl = "https://github.com/e0548433917-gif/achat-shaalti/issues/new";
     private static readonly Regex Secret = new("(hash|salt|key|secret|password|token|recovery)", RegexOptions.IgnoreCase);
 
     public static void Report()
