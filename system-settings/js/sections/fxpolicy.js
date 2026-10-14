@@ -12,6 +12,7 @@
   });
 
   var MODES = [['off', 'פתוח (ללא הגבלה)'], ['restricted', 'מוגבל לתיקיות שנבחרו'], ['locked', 'נעול (נפתח בסיסמה לזמן קצוב)']];
+  var EFFECTIVE_LABELS = { open: 'פתוח', restricted: 'מוגבל לתיקיות שנבחרו', locked: 'נעול' };
 
   async function load(body) {
     var st;

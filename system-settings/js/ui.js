@@ -77,7 +77,8 @@
     airplane: '<path d="M21 15.5l-8-4.5V5a1.5 1.5 0 0 0-3 0v6l-8 4.5V17l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-4.5l8 2.5z"/>',
     hibernate: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/><path d="M15 3.5h4l-4 4h4"/>',
     signout: '<path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8l-4 4 4 4M6 12h10"/>',
-    bridge: '<path d="M2.5 17h19M4 17v-4M20 17v-4M2.5 13c3.5 0 6-4 9.5-4s6 4 9.5 4M8 17v-5.5M16 17v-5.5M12 17V9"/>'
+    bridge: '<path d="M2.5 17h19M4 17v-4M20 17v-4M2.5 13c3.5 0 6-4 9.5-4s6 4 9.5 4M8 17v-5.5M16 17v-5.5M12 17V9"/>',
+    copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5.5A1.5 1.5 0 0 0 14 4H5.5A1.5 1.5 0 0 0 4 5.5V14a1.5 1.5 0 0 0 1.5 1.5h3"/>'
   };
   ui.icon = function (name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[name] || '') + '</svg>';

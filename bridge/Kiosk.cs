@@ -774,10 +774,16 @@ public static partial class Kiosk
 
     private static object Settings(JsonElement b)
     {
-        Verify(b.Str("password"), allowRecovery: false);
-        AdminLog.Add("שינוי הגדרות נעילה");
-        // שינוי הגדרות דורש Windows Hello כשהאימות הדו-שלבי כבר פעיל (הפעלה ראשונה מטופלת למטה)
-        TwoFactor.Require("שינוי הגדרות הנעילה");
+        // לפני שהוגדרה סיסמת נעילה בכלל (לא כאן ולא ברכיב ההקשחה) אין עדיין מה להגן עליו - Enable()
+        // ממילא דורש HasPassword בנפרד, אז דחיית שמירת העדפות (שומר מסך וכו') עד שתוגדר סיסמה הייתה
+        // חוסמת סתם הגדרה ראשונית, בלי לתרום לאבטחה בפועל
+        if (PasswordConfigured)
+        {
+            Verify(b.Str("password"), allowRecovery: false);
+            AdminLog.Add("שינוי הגדרות נעילה");
+            // שינוי הגדרות דורש Windows Hello כשהאימות הדו-שלבי כבר פעיל (הפעלה ראשונה מטופלת למטה)
+            TwoFactor.Require("שינוי הגדרות הנעילה");
+        }
         if (b.Has("twoFactor"))
         {
             bool want = b.Bool("twoFactor");
