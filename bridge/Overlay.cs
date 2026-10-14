@@ -438,9 +438,12 @@ internal sealed class RestScreen : Form
         while (true)
         {
             // "Segoe UI Semibold" אינו שם family נפרד שניתן לסמוך עליו בכל Windows - בחלק מהמחשבים
-            // זה נופל לגופן חלופי בלי כיסוי עברי, והאותיות העבריות מוצגות כריבועים ריקים (tofu) בעוד
-            // שהמספרים (שקיימים בכל גופן) מוצגים כרגיל. "Segoe UI" הרגיל עם FontStyle.Bold אמין בכל מקום
-            f = new Font("Segoe UI", size, FontStyle.Bold, GraphicsUnit.Point);
+            // זה נופל לגופן חלופי בלי כיסוי עברי, והאותיות העבריות מוצגות כריבועים ריקים (tofu).
+            // גם "Segoe UI" הרגיל לא מכסה סימני גרש/גרשיים (״ ׳, כמו ב"דף יומי"/גימטריה של תאריך עברי -
+            // "כ״ה" וכו') - בדיוק הריבועים שהופיעו לצד "מספרים" (אותיות-גימטריה) בעמודת הזמנים. "David"
+            // הוא גופן עברי ייעודי עם כיסוי מלא לבלוק היוניקוד העברי כולל סימני פיסוק, ומשומש כבר באותו
+            // מסך (headF/verseF/dateF) בלי בעיה - עקבי ואמין יותר מ"Segoe UI" לטקסט עברי מלא כאן
+            f = new Font("David", size, FontStyle.Bold, GraphicsUnit.Point);
             lineH = f.GetHeight(g) * 1.25f;
             float need = 24 * s + lineH * (items.Count - blank) + lineH * 0.5f * blank;
             if (need <= maxH || size <= 11f) { maxH = Math.Min(maxH, need); break; }

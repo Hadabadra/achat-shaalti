@@ -33,7 +33,11 @@ public static class Installer
         if (!IsRunningFromInstallDir())
         {
             StopOtherInstances();
-            File.Copy(Environment.ProcessPath!, InstalledExe, overwrite: true);
+            // אחרי Kill ייתכן שהקובץ עדיין נעול לרגע (ההפעלה הבודדת לא שוחררה מיד) - מספר ניסיונות
+            // עם המתנה קצרה, ואם עדיין נכשל לא מפילים את כל התהליך (בעיה אמיתית: קריסה כאן הפילה
+            // את כל הגשר/השומר באמצע נעילה פעילה) - ממשיכים עם שאר ההתקנה, מנסים שוב בהפעלה הבאה
+            try { CopyExeWithRetry(Environment.ProcessPath!, InstalledExe); }
+            catch (Exception ex) { Config.Log("install: העתקת exe נכשלה (ימשיך עם הגרסה הקיימת): " + ex.Message); }
         }
 
         using (var k = Registry.CurrentUser.CreateSubKey(RunKey))
@@ -158,6 +162,16 @@ public static class Installer
         {
             if (p.Id == self) continue;
             try { p.Kill(); p.WaitForExit(3000); } catch { }
+        }
+    }
+
+    /// <summary>עד 5 ניסיונות עם המתנה - תהליך שזה עתה נהרג עשוי להחזיק עדיין את ה-handle של ה-exe לרגע</summary>
+    private static void CopyExeWithRetry(string src, string dst)
+    {
+        for (int i = 0; ; i++)
+        {
+            try { File.Copy(src, dst, overwrite: true); return; }
+            catch (IOException) when (i < 4) { Thread.Sleep(400); }
         }
     }
 
