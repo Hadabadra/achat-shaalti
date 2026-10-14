@@ -290,6 +290,8 @@ public static partial class Kiosk
         restShowLogo = Config.Has("kiosk.restShowLogo") ? Config.Get("kiosk.restShowLogo", true) : (bool?)null,
         restShowDedication = Config.Has("kiosk.restShowDedication") ? Config.Get("kiosk.restShowDedication", true) : (bool?)null,
         restDedicationText = Config.Get("kiosk.restDedicationText", ""),
+        restDedicationStyle = Config.Get("kiosk.restDedicationStyle", "fixed"),
+        restCandleFlicker = Config.Get("kiosk.restCandleFlicker", false),
         lockScreenImage = Config.Get("kiosk.lockScreenImage", false),
         restNoteText = Config.Get("kiosk.restNoteText", ""),
         showDafYomi = Config.Get("kiosk.showDafYomi", false),
@@ -297,6 +299,7 @@ public static partial class Kiosk
         yahrzeitDay = Config.Get("kiosk.yahrzeitDay", 0),
         yahrzeitLabel = Config.Get("kiosk.yahrzeitLabel", ""),
         venueName = Config.Get("kiosk.venueName", ""),
+        dedicationText = Config.Get("kiosk.dedicationText", ""),
         fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
         sideBar = Config.Get("kiosk.sideBar", true),
         barPrograms = Config.Get("kiosk.barPrograms", !Config.Get("kiosk.sideBar", true)), // D4
@@ -825,6 +828,8 @@ public static partial class Kiosk
             "lockScreenImage", "restShowVerse", "restShowClock", "restShowZmanim", "restShowLogo", "restShowDedication" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restDedicationText")) { string dt = (b.Str("restDedicationText") ?? "").Replace("\r", ""); Config.Set("kiosk.restDedicationText", dt.Length > 400 ? dt[..400] : dt); }
+        if (b.Has("restDedicationStyle")) Config.Set("kiosk.restDedicationStyle", b.Str("restDedicationStyle") == "column" ? "column" : "fixed");
+        if (b.Has("restCandleFlicker")) Config.Set("kiosk.restCandleFlicker", b.Bool("restCandleFlicker"));
         if (b.Has("restNoteText")) { string nt = (b.Str("restNoteText") ?? "").Replace("\r", ""); Config.Set("kiosk.restNoteText", nt.Length > 600 ? nt[..600] : nt); }
         if (b.Has("lockScreenImage")) Tray.Invoke(LockScreenImage.Update);
         if (b.Has("saverWhenUnlocked")) Config.Set("kiosk.saverWhenUnlocked", b.Bool("saverWhenUnlocked", true)); // D2
@@ -883,6 +888,12 @@ public static partial class Kiosk
             string vn = (b.Str("venueName") ?? "").Trim();
             if (vn.Length > 60) vn = vn.Substring(0, 60);
             Config.Set("kiosk.venueName", vn);
+        }
+        if (b.Has("dedicationText"))
+        {
+            string ded = (b.Str("dedicationText") ?? "").Trim();
+            if (ded.Length > 120) ded = ded.Substring(0, 120);
+            Config.Set("kiosk.dedicationText", ded);
         }
         string cp = b.Str("clockPosition");
         if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right" or "bar-bottom" or "bar-top") Config.Set("kiosk.clockPosition", cp);

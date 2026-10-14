@@ -860,6 +860,12 @@
     fields.push({ name: 'dedText', type: 'textarea', rows: 3, label: 'נוסח ההקדשה בשומר המסך', value: st.restDedicationText || '',
       placeholder: 'ריק = ההקדשה הקבועה. שורה ראשונה קטנה, שורה שנייה מודגשת (שם), השאר קטן',
       hint: 'אפשר לכתוב הקדשה אחרת או לעילוי נשמת יקיריכם. עד 4 שורות' });
+    /* d992415 (יאיר) — "גם וגם": סגנון ההקדשה ונר מרצד לבחירת המשתמש. ברירת מחדל לפי 15.10: קבועה, בלי תזוזה */
+    fields.push({ name: 'dedStyle', type: 'select', label: 'סגנון ההקדשה', value: st.restDedicationStyle || 'fixed',
+      options: [{ value: 'fixed', label: 'קבועה בתחתית הצד שמול הזמנים' }, { value: 'column', label: 'עמודה ממוסגרת עם נר' }],
+      hint: 'שני הסגנונות מוצגים בצד שמול זמני היום, בגבולות קבועים' });
+    fields.push({ name: 'candleFlicker', type: 'checkbox', label: 'נר מרצד (בסגנון עמודה)', value: !!st.restCandleFlicker,
+      hint: 'כבוי (ברירת מחדל): הנר דולק בלי תזוזה' });
     fields.push({ name: 'zmSide', type: 'select', label: 'עמודת זמני היום בשומר המסך', value: st.restZmanimSide || 'right', hint: 'הזמנים מוצגים בעמודה בצד, וההקדשה בתחתית בלי חפיפה', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }] });
     fields.push({ more: true, name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
       options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
@@ -875,7 +881,7 @@
   };
   SS.screensaverPayload = function (x) {
     return {
-      restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi, restShowVerse: !!x.rsVerse, restShowClock: !!x.rsClock, restShowZmanim: !!x.rsZmanim, restShowLogo: !!x.rsLogo, restShowDedication: !!x.rsDed, restDedicationText: String(x.dedText || '').slice(0, 400), lockScreenImage: !!x.lockImg, restNoteText: String(x.noteText || '').slice(0, 600),
+      restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi, restShowVerse: !!x.rsVerse, restShowClock: !!x.rsClock, restShowZmanim: !!x.rsZmanim, restShowLogo: !!x.rsLogo, restShowDedication: !!x.rsDed, restDedicationStyle: x.dedStyle === 'column' ? 'column' : 'fixed', restCandleFlicker: !!x.candleFlicker, restDedicationText: String(x.dedText || '').slice(0, 400), lockScreenImage: !!x.lockImg, restNoteText: String(x.noteText || '').slice(0, 600),
       zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
       zmanimElevation: +String(x.zelev).trim() || 0, zmanimAlert: ZMAN_FIELDS.filter(function (z) { return x['za_' + z.id]; }).map(function (z) { return z.id; }).join(','), zmanimAlertMinutes: +String(x.zalertmin).trim() || 10, zmanimFallbackEngine: x.zengine,
       zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,

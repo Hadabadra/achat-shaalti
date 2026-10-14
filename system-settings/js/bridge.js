@@ -163,7 +163,7 @@
     kiosk: {
       active: false, hasPassword: false, strict: false, autoStartBridge: true,
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
-      allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, allowExcelDocs: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left', venueName: '',
+      allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, allowExcelDocs: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left', venueName: '', dedicationText: '',
       restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
       candleLightingMinutes: 18, zmanimElevation: 0, zmanimFallbackEngine: 'noaa', showParsha: false, showDafYomi: false, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
       sideBar: true, sideBarIconsOnly: false, sideBarPosition: 'right', restZmanimSide: 'right', resetOnShutdown: false,
@@ -334,6 +334,7 @@
       if (Array.isArray(b.allowOpenExtensions)) M.kiosk.allowOpenExtensions = b.allowOpenExtensions.slice();
       if (typeof b.otzariaPath === 'string') M.kiosk.otzariaPath = b.otzariaPath;
       if (typeof b.venueName === 'string') M.kiosk.venueName = b.venueName.slice(0, 60);
+      if (typeof b.dedicationText === 'string') M.kiosk.dedicationText = b.dedicationText.slice(0, 120);
       ['readOnly', 'allowExcelDocs', 'twoFactor', 'clock', 'restScreen', 'fullscreenOtzaria', 'sideBar', 'sideBarIconsOnly', 'resetOnShutdown', 'showParsha', 'showDafYomi'].forEach(function (k) { if (typeof b[k] === 'boolean') M.kiosk[k] = b[k]; });
       /* פתיחה זמנית: אותם כללים כמו בגשר (Kiosk.ApplyTempUnlockSettings) */
       var tu = M.kiosk.tempUnlock;

@@ -478,9 +478,20 @@ internal sealed class RestScreen : Form
         bool shDed = Config.Get("kiosk.restShowDedication", true);
         var zmItems = !shZm ? new List<string>() : ZmanimItems(Zmanim.Sections(DateTime.Now));
         bool zmLeft = Config.Get("kiosk.restZmanimSide", "right") == "left";
-        float colW = zmItems.Count > 0 ? Math.Min(340 * s, r.Width * 0.24f) : 0;
+        // d992415 (יאיר) + משוב 15.10 — "גם וגם": סגנון ההקדשה הוא בחירת המשתמש (kiosk.restDedicationStyle):
+        // "fixed" (ברירת מחדל) — ההקדשה בגבולות קבועים בתחתית הצד שמול הזמנים; "column" — עמודת הקדשה של יאיר עם נר.
+        // הנר מרצד רק אם kiosk.restCandleFlicker (ברירת מחדל: כבוי — שומר מסך בלי תזוזה חוץ מהחותמת).
+        bool dedColumn = Config.Get("kiosk.restDedicationStyle", "fixed") == "column";
+        bool candleFlicker = Config.Get("kiosk.restCandleFlicker", false);
+        // טקסט אחד לשני הסגנונות: הנוסח המותאם (kiosk.restDedicationText); אם ריק — ההקדשה האישית של יאיר (kiosk.dedicationText); אחרת הקבועה
+        string dedication = Config.Get("kiosk.restDedicationText", "").Trim();
+        if (dedication.Length == 0) dedication = Config.Get("kiosk.dedicationText", "").Trim();
+        if (dedication.Length == 0) dedication = "לעילוי נשמת הנערה הצדקנית\nאסתר גיטה דינר ע\"ה\nבת רבי מיכאל שלום הלוי שיבדלט\"א · תנצב\"ה";
+        bool hasDedication = dedColumn && shDed;
+        bool hasSideColumn = zmItems.Count > 0 || hasDedication;
+        float colW = hasSideColumn ? Math.Min(340 * s, r.Width * 0.24f) : 0;
         float colMargin = 28 * s;
-        float W = zmItems.Count > 0 ? Math.Max(r.Width * 0.4f, r.Width - 2 * (colW + colMargin * 2) - 2 * Math.Abs(dx)) : r.Width;
+        float W = hasSideColumn ? Math.Max(r.Width * 0.4f, r.Width - 2 * (colW + colMargin * 2) - 2 * Math.Abs(dx)) : r.Width;
         RectangleF Line(float y, float h) => new(cx - W / 2f, y, W, h);
 
         float y = r.Height * 0.09f + dy;
@@ -549,6 +560,7 @@ internal sealed class RestScreen : Form
         var dedFmt = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Far };
         // משוב 15.10: כיתוב אישי (kiosk.restNoteText) בריבוע ממוסגר, בצד שמול הזמנים, מעל ההקדשה
         string note = Config.Get("kiosk.restNoteText", "").Trim();
+        float noteBottom = r.Height * 0.08f;
         if (note.Length > 0)
         {
             using var noteF = new Font("David", 18f, GraphicsUnit.Point);
@@ -566,9 +578,22 @@ internal sealed class RestScreen : Form
                 g.SetClip(path);
                 g.DrawString(note, noteF, Brushes.White, new RectangleF(box.X + pad, box.Y + pad, inner, th), fmtN);
                 g.ResetClip();
+                noteBottom = box.Bottom + 16 * s;
             }
         }
-        if (shDed)
+        if (hasDedication)
+        {
+            // עמודת ההקדשה של יאיר, באותו צד ובאותם גבולות קבועים של ההקדשה (מתחת לכיתוב האישי), עם חיתוך
+            float colBottom = r.Height - 70 * s;
+            if (colBottom - noteBottom > 120 * s)
+            {
+                var colR = new RectangleF(ded.X, noteBottom, ded.Width, colBottom - noteBottom);
+                g.SetClip(colR);
+                DrawDedicationColumn(g, dedication, colR.X, colR.Y, colR.Width, colR.Height, s, gold, candleFlicker ? t : 0f);
+                g.ResetClip();
+            }
+        }
+        else if (shDed)
         {
             // נוסח מותאם (kiosk.restDedicationText): שורה 1 קטנה, שורה 2 מודגשת, השאר קטן. ריק = הקבוע
             string custom = Config.Get("kiosk.restDedicationText", "").Trim();
@@ -670,6 +695,65 @@ internal sealed class RestScreen : Form
             }
             g.ResetClip();
         }
+    }
+
+    /// <summary>
+    /// עמודת הקדשה אישית (אופציונלי, kiosk.dedicationText) + נר מרצד, בעמודה בצד הנגדי לזמני היום -
+    /// באותה מסגרת כמו עמודת הזמנים (רקע/מסגרת זהים, Overlay.Round) כדי שהשתיים ייראו כזוג סימטרי.
+    /// שלא כמו ההקדשה הקבועה שהוסרה בעבר, הטקסט כאן תמיד מגיע מהגדרות המנהל - אין ברירת מחדל.
+    /// </summary>
+    private static void DrawDedicationColumn(Graphics g, string text, float x, float y, float w, float maxH, float s, Color gold, float t)
+    {
+        using var bg = new SolidBrush(Color.FromArgb(70, 10, 12, 22));
+        using var border = new Pen(Color.FromArgb(70, gold), 1f * s);
+        using var path = Overlay.Round(new Rectangle((int)x, (int)y, (int)w, (int)maxH), (int)(14 * s));
+        g.FillPath(bg, path);
+        g.DrawPath(border, path);
+
+        var center = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near };
+        using var dim = new SolidBrush(Color.FromArgb(205, 225, 218, 200));
+        float textTop = y + 16 * s, textH = maxH * 0.5f;
+        using (var dedF = new Font("David", 16f, GraphicsUnit.Point))
+            g.DrawString(text, dedF, dim, new RectangleF(x + 12 * s, textTop, w - 24 * s, textH), center);
+
+        // נר מרצד בחצי התחתון של העמודה - נדנוד איטי (כל הלהבה) + ריצוד מהיר (גודל/שקיפות), בנפרד
+        float cx = x + w / 2f;
+        float candleW = Math.Min(24f, w * 0.16f) * s;
+        float candleH = Math.Min(90f * s, maxH * 0.32f);
+        float baseY = y + maxH - 14 * s;
+        float bodyTop = baseY - candleH;
+
+        float flick = (float)(Math.Sin(t * 9.1) * 0.5 + Math.Sin(t * 13.7 + 1.3) * 0.3 + Math.Sin(t * 5.3 + 2.1) * 0.2);
+        float sway = (float)Math.Sin(t * 0.8) * 2.5f * s;
+        float flameH = (28f + flick * 6f) * s;
+        float flameW = (13f + flick * 2.5f) * s;
+        float flameX = cx + sway;
+        float flameY = bodyTop - flameH + 4 * s;
+
+        int haloA = Math.Max(0, (int)(55 + flick * 20));
+        using (var halo = new SolidBrush(Color.FromArgb(haloA, gold)))
+            g.FillEllipse(halo, flameX - flameW * 1.8f, flameY - flameH * 0.6f, flameW * 3.6f, flameH * 2.2f);
+
+        using (var wickP = new Pen(Color.FromArgb(200, 60, 45, 30), 1.4f * s))
+            g.DrawLine(wickP, cx, bodyTop, flameX, flameY + flameH * 0.7f);
+
+        using (var flamePath = new GraphicsPath())
+        using (var flameB = new PathGradientBrush(flamePath))
+        {
+            flamePath.AddEllipse(flameX - flameW / 2f, flameY, flameW, flameH);
+            flameB.CenterColor = Color.FromArgb(255, 255, 244, 214);
+            flameB.SurroundColors = new[] { Color.FromArgb(0, gold.R, gold.G, gold.B) };
+            g.FillPath(flameB, flamePath);
+        }
+        using (var flameCore = new SolidBrush(Color.FromArgb(230, 255, 170, 60)))
+            g.FillEllipse(flameCore, flameX - flameW * 0.22f, flameY + flameH * 0.3f, flameW * 0.44f, flameH * 0.5f);
+
+        using (var bodyB = new SolidBrush(Color.FromArgb(235, 232, 220, 195)))
+            g.FillRectangle(bodyB, cx - candleW / 2f, bodyTop, candleW, candleH);
+        using (var topB = new SolidBrush(Color.FromArgb(235, 240, 230, 205)))
+            g.FillEllipse(topB, cx - candleW / 2f, bodyTop - 4 * s, candleW, 8 * s);
+        using (var standB = new SolidBrush(Color.FromArgb(220, 180, 150, 90)))
+            g.FillRectangle(standB, cx - candleW * 0.7f, baseY, candleW * 1.4f, 10 * s);
     }
 
     private static Color Mix(Color a, Color b, float k) =>

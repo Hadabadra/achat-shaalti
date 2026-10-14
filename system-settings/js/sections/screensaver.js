@@ -23,7 +23,7 @@
     ]);
     body.innerHTML =
       '<div class="card"><div class="card-title">שומר מסך ומסך מנוחה</div>' +
-      '<p class="muted">מסך המנוחה מציג שעה, תאריך עברי והקדשה בתחתית; זמני היום מוצגים בעמודה בצד שבוחרים כאן.</p>' +
+      '<p class="muted">מסך המנוחה מציג שעה ותאריך עברי במרכז; זמני היום בעמודה בצד שבוחרים כאן, וההקדשה והכיתוב האישי בצד שמולם — קבועה או עמודה עם נר, לבחירתכם.</p>' +
       '<form class="ss-form" novalidate><div class="dlg-fields">' + ui.fieldsHtml(fields) + '</div>' +
       '<div class="row-actions"><button class="btn btn-primary btn-lg" type="submit">' + ui.icon('check') + 'שמירה</button>' +
       (st.active ? '<button class="btn btn-lg ss-unlock" type="button">' + ui.icon('unlock') + 'ביטול הנעילה</button>' : '') + '</div>' +
@@ -48,6 +48,7 @@
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
       var x = ui.fieldValues(form, fields);
+      if ((x.dedication || '').trim().length > 120) { ui.toast('ההקדשה האישית: עד 120 תווים', 'error'); return; }
       var btn = form.querySelector('button[type=submit]');
       btn.disabled = true;
       try {
