@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- אחת שאלתי — סמל קווי בסגנון אייקוני אוצריא: חותמת עגולה, ספר פתוח וקורות "בית ה'" (B4/B5, 14.10.2026) -->
+  <circle cx="32" cy="32" r="31" fill="#ffffff" fill-opacity="0.94"/>
+  <g fill="none" stroke="#a8792c" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="32" cy="32" r="28" stroke-width="3"/>
+    <circle cx="32" cy="32" r="23.5" stroke-width="1.5" stroke-dasharray="0.1 4.2"/>
+    <path d="M20 27 32 18.5 44 27" stroke-width="3"/>
+    <path d="M32 31c-3.6-2.4-8.4-2.9-12-2.1v14.6c3.6-.8 8.4-.3 12 2.1 3.6-2.4 8.4-2.9 12-2.1V28.9c-3.6-.8-8.4-.3-12 2.1z" stroke-width="3"/>
+    <path d="M32 31v14.6" stroke-width="2.4"/>
+  </g>
+</svg>

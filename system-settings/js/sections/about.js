@@ -12,6 +12,7 @@
     mount: function (body) {
       body.innerHTML =
         '<div class="card about-hero"><div class="about-ic">' + ui.icon('computer') + '</div><div>' +
+        '<img src="icon/brand.svg" alt="אחת שאלתי" width="72" height="72" style="display:block;margin:0 auto 8px">' +
         '<h3>הגדרות מערכת</h3><p class="muted">גרסה ' + ui.esc(SS.VERSION) + ' · מאת גמח תורת אסתר</p>' +
         '<p>כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה ותאריך, מקלדת, עכבר, מדפסות, USB, בלוטות׳ ורשת — ומצב נעילה שהופך את המחשב לעמדת לימוד באוצריא ובתוכנות הלימוד בלבד.</p></div></div>' +
         '<div class="card about-memorial"><p>לעילוי נשמת הנערה הצדקנית</p><h3>אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א</h3><p>תהא נשמתה צרורה בצרור החיים. תנצב"ה</p></div>' +

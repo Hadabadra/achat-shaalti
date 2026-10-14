@@ -1076,6 +1076,7 @@
       '<div id="fx-pol-host">' + ui.loading('טוען…') + '</div>';
     var b = FX.Bridge && FX.Bridge.info;
     return '<div class="fx-set-card fx-set-hero"><div class="fx-set-logo">' + ic('folder') + '</div><div>' +
+      '<img src="icon/brand.svg" alt="אחת שאלתי" width="72" height="72" style="display:block;margin:0 auto 8px">' +
       '<h3>סייר קבצים</h3><p class="muted">גרסה ' + FX.esc(FX.VERSION) + ' · גמח תורת אסתר</p>' +
       '<p>עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, סל מיחזור, וצפייה ב-PDF, Word, טקסט ותמונות. עם אחת שאלתי — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.</p></div></div>' +
       '<div class="fx-set-card fx-set-memorial"><p>לעילוי נשמת</p><b>אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א</b><p>תנצב"ה</p></div>' +
