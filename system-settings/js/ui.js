@@ -171,14 +171,27 @@
   /* options: title, body (html), icon, tone (danger|primary), actions [{label, value, kind}], fields [{name,label,type,placeholder,value,disabled}],
      onSubmit(values) -> may throw to keep dialog open (shows message), dismissible.
      disabled: השדה מושבת (data-locked) ונשאר מושבת גם אחרי מצב "שומר…"; onOpen יכול לשנות זאת עם ui.lockField */
-  /* C7: שדות עם more:true מקובצים לאזור מתקפל "עוד" (מוסתרים, לא נמחקים) */
+  /* C7: שדות עם more:true מקובצים לאזור מתקפל "עוד" (מוסתרים, לא נמחקים).
+     f.type === 'group' (יאיר, 049b564): כותרת קבוצה מתקפלת (<details>/<summary>) - כל השדות שאחריה
+     נכנסים לתוכה עד הקבוצה הבאה (או סוף הרשימה). ר' kiosk.js editSettings */
   ui.fieldsHtml = function (fields) {
-    var out = '', more = '';
+    var out = '', more = '', inGroup = false;
+    function flushMore() { if (more) { out += '<details class="field-more"><summary class="muted small">עוד…</summary>' + more + '</details>'; more = ''; } }
     (fields || []).forEach(function (f) {
+      if (f.type === 'group') {
+        flushMore();
+        if (inGroup) out += '</div></details>';
+        out += '<details class="field-group"' + (f.open ? ' open' : '') + '><summary>' +
+          (f.icon ? ui.icon(f.icon) : '') + '<span>' + ui.esc(f.label) + '</span>' +
+          (f.hint ? '<small>' + f.hint + '</small>' : '') + '</summary><div class="field-group-body">';
+        inGroup = true;
+        return;
+      }
       var h = ui.fieldHtml(f);
-      if (f.more) more += h; else { if (more) { out += '<details class="field-more"><summary class="muted small">עוד…</summary>' + more + '</details>'; more = ''; } out += h; }
+      if (f.more) more += h; else { flushMore(); out += h; }
     });
-    if (more) out += '<details class="field-more"><summary class="muted small">עוד…</summary>' + more + '</details>';
+    flushMore();
+    if (inGroup) out += '</div></details>';
     return out;
   };
   ui.fieldHtml = function (f) {
@@ -233,7 +246,7 @@
   ui.fieldValues = function (form, fields) {
     var v = {};
     (fields || []).forEach(function (f) {
-      if (f.type === 'note') return;
+      if (f.type === 'note' || f.type === 'group') return;
       var inp = form.querySelector('[name="' + f.name + '"]');
       if (f.type === 'checkpair') { var i2 = form.querySelector('[name="' + f.name2 + '"]'); if (i2) v[f.name2] = i2.checked; }
       if (inp) v[f.name] = (f.type === 'checkbox' || f.type === 'checkpair') ? inp.checked : inp.value;
@@ -297,7 +310,7 @@
       function values() {
         var v = {};
         (opt.fields || []).forEach(function (f) {
-          if (f.type === 'note') return;
+          if (f.type === 'note' || f.type === 'group') return;
           var inp = form.querySelector('[name="' + f.name + '"]');
           v[f.name] = f.type === 'checkbox' ? inp.checked : inp.value;
         });

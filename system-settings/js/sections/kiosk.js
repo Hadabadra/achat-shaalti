@@ -702,7 +702,7 @@
   function showBiosResult(r) {
     var rows = (r.steps || []).map(function (s) {
       var label = s.id === 'password' ? 'סיסמת BIOS' : s.id === 'bootMenuAuth' ? 'נעילת תפריט האתחול' : 'חסימת אתחול USB';
-      return '<li>' + ui.icon(s.success ? 'check' : 'warning') + '<span><b>' + label + (s.success ? ' — הצליח.' : ' — לא הצליח.') +
+      return '<li' + (s.success ? '' : ' class="bios-fail"') + '>' + ui.icon(s.success ? 'check' : 'warning') + '<span><b>' + label + (s.success ? ' — הצליח.' : ' — לא הצליח.') +
         '</b> ' + ui.esc(s.message || '') + '</span></li>';
     }).join('');
     return ui.dialog({
@@ -910,14 +910,6 @@
     var tfaNow = !!(tu.twoFactorOn != null ? tu.twoFactorOn : st.twoFactor);
     var TU_HINT_ON = 'סיסמה נפרדת, שאפשר למסור למי שצריך את המחשב לזמן קצר, בלי לגלות את סיסמת הנעילה. כל הנעילה (גם סייר הקבצים) נפתחת לזמן שנקבע כאן, ואז חוזרת מעצמה. לא מתקבלת כסיסמת נעילה.';
     var TU_HINT_OFF = 'זמין רק כשהאימות הדו-שלבי (Windows Hello) מופעל — סמנו קודם את האימות הדו-שלבי. אם הוא יכובה, הפתיחה הזמנית תיעצר עד שיופעל שוב (ההגדרות נשמרות).';
-    fields.push({ name: 'tu', type: 'checkbox', label: 'פתיחה זמנית בסיסמה נפרדת', value: !!tu.enabled,
-      disabled: !tfaNow && !tu.enabled, hint: '<span data-tu-hint>' + (tfaNow ? TU_HINT_ON : TU_HINT_OFF) + '</span>' });
-    fields.push({ name: 'tuMin', label: 'פתיחה זמנית: משך בדקות (1–60)', value: String(tu.minutes || 30), dir: 'ltr', placeholder: '30' });
-    fields.push({ name: 'tuPw', label: tu.configured ? 'סיסמת פתיחה זמנית חדשה (ריק = ללא שינוי)' : 'סיסמת פתיחה זמנית', type: 'password', dir: 'ltr' });
-    fields.push({ name: 'tuPw2', label: 'אימות סיסמת הפתיחה הזמנית', type: 'password', dir: 'ltr' });
-    all.forEach(function (id) {
-      fields.push({ name: 'sec_' + id, type: 'checkbox', label: 'פתוח בנעילה: ' + (SECTION_NAMES[id] || id), value: open.indexOf(id) >= 0 });
-    });
     var sc = st.schedule || {};
     fields.push({ name: 'sched', type: 'checkbox', label: 'תזמון נעילה לפי שעות', value: !!sc.enabled, hint: 'נעילה אוטומטית בכל יום בין שעה לשעה (למשל 20:00 עד 02:00, כולל אחרי חצות). מחוץ לטווח המחשב פועל רגיל. ביטול ידני בתוך הטווח יחזור לנעילה' });
     /* #56/#57: זמנים מוכנים (סדרים) — בחירה ממלאת שעת התחלה וסיום. סדרים שנשמרו כאן נזכרים (ss.sedarim) */
@@ -967,7 +959,24 @@
         { value: 'bar-top', label: 'שורת משימות למעלה' }
       ]
     });
+    fields.splice.apply(fields, [secIdx + 1, 0].concat(secFields));
+    /* 049b564 (יאיר): הטופס מחולק לקבוצות מתקפלות לפי נושא (ר' ui.fieldsHtml) — כל קבוצה סגורה חוץ מהראשונה.
+       השדות נבנים כמו קודם (כולל שינויי 15.10) ומסודרים כאן לתוך הקבוצות. סיסמת הנעילה מעל הקבוצות (חובה לשמירה). */
+    var GROUPS = [
+      { g: { type: 'group', icon: 'display', label: 'תצוגה ושולחן עבודה', open: true, hint: 'שעון, שם המחשב, סרגל התוכנות ומסך מלא' }, n: ['clock', 'pos', 'venue', 'fs', 'side', 'barProgs', 'sideIcons', 'sidePos'] },
+      { g: { type: 'group', icon: 'edit', label: 'קבצים ותוכן', hint: 'נתיב אוצריא, סיומות מותרות, קריאה-בלבד' }, n: ['path', 'ext', 'ro'] },
+      { g: { type: 'group', icon: 'shield', label: 'אבטחה', hint: 'אימות דו-שלבי, ביטול נעילה בכיבוי' }, n: ['tfa', 'reset'] },
+      { g: { type: 'group', icon: 'key', label: 'פתיחה זמנית בסיסמה נפרדת', hint: 'לתת למישהו את המחשב לזמן קצר בלי לגלות את הסיסמה הראשית' }, n: ['tu', 'tuMin', 'tuPw', 'tuPw2'] },
+      { g: { type: 'group', icon: 'unlock', label: 'מה פתוח בזמן נעילה', hint: 'אילו מסכי הגדרות נגישים לתלמיד בזמן נעילה' }, n: all.map(function (id) { return 'sec_' + id; }) },
+      { g: { type: 'group', icon: 'clock', label: 'תזמון נעילה לפי שעות', hint: 'נעילה אוטומטית מתחילה ונגמרת בשעה קבועה כל יום' }, n: ['sched', 'schedPreset', 'schedStart', 'schedEnd', 'schedExtra', 'schedDays', 'schedWarn'] }
+    ];
+    var byName = {}; fields.forEach(function (f) { byName[f.name] = f; });
+    var used = {}, grouped = [];
+    GROUPS.forEach(function (G) { grouped.push(G.g); G.n.forEach(function (n) { if (byName[n]) { grouped.push(byName[n]); used[n] = 1; } }); });
+    var rest = fields.filter(function (f) { return !used[f.name]; });
+    fields = [];
     fields.push({ name: 'pw', label: st.hasPassword ? 'סיסמת נעילה' : 'סיסמת נעילה (עוד לא הוגדרה — אפשר להשאיר ריק)', type: 'password', dir: 'ltr' });
+    fields = fields.concat(rest, grouped);
     var slot = body.querySelector('[data-slot=kset]'); if (!slot) return;
     setTimeout(function () {
       var ps = slot.querySelector('[name=schedPreset]'); if (!ps) return;

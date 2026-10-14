@@ -387,6 +387,27 @@ button, input, select { font-family: var(--font-ui); font-size: inherit; color: 
 .form-grid .row-actions, .form-grid .form-msg, .form-grid > p { grid-column: 1 / -1; }
 .field { display: flex; flex-direction: column; gap: 0.375em; }
 .field-label { font-size: 0.85em; font-weight: 600; color: var(--color-on-surface-variant); }
+
+/* קבוצת שדות מתקפלת (<details>) - לטפסים ארוכים עם הרבה נושאים, כדי שלא הכל יוצג פרוש ביחד */
+.field-group {
+  border: 0.0625em solid var(--color-outline-variant); border-radius: var(--radius-md);
+  background: var(--color-surface-container-low);
+}
+.field-group + .field-group { margin-top: 0.625em; }
+.field-group summary {
+  display: flex; align-items: center; gap: 0.625em; padding: 0.875em 1em; cursor: pointer;
+  font-weight: 600; list-style: none; user-select: none;
+}
+.field-group summary::-webkit-details-marker { display: none; }
+.field-group summary::before {
+  content: ''; width: 0.625em; height: 0.625em; flex-shrink: 0; margin-inline-start: auto;
+  border-inline-end: 0.1875em solid currentColor; border-block-end: 0.1875em solid currentColor;
+  transform: rotate(45deg); transition: transform 0.15s; color: var(--color-on-surface-variant);
+}
+.field-group[open] summary::before { transform: rotate(-135deg); }
+.field-group summary .ic { width: 1.25em; height: 1.25em; color: var(--color-primary); flex-shrink: 0; }
+.field-group summary small { flex-basis: 100%; font-weight: 400; color: var(--color-on-surface-variant); }
+.field-group-body { display: flex; flex-direction: column; gap: 0.875em; padding: 0 1em 1.125em; }
 .input {
   min-height: 3em; padding: 0 0.875em;
   border: 0.0938em solid var(--color-outline); border-radius: var(--radius-sm);
@@ -420,6 +441,8 @@ code { font-family: var(--font-mono); }
 .warn-text { display: flex; gap: 0.375em; align-items: flex-start; color: var(--color-error); }
 .warn-text .ic { width: 1.2em; height: 1.2em; margin-top: 0.0625em; }
 .bullets { padding-inline-start: 1.3em; margin: 0.5em 0 0.625em; display: flex; flex-direction: column; gap: 0.25em; }
+.bullets li.bios-fail { color: var(--color-error); }
+.bullets li.bios-fail .ic { color: var(--color-error); }
 
 /* ---------- system ---------- */
 .info-grid { display: grid; grid-template-columns: max-content 1fr; gap: 0.625em 1.75em; align-items: center; }
