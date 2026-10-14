@@ -21,7 +21,7 @@ public static class SelfTestMore
         }
         if (Array.IndexOf(args, "--selftest-crash") >= 0)
         {
-            Support.Init();
+            Outbox.Init();
             throw new InvalidOperationException("selftest-crash: קריסה מכוונת של הבדיקה העצמית");
         }
         return null;
