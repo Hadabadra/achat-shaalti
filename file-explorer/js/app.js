@@ -299,6 +299,7 @@
     S.entries = ents;
     S.sel = {}; S.anchor = -1; S.focus = -1;
     $('fx-search').value = '';
+    $('fx-search-clear').hidden = true;
     savePrefs();
     renderCrumbs(); renderList(); markSide(); renderCmds(); renderTabs();
   }
@@ -1388,6 +1389,7 @@
     cancelSearch();
     S.search = null;
     $('fx-search').value = '';
+    $('fx-search-clear').hidden = true;
     renderCrumbs(); renderList(); markSide(); renderCmds();
   }
   function runSearch(q) {
@@ -1477,6 +1479,7 @@
     $('fx-add-folder').innerHTML = ic('plus');
     $('fx-settings').innerHTML = ic('settings');
     $('fx-search-ic').innerHTML = ic('search');
+    $('fx-search-clear').innerHTML = ic('close');
 
     $('fx-back').addEventListener('click', goBack);
     $('fx-fwd').addEventListener('click', goFwd);
@@ -1503,6 +1506,12 @@
     $('fx-crumbs').addEventListener('contextmenu', function (e) { e.preventDefault(); editPath(); });
 
     $('fx-search-form').addEventListener('submit', function (e) { e.preventDefault(); runSearch($('fx-search').value); });
+    $('fx-search-clear').addEventListener('click', function () {
+      $('fx-search').value = ''; $('fx-search-clear').hidden = true;
+      if (S.search) exitSearch();
+      $('fx-search').focus();
+    });
+    $('fx-search').addEventListener('input', function () { $('fx-search-clear').hidden = !$('fx-search').value.trim(); });
     $('fx-search').addEventListener('input', FX.debounce(function () {
       var v = $('fx-search').value.trim();
       if (!v && S.search) exitSearch();

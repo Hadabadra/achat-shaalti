@@ -331,7 +331,32 @@ public static class Programs
         if (word != null) found.Add(new { name = "Word", path = word, procs = "WINWORD" });
         foreach (var (name, path, procs) in KnownTorah())
             found.Add(new { name, path, procs = string.Join(", ", procs) });
+        foreach (var (name, path, procs) in KnownUtilities())
+            found.Add(new { name, path, procs = string.Join(", ", procs) });
         return new { found = found.ToArray() };
+    }
+
+    /// <summary>
+    /// כלים מובנים של Windows שימושיים בזמן נעילה (למשל לצילום מסך כדי לדווח על תקלה) - להצעה בלבד
+    /// כאן ב-Detect(), לא ב-KnownList: אסור שאלה ייכנסו ל-DetectAuto (הזיהוי האוטומטי הוא ל"תוכנה
+    /// תורנית" בלבד ודולק כברירת מחדל - תוסף מערכת לא אמור להתווסף לרשימה המותרת בלי אישור מפורש).
+    /// נתיבים ידועים בלבד (בלי חיפוש בכוננים) - אלה כלי מערכת במקום קבוע, לא תוכנות שמתקינים לבד.
+    /// </summary>
+    private static IEnumerable<(string name, string path, string[] procs)> KnownUtilities()
+    {
+        string sys32 = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        string winApps = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps");
+        var list = new (string name, string[] procs, string[] candidates)[]
+        {
+            ("כלי חיתוך (צילום מסך)", new[] { "SnippingTool" }, new[] { System.IO.Path.Combine(sys32, "SnippingTool.exe"), System.IO.Path.Combine(winApps, "SnippingTool.exe") }),
+            ("פתקים דביקים", new[] { "Microsoft.Notes" }, new[] { System.IO.Path.Combine(winApps, "StickyNotes.exe"), System.IO.Path.Combine(winApps, "Microsoft.MicrosoftStickyNotes.exe") }),
+            ("שעון וטיימר", new[] { "Time", "ApplicationFrameHost" }, new[] { System.IO.Path.Combine(winApps, "Time.exe") }),
+        };
+        foreach (var u in list)
+        {
+            string hit = u.candidates.FirstOrDefault(File.Exists);
+            if (hit != null) yield return (u.name, hit, u.procs);
+        }
     }
 
     // ---------- תוכנות תורה מוכרות ----------
