@@ -429,7 +429,7 @@ internal sealed class ChangelogForm : Form
         pick.Items.Add(Lang.T("קפיצה לגרסה…", "Jump to version…"));
         foreach (var v in versions) pick.Items.Add(v);
         pick.SelectedIndex = 0;
-        Controls.Add(box);
+        var boxPad = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(18, 14, 18, 14) }; boxPad.Controls.Add(box); Controls.Add(boxPad); // A9: ריווח מהמסגרת
         Controls.Add(pick);
 
         foreach (string raw in text.Replace("\r", "").Split('\n'))
