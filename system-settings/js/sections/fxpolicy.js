@@ -12,6 +12,7 @@
   });
 
   var MODES = [['off', 'פתוח (ללא הגבלה)'], ['restricted', 'מוגבל לתיקיות שנבחרו'], ['locked', 'נעול (נפתח בסיסמה לזמן קצוב)']];
+  var EFFECTIVE_LABELS = { open: 'פתוח', restricted: 'מוגבל לתיקיות שנבחרו', locked: 'נעול' };
 
   async function load(body) {
     var st;
@@ -31,7 +32,7 @@
     fields.push({ name: 'min', label: 'דקות פתיחה בסיסמה', value: String(st.unlockMinutes || 15), dir: 'ltr' });
     fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
     body.innerHTML = '<div class="card"><div class="card-title">נעילת סייר הקבצים</div>' +
-      '<p class="muted">אותן הגדרות שבסייר הקבצים: מה מותר לגלוש בסייר. מצב נוכחי: <b>' + ui.esc(st.effective || st.mode || '') + '</b></p><div data-slot="f"></div></div>';
+      '<p class="muted">אותן הגדרות שבסייר הקבצים: מה מותר לגלוש בסייר. מצב נוכחי: <b>' + ui.esc(EFFECTIVE_LABELS[st.effective] || st.effective || st.mode || '') + '</b></p><div data-slot="f"></div></div>';
     await ui.inlineForm(body.querySelector('[data-slot=f]'), {
       fields: fields,
       validate: function (x) {

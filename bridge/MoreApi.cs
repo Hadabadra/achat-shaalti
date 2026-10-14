@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Drawing.Printing;
 using System.Management;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -239,11 +241,28 @@ public static class Printers
         return List();
     }
 
+    /// <summary>
+    /// דף ניסיון דרך Win32_Printer.PrintTestPage() (WMI) כושל כמעט תמיד עם קוד 5 ("Access Denied") -
+    /// זו תקלה מתועדת של ה-method הזה מול ספולר ה-הדפסה המודרני, במיוחד למדפסות וירטואליות/PDF (אין
+    /// להן "דף ניסיון" אמיתי של דרייבר). מדפיסים בפועל דרך PrintDocument, שעובד גם למדפסות וירטואליות
+    /// (יפתח/ישמור קובץ, לפי האופן שבו אותה מדפסת וירטואלית מוגדרת) ועובר דרך ספולר המשתמש הנוכחי.
+    /// </summary>
     public static object TestPage(string name)
     {
-        using var p = Find(name);
-        var r = p.InvokeMethod("PrintTestPage", null);
-        if (Convert.ToInt32(r ?? 0) != 0) throw new BridgeException("failed", "שליחת דף הניסיון נכשלה (קוד " + r + ")", 500);
+        using (Find(name)) { } // זורק NotFound אם המדפסת לא קיימת
+        using var pd = new PrintDocument { DocumentName = "דף ניסיון - תוכנת חסימת אוצריא", PrinterSettings = { PrinterName = name } };
+        if (!pd.PrinterSettings.IsValid) throw BridgeException.NotFound("המדפסת לא נמצאה: " + name);
+        pd.PrintPage += (_, e) =>
+        {
+            using var title = new Font("Segoe UI", 28, FontStyle.Bold);
+            using var body = new Font("Segoe UI", 14);
+            var x = e.MarginBounds.Left; var y = e.MarginBounds.Top;
+            e.Graphics.DrawString("דף ניסיון", title, Brushes.Black, x, y); y += 50;
+            e.Graphics.DrawString("מדפסת: " + name, body, Brushes.Black, x, y); y += 26;
+            e.Graphics.DrawString("נשלח מתוך תוכנת חסימת אוצריא ב-" + DateTime.Now.ToString("dd/MM/yyyy HH:mm"), body, Brushes.Black, x, y);
+        };
+        try { pd.Print(); }
+        catch (Exception ex) { throw new BridgeException("failed", "שליחת דף הניסיון נכשלה: " + ex.Message, 500); }
         return new { ok = true };
     }
 }

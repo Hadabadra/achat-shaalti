@@ -203,7 +203,8 @@
       title: 'קוד השחזור שלכם', icon: 'key', tone: 'recovery', dismissible: false,
       body:
         '<p>זהו <b>קוד שחזור חד-פעמי</b>. הוא יוצג <b>רק עכשיו</b> ולא יהיה אפשר לראות אותו שוב.</p>' +
-        '<div class="recovery-code" dir="ltr">' + ui.esc(pretty) + '</div>' +
+        '<div class="recovery-code" dir="ltr">' + ui.esc(pretty) +
+        '<button type="button" class="btn btn-text" data-copy-code title="העתקת הקוד">' + ui.icon('copy') + '</button></div>' +
         '<p>רשמו אותו על דף ושמרו במקום בטוח, <b>לא ליד המחשב</b>. אם תשכחו את הסיסמה, אפשר לבטל את הנעילה עם הקוד הזה בחלון „ביטול נעילה”, או מחלון פקודה:</p>' +
         '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock ' + ui.esc(code) + '</code>',
       fields: [{ name: 'ack', type: 'checkbox', label: 'רשמתי את הקוד' }],
@@ -214,6 +215,10 @@
         var cb = form.querySelector('input[name=ack]');
         btn.disabled = true;
         cb.addEventListener('change', function () { btn.disabled = !cb.checked; });
+        var copyBtn = form.querySelector('[data-copy-code]');
+        if (copyBtn) copyBtn.addEventListener('click', function () {
+          SS.copyText(code).then(function (ok) { ui.toast(ok ? 'הקוד הועתק' : 'ההעתקה נכשלה', ok ? 'success' : 'error'); });
+        });
       }
     });
   }
@@ -617,6 +622,8 @@
   ];
   var DEFAULT_ZMAN_SHOW = ['alot', 'netz', 'shemaGra', 'chatzot', 'shkia', 'tzeit'];
   var YAHRZEIT_MONTHS = ['תשרי', 'חשון', 'כסלו', 'טבת', 'שבט', 'אדר', 'אדר א', 'אדר ב', 'ניסן', 'אייר', 'סיון', 'תמוז', 'אב', 'אלול'];
+  /* ט"ו/ט"ז ולא י"ה/י"ו — נמנעים מצירוף שנראה כשם ה' */
+  var YAHRZEIT_DAYS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 'יא', 'יב', 'יג', 'יד', 'טו', 'טז', 'יז', 'יח', 'יט', 'כ', 'כא', 'כב', 'כג', 'כד', 'כה', 'כו', 'כז', 'כח', 'כט', 'ל'];
 
 
   /* שדות שומר המסך — משותפים לטאב "שומר מסך" (sections/screensaver.js) */
@@ -655,7 +662,7 @@
         { value: 'noaa', label: 'ישן (קירוב אסטרונומי פשוט)' },
         { value: 'kosherjava', label: 'חדש (ספריית KosherJava — זמנים הלכתיים מלאים, כולל תיקון גובה)' }
       ],
-      hint: 'ישן: קירוב NOAA פשוט, הנץ/שקיעה בגובה פני הים בלבד, זמנים מעטים. חדש: ספריית KosherJava, זמנים הלכתיים מלאים עם תיקון גובה, אך קוד צד-שלישי שעלול להיבדל מעט בזמנים גבוליים' });
+      hint: 'ישן: קירוב NOAA פשוט, הנץ/שקיעה בגובה פני הים בלבד, זמנים מעטים. חדש: ספריית KosherJava, זמנים הלכתיים מלאים עם תיקון גובה — <b>אך קוד צד-שלישי שעלול להיבדל מעט בזמנים גבוליים</b>' });
     fields.push({ name: 'zelev', label: 'גובה מעל פני הים במיקום (מטרים)', value: String(st.zmanimElevation || 0), dir: 'ltr', placeholder: '0',
       hint: 'משפיע רק כשנבחר מנוע הגיבוי "חדש" (KosherJava) למעלה. 0 עד 5000 מטר' });
     fields.push({ name: 'diaspora', type: 'checkbox', label: 'חוץ לארץ (יום טוב שני)', value: !!st.zmanimDiaspora,
@@ -673,7 +680,12 @@
     fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
       options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
       hint: 'מציג שורה מיוחדת בשומר המסך ביום הזה בכל שנה. ריק = כבוי. לא קשור בהכרח להקדשה הקבועה שבתוסף' });
-    fields.push({ name: 'yzDay', label: 'יום השנה: יום בחודש (1–30)', value: String(st.yahrzeitDay || 0), dir: 'ltr', placeholder: '0' });
+    fields.push({ name: 'yzDay', type: 'select', label: 'יום השנה: יום בחודש', value: String(st.yahrzeitDay || 0),
+      options: [{ value: '0', label: '(כבוי)' }].concat(YAHRZEIT_DAYS.map(function (d, i) {
+        /* גרש (׳) אחרי אות בודדת, גרשיים (״) לפני האות האחרונה כשיש יותר מאחת */
+        var label = d.length === 1 ? d + '׳' : d.slice(0, -1) + '״' + d.slice(-1);
+        return { value: String(i + 1), label: label };
+      })) });
     fields.push({ name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
     return { fields: fields, cityByName: cityByName };
   };
@@ -734,7 +746,7 @@
         { value: 'top-right', label: 'למעלה-ימין' }
       ]
     });
-    fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
+    fields.push({ name: 'pw', label: st.hasPassword ? 'סיסמת נעילה' : 'סיסמת נעילה (עוד לא הוגדרה — אפשר להשאיר ריק)', type: 'password', dir: 'ltr' });
     var slot = body.querySelector('[data-slot=kset]'); if (!slot) return;
     var ok = await ui.inlineForm(slot, {
       title: 'הגדרות נעילה', icon: 'edit',
@@ -742,7 +754,8 @@
       fields: fields,
       actions: [{ label: 'ביטול', value: false }, { label: 'שמירה', value: true, kind: 'primary' }],
       validate: function (x) {
-        if (!x.pw) return 'יש להקליד את סיסמת הנעילה';
+        /* לפני שהוגדרה סיסמת נעילה בכלל, אין עדיין מה לאמת מולו - הגשר מקבל שמירת העדפות גם בלי סיסמה */
+        if (st.hasPassword && !x.pw) return 'יש להקליד את סיסמת הנעילה';
         if (['bottom-left', 'bottom-right', 'top-left', 'top-right'].indexOf(x.pos) < 0) return 'מיקום שעון לא תקין';
         if (['right', 'left', 'top', 'bottom'].indexOf(x.sidePos) < 0) return 'מיקום סרגל לא תקין';
         if (!/^\d{1,2}$/.test(String(x.tuMin).trim()) || +x.tuMin < 1 || +x.tuMin > 60) return 'פתיחה זמנית: משך בדקות בין 1 ל-60';
