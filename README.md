@@ -1,6 +1,5 @@
 # אחת שאלתי - [תורת אסתר]
 
-## תוכנת חסימת אוצריא - 
 
 > לעילוי נשמת הנערה הצדקנית **אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א** — תנצב"ה.
 
@@ -85,10 +84,7 @@
 Standard של פרויקט **KosherJava** מאת Eliyahu Hershfeld ([kosherjava.com](http://www.kosherjava.com/zmanim-project/)),
 ברישיון LGPL-2.1. הספרייה מקושרת כ-`PackageReference` רגיל (קישור דינמי), ללא קוד מועתק/משוכתב בתוך הגשר.
 
-## קרדיטים
-חישוב זמני היום כגיבוי בשומר המסך (כשאוצריא סגורה או ישנה מדי, ורק אם נבחר מנוע "חדש" בהגדרות) משתמש
-בחבילת ה-NuGet [`Zmanim`](https://www.nuget.org/packages/Zmanim) גרסה 1.5.0 — הפורט הרשמי ל-.NET/.NET
-Standard של פרויקט **KosherJava** מאת Eliyahu Hershfeld ([kosherjava.com](http://www.kosherjava.com/zmanim-project/)),
-ברישיון LGPL-2.1. הספרייה מקושרת כ-`PackageReference` רגיל (קישור דינמי), ללא קוד מועתק/משוכתב בתוך הגשר.
+## רישיון
+מהגרסה שאחרי 3.7.0: [PolyForm Noncommercial 1.0.0](LICENSE) — קוד פתוח לשימוש אישי ולא-מסחרי. גרסאות עד 3.7.0 וקוד תורמים שנכנס לפני המעבר נשארים תחת MIT. פירוט: [docs/LICENSING.md](docs/LICENSING.md).
 
 יומן שינויים: [CHANGELOG.md](CHANGELOG.md) · מפתח: גמח תורת אסתר

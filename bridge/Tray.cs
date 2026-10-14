@@ -157,7 +157,7 @@ internal sealed class AboutForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10f);
         BackColor = Color.White;
-        ClientSize = new Size(480, 510);
+        ClientSize = new Size(480, 532);
         Padding = new Padding(20);
 
         var logo = new PictureBox { Image = new Icon(Overlay.AppIcon(), 64, 64).ToBitmap(), SizeMode = PictureBoxSizeMode.CenterImage, Height = 76, Dock = DockStyle.Top };
@@ -171,6 +171,7 @@ internal sealed class AboutForm : Form
             Height = 36, Font = new Font("Segoe UI", 8.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.Gray };
         var zmanimLink = new LinkLabel { Text = "kosherjava.com/zmanim-project", Height = 22, Font = new Font("Segoe UI", 8.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         zmanimLink.LinkClicked += (_, _) => OpenUrl("http://www.kosherjava.com/zmanim-project/");
+        var lic = new Label { Text = Lang.T("רישיון: PolyForm Noncommercial 1.0.0 — לשימוש אישי ולא-מסחרי", "License: PolyForm Noncommercial 1.0.0 — personal, non-commercial use"), Height = 22, Font = new Font("Segoe UI", 8.5f), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.Gray };
         var link = new LinkLabel { Text = Lang.T("עמוד ההוצאות ויומן השינויים", "Releases page and changelog"), Height = 28, Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleCenter };
         link.LinkClicked += (_, _) => OpenUrl(UpdateApi.AllReleasesUrl);
 
@@ -182,10 +183,10 @@ internal sealed class AboutForm : Form
         row.Controls.AddRange(new Control[] { _check, _install });
 
         if (OfflineMode.IsOn()) // #9: אוצריא במצב מנותק — מסתירים את אזור העדכונים
-            Controls.AddRange(new Control[] { zmanimLink, zmanimCredit, ded, ver, title, logo });
+            Controls.AddRange(new Control[] { lic, zmanimLink, zmanimCredit, ded, ver, title, logo });
         else
         {
-            Controls.AddRange(new Control[] { row, _state, link, zmanimLink, zmanimCredit, ded, ver, title, logo });
+            Controls.AddRange(new Control[] { row, _state, link, lic, zmanimLink, zmanimCredit, ded, ver, title, logo });
             Shown += async (_, _) => await DoCheck(false);
         }
     }

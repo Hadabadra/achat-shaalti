@@ -51,9 +51,9 @@
 - [ ] E2 #30 — ממצאי אבטחה שנשארו פתוחים, כולל ממצא 8 (הרצה מוגבהת מתיקייה ניתנת לכתיבה).
 - [ ] E3 #19 — חתימת קוד (SignPath): בלעדיה SmartScreen מזהיר בהתקנה. תלוי באישור הבקשה.
 - [ ] E4 #8 — לוודא שרשת הביטחון מכסה את תרחיש הקריסה; בדיקה על מחשב נקי.
-- [ ] E5 #62 — לכבות שחרורי 0.0.x אוטומטיים כפולים (בתיאום עם יאיר).
-- [ ] E6 רישיון: להחליף ל-PolyForm Noncommercial בקוד שלך (LICENSE + README + About), לפי docs/LICENSING.md.
-- [ ] E7 #18 — בדיקות יחידה בסיסיות ב-CI (תזמון, השוואת גרסאות, קוד שחזור).
+- [x] ✅ E5 #62 — build.yml משחרר רק מ-main ורק כשגרסה חדשה (v<ver>) לא קיימת; אין עוד 0.0.x כפולים.
+- [x] ✅ E6 רישיון: להחליף ל-PolyForm Noncommercial בקוד שלך (LICENSE + README + About), לפי docs/LICENSING.md. — נוסף ל-README ולחלון About.
+- [x] ✅ E7 #18 — tests/OtzariaBridge.Tests (Sched, UpdateApi, RecoveryCode, PipeMac, TempUnlock) רצות ב-build.yml.
 - [ ] E8 בדיקת התקנה נקייה + שדרוג מ-3.x + הסרה מלאה (WINDOWS-CHECKLIST, 42 סעיפים פתוחים) — רצוי דרך הבדיקה העצמית מ-D6.
 - [ ] E9 README ותיעוד משתמש במיתוג "אחת שאלתי" + עדכון פוסט הפורום.
 
