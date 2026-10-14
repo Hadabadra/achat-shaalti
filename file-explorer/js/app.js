@@ -822,7 +822,15 @@
       }
     });
     if (!r) return;
-    await reloadSelect([made && made.path ? made.path : S.prov.join(S.path, r)]);
+    var newPath = made && made.path ? made.path : S.prov.join(S.path, r);
+    await reloadSelect([newPath]);
+    // קובץ טקסט חדש הוא ריק - הצופה הפנימי (FX.viewText) תמיד לקריאה בלבד (ללא עריכה בכוונה,
+    // כדי שלא "ייראה שבור": לפני התיקון, לחיצה על הקובץ החדש פתחה תצוגה ריקה וקבועה בלי אפשרות
+    // להקליד לתוכה. כאן פותחים ישר ביישום חיצוני (Notepad וכו') כדי שאפשר יהיה לכתוב משהו בפועל
+    if (!isDir) {
+      if (S.prov.caps.open) S.prov.open(newPath).catch(function (err) { opError(err, 'הפתיחה נכשלה'); });
+      else ui.toast('הקובץ נוצר ריק. לעריכה יש לפתוח אותו ביישום חיצוני (דורש קיוסק אוצריא)', 'info');
+    }
   }
   async function reloadSelect(paths) {
     try { await load(S.path, false); } catch (e) { return; }
