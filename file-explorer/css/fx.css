@@ -57,10 +57,19 @@
 .fx-crumb-static { display: inline-flex; align-items: center; gap: 0.375em; overflow: hidden; text-overflow: ellipsis; }
 .fx-crumb-static .ic { width: 1em; height: 1em; }
 .fx-path-input { width: 100%; height: 2em; }
-.fx-search { position: relative; display: flex; align-items: center; gap: 0.375em; flex: 0 1 18em; }
-.fx-search .input { height: 2.5em; padding-inline-start: 2.25em; width: 100%; }
+.fx-search { position: relative; display: flex; align-items: center; gap: 0.375em; flex: 1 1 18em; min-width: 9em; }
+.fx-search .input { height: 2.5em; padding-inline-start: 2.25em; padding-inline-end: 2em; width: 100%; font-size: 0.925em; }
 .fx-search-ic { position: absolute; inset-inline-start: 0.625em; display: inline-flex; color: var(--fx-muted); pointer-events: none; }
 .fx-search-ic .ic { width: 1.125em; height: 1.125em; }
+/* כפתור ניקוי מותאם (Fluent) במקום כפתור ה-X הילידי של type=search, שלא תואם לסגנון האייקונים */
+.fx-search input[type=search]::-webkit-search-cancel-button { display: none; }
+.fx-search-clear {
+  position: absolute; inset-inline-end: 0.5em; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5em; height: 1.5em; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--fx-muted); cursor: pointer;
+}
+.fx-search-clear:hover { background: var(--fx-hover); color: var(--color-on-surface); }
+.fx-search-clear .ic { width: 1em; height: 1em; }
+.fx-search-clear[hidden] { display: none; }
 .fx-content-q { display: inline-flex; align-items: center; gap: 0.25em; white-space: nowrap; font-size: 0.875em; color: var(--fx-muted); }
 
 /* פעולות */

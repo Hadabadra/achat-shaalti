@@ -432,6 +432,13 @@ internal sealed class RestScreen : Form
         var now = DateTime.Now;
         g.DrawString(now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture), timeF, Brushes.White, Line(y, 110 * s), center);
         y += 108 * s;
+        // שם מחשב/בית כנסת (קיוסק.venueName) - אופציונלי, ישירות מתחת לשעון. ריק = לא תופס מקום בכלל
+        string venue = Config.Get("kiosk.venueName", "");
+        if (!string.IsNullOrWhiteSpace(venue))
+        {
+            g.DrawString(venue, dateF, dim, Line(y, 36 * s), center);
+            y += 36 * s;
+        }
         // #2: התאריך הלועזי באותה שורה עם העברי (לא בשורה נפרדת שנופלת מתחת להקדשה)
         g.DrawString(Overlay.HebrewDate(now) + "   ·   " + now.ToString("d/M/yyyy"), dateF, Brushes.White, Line(y, 40 * s), rtl);
         if (Target == IntPtr.Zero && Idle)

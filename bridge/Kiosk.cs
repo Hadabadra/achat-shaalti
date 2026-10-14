@@ -286,6 +286,7 @@ public static partial class Kiosk
         yahrzeitMonth = Config.Get("kiosk.yahrzeitMonth", ""),
         yahrzeitDay = Config.Get("kiosk.yahrzeitDay", 0),
         yahrzeitLabel = Config.Get("kiosk.yahrzeitLabel", ""),
+        venueName = Config.Get("kiosk.venueName", ""),
         fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
         sideBar = Config.Get("kiosk.sideBar", true),
         sideBarIconsOnly = Config.Get("kiosk.sideBarIconsOnly", false),
@@ -843,6 +844,12 @@ public static partial class Kiosk
             string lbl = (b.Str("yahrzeitLabel") ?? "").Trim();
             if (lbl.Length > 200) lbl = lbl.Substring(0, 200);
             Config.Set("kiosk.yahrzeitLabel", lbl);
+        }
+        if (b.Has("venueName"))
+        {
+            string vn = (b.Str("venueName") ?? "").Trim();
+            if (vn.Length > 60) vn = vn.Substring(0, 60);
+            Config.Set("kiosk.venueName", vn);
         }
         string cp = b.Str("clockPosition");
         if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right" or "bar-bottom" or "bar-top") Config.Set("kiosk.clockPosition", cp);

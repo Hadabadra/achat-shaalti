@@ -784,6 +784,7 @@
       { name: 'ext', label: 'סיומות קבצים שמותר לפתוח בתוכנות אחרות', value: (st.allowOpenExtensions || []).join(', '), dir: 'ltr', placeholder: 'pdf, txt' },
       { name: 'path', label: 'נתיב אוצריא (ריק = זיהוי אוטומטי)', value: st.otzariaPath || '', dir: 'ltr', placeholder: 'C:\\Program Files\\Otzaria\\otzaria.exe' },
       { name: 'clock', type: 'checkbox', label: 'שעון ותאריך עברי צפים', value: st.clock !== false, hint: 'שורת המשימות מוסתרת בנעילה, ולכן מוצג שעון קטן בפינת המסך. לחיצה עליו מחזירה לאוצריא' },
+      { name: 'venue', label: 'שם המחשב/בית הכנסת (אופציונלי)', value: st.venueName || '', placeholder: '', hint: 'מוצג במרכז המסך מתחת לשעון, במסך המנוחה. ריק = מוצגת רק השעה' },
     ];
     fields.push({ name: 'side', type: 'checkbox', label: 'סרגל תוכנות בצד המסך', value: st.sideBar !== false, hint: 'פס צר בשולי המסך שמתרחב כשמתקרבים אליו: אוצריא והתוכנות התורניות המותרות, עם סימון מה פתוח. לחיצה מעבירה לחזית, או פותחת אם סגורה' });
     fields.push({ name: 'sideIcons', type: 'checkbox', label: 'סרגל התוכנות: אייקונים בלבד', value: !!st.sideBarIconsOnly, hint: 'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה' });
@@ -866,6 +867,7 @@
       validate: function (x) {
         if (!x.pw) return 'יש להקליד את סיסמת הנעילה';
         if (['bottom-left', 'bottom-right', 'top-left', 'top-right', 'bar-bottom', 'bar-top'].indexOf(x.pos) < 0) return 'מיקום שעון לא תקין';
+        if ((x.venue || '').trim().length > 60) return 'שם המחשב/בית הכנסת: עד 60 תווים';
         if (['right', 'left', 'top', 'bottom'].indexOf(x.sidePos) < 0) return 'מיקום סרגל לא תקין';
         if (x.sched && (!/^\d{1,2}:\d{2}$/.test(x.schedStart || '') || !/^\d{1,2}:\d{2}$/.test(x.schedEnd || ''))) return 'יש להזין שעת התחלה ושעת סיום לתזמון';
         if (x.sched && x.schedStart === x.schedEnd) return 'שעת ההתחלה והסיום של התזמון זהות';
@@ -896,7 +898,7 @@
         }
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
-          readOnly: !!x.ro, twoFactor: !!x.tfa, clock: !!x.clock, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos,
+          readOnly: !!x.ro, twoFactor: !!x.tfa, clock: !!x.clock, venueName: (x.venue || '').trim(), fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos,
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
           schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn, extra: parseExtraSched(x.schedExtra) || [] },
           tempUnlockEnabled: !!x.tu, tempUnlockMinutes: +String(x.tuMin).trim() || 30, tempUnlockPassword: x.tuPw || ''
