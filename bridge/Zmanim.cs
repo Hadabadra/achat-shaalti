@@ -62,6 +62,8 @@ internal static class Zmanim
         if (cached != null)
         {
             var (dailyTimes, jdToday, jdTomorrow) = cached.Value;
+            string cal = CalendarLine(jdToday);
+            if (cal != null) list.Add(cal);
             string zm = ZmanimLine(dailyTimes);
             if (zm != null) list.Add(zm);
             string ch = CandleHavdalaLine(now, dailyTimes, jdToday, jdTomorrow);
@@ -207,6 +209,40 @@ internal static class Zmanim
         return false;
     }
 
+    /// <summary>#1 (13.10.2026): ערך זמן מאוצריא (ISO / AM-PM / מספר אפוק) → "H:mm" בלי אותיות לועזיות</summary>
+    private static string Hm(string v)
+    {
+        if (string.IsNullOrWhiteSpace(v)) return v;
+        v = v.Trim();
+        if (long.TryParse(v, out long ms) && ms > 100000000000L)
+            return DateTimeOffset.FromUnixTimeMilliseconds(ms).ToLocalTime().ToString("H:mm");
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        bool tz = v.EndsWith("Z", StringComparison.OrdinalIgnoreCase) || System.Text.RegularExpressions.Regex.IsMatch(v, @"T.*[+-]\d\d:?\d\d$");
+        if (tz && DateTimeOffset.TryParse(v, inv, System.Globalization.DateTimeStyles.None, out var o)) return o.ToLocalTime().ToString("H:mm");
+        if (DateTime.TryParse(v, inv, System.Globalization.DateTimeStyles.None, out var d)) return d.ToString("H:mm");
+        return System.Text.RegularExpressions.Regex.Replace(v, "[A-Za-z]", "").Trim();
+    }
+
+    /// <summary>#3: חגים ודף יומי מלוח השנה של אוצריא (getJewishDate), אם קיימים</summary>
+    private static string CalendarLine(JsonElement jd)
+    {
+        if (jd.ValueKind != JsonValueKind.Object) return null;
+        var parts = new List<string>();
+        if (jd.TryGetProperty("holidays", out var hol) && hol.ValueKind == JsonValueKind.Array)
+            foreach (var h in hol.EnumerateArray())
+            {
+                string n = h.ValueKind == JsonValueKind.String ? h.GetString()
+                    : h.ValueKind == JsonValueKind.Object && h.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(n)) parts.Add(n.Trim());
+            }
+        if (TryPick(jd, out string parasha, "parasha", "parsha", "parashat", "weeklyParasha")) parts.Add(Lang.T("פרשת ", "Parasha ") + parasha);
+        if (TryPick(jd, out string daf, "dafYomi", "daf_yomi", "dafYomiBavli")) parts.Add(Lang.T("דף יומי: ", "Daf Yomi: ") + daf);
+        else if (jd.TryGetProperty("dafYomi", out var dy) && dy.ValueKind == JsonValueKind.Object &&
+                 TryPick(dy, out string mas, "masechta", "tractate", "name") && TryPick(dy, out string page, "daf", "page"))
+            parts.Add(Lang.T("דף יומי: ", "Daf Yomi: ") + mas + " " + page);
+        return parts.Count > 0 ? string.Join("   ·   ", parts) : null;
+    }
+
     private static string ZmanimLine(JsonElement dailyTimes)
     {
         if (dailyTimes.ValueKind != JsonValueKind.Object) return null;
@@ -216,7 +252,7 @@ internal static class Zmanim
         {
             if (!show.Contains(z.id, StringComparer.OrdinalIgnoreCase)) continue;
             if (!TryPick(dailyTimes, out string val, z.keys)) continue;
-            parts.Add(Lang.T(z.he + " ", z.en + " ") + val);
+            parts.Add(Lang.T(z.he + " ", z.en + " ") + Hm(val));
         }
         if (parts.Count == 0) return null;
         int half = (parts.Count + 1) / 2;

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html data-plugin-id="com.chadbedera.fileexplorer" lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,7 +14,21 @@
       <h1>סייר קבצים</h1>
       <span id="fx-chip" class="topbar-chip"><i class="dot"></i>מתחבר…</span>
       <span id="fx-temp" class="topbar-chip temp" role="status" aria-live="polite" hidden></span>
-      <span class="topbar-spacer"></span>
+      <div class="fx-nav" role="toolbar" aria-label="ניווט">
+        <button class="icon-btn" id="fx-back" title="אחורה (Alt+ימינה)" aria-label="אחורה"></button>
+        <button class="icon-btn" id="fx-fwd" title="קדימה (Alt+שמאלה)" aria-label="קדימה"></button>
+        <button class="icon-btn" id="fx-up" title="תיקייה מעל (Backspace)" aria-label="תיקייה מעל"></button>
+        <button class="icon-btn" id="fx-refresh" title="רענון (F5)" aria-label="רענון"></button>
+        <button class="icon-btn" id="fx-mode-btn" title="תצוגה" aria-label="תצוגה"></button>
+        <button class="icon-btn" id="fx-preview-btn" title="חלונית תצוגה מקדימה" aria-label="חלונית תצוגה מקדימה" aria-pressed="false"></button>
+        <button class="icon-btn" id="fx-details-btn" title="חלונית פרטים" aria-label="חלונית פרטים" aria-pressed="false"></button>
+        <div class="fx-crumbs" id="fx-crumbs" title="לחיצה כפולה לעריכת הנתיב"></div>
+        <form class="fx-search" id="fx-search-form" role="search">
+          <span class="fx-search-ic" id="fx-search-ic"></span>
+          <input class="input" id="fx-search" type="search" placeholder="חיפוש בתיקייה" title="אפשר להשתמש ב-* וב-?" autocomplete="off" aria-label="חיפוש">
+          <label class="fx-content-q check-row" id="fx-content-wrap" hidden><input type="checkbox" id="fx-content"><span class="check-box"></span><span class="check-text">גם בתוכן</span></label>
+        </form>
+      </div>
       <button class="topbar-btn fx-lang" id="fx-lang" data-noi18n title="Language / שפה" aria-label="Language / שפה">English</button>
       <button class="topbar-btn" id="fx-feedback" title="שליחת הערה" aria-label="שליחת הערה"></button>
       <button class="topbar-btn" id="fx-settings" title="הגדרות" aria-label="הגדרות"></button>
@@ -28,25 +42,10 @@
 
     <div class="fx-tabs" id="fx-tabs" role="tablist" aria-label="כרטיסיות"></div>
 
-    <div class="fx-nav" role="toolbar" aria-label="ניווט">
-      <button class="icon-btn" id="fx-back" title="אחורה (Alt+ימינה)" aria-label="אחורה"></button>
-      <button class="icon-btn" id="fx-fwd" title="קדימה (Alt+שמאלה)" aria-label="קדימה"></button>
-      <button class="icon-btn" id="fx-up" title="תיקייה מעל (Backspace)" aria-label="תיקייה מעל"></button>
-      <button class="icon-btn" id="fx-refresh" title="רענון (F5)" aria-label="רענון"></button>
-      <button class="icon-btn" id="fx-mode-btn" title="תצוגה" aria-label="תצוגה"></button>
-      <button class="icon-btn" id="fx-preview-btn" title="חלונית תצוגה מקדימה" aria-label="חלונית תצוגה מקדימה" aria-pressed="false"></button>
-      <button class="icon-btn" id="fx-details-btn" title="חלונית פרטים" aria-label="חלונית פרטים" aria-pressed="false"></button>
-      <div class="fx-crumbs" id="fx-crumbs" title="לחיצה כפולה לעריכת הנתיב"></div>
-      <form class="fx-search" id="fx-search-form" role="search">
-        <span class="fx-search-ic" id="fx-search-ic"></span>
-        <input class="input" id="fx-search" type="search" placeholder="חיפוש בתיקייה" title="אפשר להשתמש ב-* וב-?" autocomplete="off" aria-label="חיפוש">
-        <label class="fx-content-q" id="fx-content-wrap" hidden><input type="checkbox" id="fx-content"> גם בתוכן</label>
-      </form>
-    </div>
 
     <div class="fx-cmds" role="toolbar" aria-label="פעולות" id="fx-cmds"></div>
 
-    <div class="fx-body">
+    <div class="fx-body" id="fx-body">
       <nav class="fx-side" id="fx-side" aria-label="מיקומים"></nav>
       <div class="fx-split" id="fx-split-side" role="separator" aria-orientation="vertical" tabindex="0" title="גררו לשינוי הרוחב (לחיצה כפולה: ברירת מחדל)"></div>
       <main class="fx-main" id="fx-main" tabindex="0" aria-label="רשימת קבצים">
@@ -74,9 +73,11 @@
   <script src="js/fallback.js"></script>
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
+  <script src="js/sdk-extras.js"></script>
   <script src="js/feedback.js"></script>
   <script src="js/viewers.js"></script>
   <script src="js/layout.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/packb.js"></script>
 </body>
 </html>

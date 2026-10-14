@@ -7,7 +7,7 @@ namespace OtzariaBridge;
 
 public static class Program
 {
-    public const string Version = "3.5.0";
+    public const string Version = "3.6.1";
     public static int Port { get; set; }
 
     // שם המוצר: הוחלף מ"תורת אסתר" לשם שמתאר בעברית פשוטה את מה שהתוכנה עושה, כי "קיוסק" ואפילו
@@ -86,6 +86,7 @@ public static class Program
 
             Tray.Init();
             Outbox.Init();
+            Reports.Init();
             Port = Server.Start();
             Kiosk.RestoreOnStartup();
             HardLock.StartSync();

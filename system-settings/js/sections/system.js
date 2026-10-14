@@ -22,16 +22,7 @@
         '<div class="card"><div class="card-title">הפעלה וכיבוי</div><div class="power-grid">' +
         POWER.map(function (p) {
           return '<button class="power-btn' + (p.danger ? ' danger' : '') + '" data-a="' + p.action + '">' + ui.icon(p.icon) + '<span>' + p.label + '</span></button>';
-        }).join('') + '</div></div>' +
-        '<div class="card"><div class="card-title">מצב מנותק</div>' +
-        '<div class="setting-row"><div class="setting-text"><b>מחשב בלי רשת</b><span class="muted">מסתיר את Wi-Fi, בלוטות׳ ומצב טיסה מהתפריט, למחשבי לימוד שאינם מחוברים לרשת</span></div>' +
-        ui.switchHtml('sw-offline', SS.isOfflineMode && SS.isOfflineMode(), 'מצב מנותק') + '</div></div>';
-      body.querySelector('#sw-offline').addEventListener('click', function () {
-        var on = !SS.isOfflineMode();
-        SS.setOfflineMode(on);
-        ui.setSwitch(this, on);
-        ui.toast(on ? 'מצב מנותק: הגדרות הרשת הוסתרו' : 'הגדרות הרשת מוצגות שוב', 'success');
-      });
+        }).join('') + '</div></div>';
       body.querySelectorAll('[data-a]').forEach(function (b) {
         b.addEventListener('click', async function () {
           var p = POWER.find(function (x) { return x.action === b.dataset.a; });

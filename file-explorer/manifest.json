@@ -1,8 +1,8 @@
 {
   "id": "com.chadbedera.fileexplorer",
   "name": "סייר קבצים",
-  "version": "3.5.0",
-  "description": "סייר קבצים מתוך אוצריא: עיון, העתקה, מחיקה, שינוי שם, תצוגה מקדימה וחיפוש. דורש את תוכנת חסימת אוצריא; בלעדיה - תיקיות שאושרו בלבד.",
+  "version": "3.6.0",
+  "description": "סייר קבצים מתוך אוצריא: עיון, העתקה, גזירה, הדבקה, מחיקה, שינוי שם, תצוגה מקדימה וחיפוש קבצים. דורש את תוכנת חסימת אוצריא; בלעדיה — תיקיות שאושרו.",
   "author": "חד בדרא, יאיר דניאל",
   "schemaVersion": 1,
   "sdkVersion": "1.x",
@@ -18,7 +18,16 @@
     "reader.toolbar",
     "app.startup_contributions",
     "navigation.write",
-    "plugin.open_other"
+    "plugin.open_other",
+    "events.subscribe:settings.changed",
+    "events.subscribe:plugin.permissions_changed",
+    "app.info.read",
+    "notifications.system",
+    "notifications.send",
+    "app.shortcuts",
+    "clipboard.read",
+    "fonts.local.read",
+    "library.books.provide"
   ],
   "network": {
     "enabled": true,

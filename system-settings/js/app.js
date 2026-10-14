@@ -90,12 +90,12 @@
   }
 
   /* סדר וקבוצות כמו בהגדרות של Windows */
-  var ORDER = ['display', 'audio', 'energy', 'time', 'keyboard', 'mouse', 'printer', 'usb', 'bluetooth', 'wifi', 'airplane', 'programs', 'kiosk', 'system', 'about'];
+  var ORDER = ['display', 'audio', 'energy', 'time', 'keyboard', 'mouse', 'printer', 'usb', 'bluetooth', 'wifi', 'airplane', 'programs', 'kiosk', 'fxpolicy', 'screensaver', 'system', 'about'];
   var GROUPS = [
     ['system', 'מערכת', ['display', 'audio', 'energy', 'time', 'system']],
     ['devices', 'התקנים', ['keyboard', 'mouse', 'printer', 'usb', 'bluetooth']],
     ['network', 'רשת', ['wifi', 'airplane']],
-    ['study', 'לימוד ונעילה', ['programs', 'kiosk']],
+    ['study', 'לימוד ונעילה', ['programs', 'kiosk', 'fxpolicy', 'screensaver']],
     ['about', '', ['about']]
   ];
   /* הגדרות שאפשר לסגור בנעילה (חייב להתאים ל-Kiosk.AllSections בגשר) */
@@ -107,8 +107,25 @@
     set: function (k, v) { try { localStorage.setItem('ss.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } }
   };
   /* מצב מנותק: מחשב בלי רשת — מסתירים Wi-Fi, בלוטות׳ ומצב טיסה */
-  SS.isOfflineMode = function () { return !!SS.prefs.get('offlineMode', false); };
-  SS.setOfflineMode = function (on) { SS.prefs.set('offlineMode', !!on); refreshNav(); };
+  /* #8 (13.10.2026): נלקח ממצב המנותק של אוצריא עצמה דרך הגשר — אין הגדרה נפרדת בתוסף */
+  /* #13: מצב קומפקטי (אייקונים בלבד), נשמר בהעדפות */
+  function applyCompact() {
+    var on = !!SS.prefs.get('compact', false);
+    document.body.classList.toggle('ss-compact', on);
+    var b = document.getElementById('top-compact');
+    if (b) { b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.innerHTML = ui.icon('display'); }
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    var b = document.getElementById('top-compact');
+    if (b) b.addEventListener('click', function () { SS.prefs.set('compact', !SS.prefs.get('compact', false)); applyCompact(); });
+    applyCompact();
+  });
+  setTimeout(applyCompact, 0);
+  SS._offline = false;
+  SS.isOfflineMode = function () { return !!SS._offline; };
+  async function syncOffline() {
+    try { var r = await SS.bridge.call('/sys/offline', {}); var on = !!(r && r.offline); if (on !== SS._offline) { SS._offline = on; refreshNav(); } } catch (e) { }
+  }
   SS.lockOpen = null; /* רשימת ההגדרות הפתוחות בנעילה, כשהנעילה פעילה */
 
   function visible(s) {
@@ -211,6 +228,8 @@
   SS.setStatus = setStatus;
 
   function showOffline() {
+    /* notifications.system: התראה כשהגשר נופל (רק במעבר ממחובר למנותק) */
+    if (state.connected && window.SdkX) SdkX.notify('גשר אוצריא אינו מחובר', 'הגדרות המערכת ומצב הנעילה אינם זמינים עד שהגשר יחזור');
     state.connected = false;
     setStatus(false);
     document.getElementById('shell-body').hidden = true;
@@ -269,6 +288,7 @@
     document.getElementById('offline').hidden = true;
     document.getElementById('shell-body').hidden = false;
     await syncLock(h);
+    syncOffline();
     if (!wasConnected) setTimeout(sendPendingReports, 4000);
     if (!wasConnected) {
       var start = null;
@@ -290,15 +310,21 @@
     try { r = await SS.bridge.call('/diag/pending', {}, { timeoutMs: 15000 }); } catch (e) { return; }
     if (!r || r.enabled === false || !r.items || !r.items.length) return;
     reportsSent = true;
+    var tail = '';
+    try { tail = ((await SS.bridge.call('/diag/logTail', {}, { timeoutMs: 15000 })) || {}).text || ''; } catch (e) { tail = ''; }
     var details = ('דיווח תקלות אוטומטי מהגשר (' + r.items.length + ')\nתוסף: הגדרות מערכת ' + SS.VERSION + '\n\n' +
-      r.items.map(function (x) { return x.text; }).join('\n\n=====\n\n')).slice(0, 5000);
+      r.items.map(function (x) { return x.text; }).join('\n\n=====\n\n') + (tail ? '\n\n===== יומן מקוצר =====\n' + tail : '')).slice(0, 5000);
     var res = null;
     try { res = await window.Otzaria.call('feedback.report', { details: details, reportType: 'bug' }); } catch (e) { res = null; }
     var val = res && (res.data !== undefined ? res.data : res);
     if (val === 'sent' || val === 'queued') {
-      try { await SS.bridge.call('/diag/ack', { ids: r.items.map(function (x) { return x.id; }) }, { timeoutMs: 15000 }); } catch (e) { /* ננסה בפעם הבאה */ }
+      var ids = r.items.map(function (x) { return x.id; });
+      try { await SS.bridge.call('/diag/markSent', { ids: ids, details: details }, { timeoutMs: 15000 }); }
+      catch (e) { try { await SS.bridge.call('/diag/ack', { ids: ids }, { timeoutMs: 15000 }); } catch (e2) { /* ננסה בפעם הבאה */ } }
     }
+    reportsSent = false; /* מינימלי: מאפשר שליחה חוזרת בסבב הבא */
   }
+  setInterval(function () { if (state.connected) sendPendingReports(); }, 30 * 60 * 1000);
   SS.sendPendingReports = sendPendingReports;
 
   SS.bridge.onPairing = function (on) {
@@ -341,6 +367,7 @@
     if (window.Otzaria) {
       window.Otzaria.on('plugin.boot', boot);
       window.Otzaria.on('theme.changed', ui.applyTheme);
+      window.Otzaria.on('calendar.city_changed', function () { pushZmanimCache(); });
       window.Otzaria.on('plugin.suspended', function () { state.suspended = true; clearTimeout(state.probeTimer); clearTimeout(zmanimTimer); });
       window.Otzaria.on('plugin.resumed', function () {
         state.suspended = false;

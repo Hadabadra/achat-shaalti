@@ -269,6 +269,11 @@
     var f = zip.file('word/document.xml');
     if (!f) throw FX.OpError('bad_request', FX.t('הקובץ אינו מסמך Word תקין (docx)'));
     var xml = new DOMParser().parseFromString(await f.async('string'), 'application/xml');
+    /* גופני המסמך (fonts.local.read): נשמרים להתאמה מול הגופנים המותקנים */
+    FX.docFonts = [];
+    Array.prototype.forEach.call(xml.getElementsByTagNameNS(W, 'rFonts'), function (r) {
+      ['cs', 'ascii', 'hAnsi'].forEach(function (k) { var v = r.getAttributeNS(W, k); if (v && FX.docFonts.indexOf(v) < 0 && FX.docFonts.length < 8) FX.docFonts.push(v); });
+    });
     var body = xml.getElementsByTagNameNS(W, 'body')[0];
     if (!body) throw FX.OpError('bad_request', FX.t('הקובץ אינו מסמך Word תקין (docx)'));
     return blocks(body);
@@ -290,6 +295,7 @@
     if (cur !== st) return;
     st.body.innerHTML = '<article class="fx-doc">' + (html || '<p>' + FX.t('המסמך ריק') + '</p>') + '</article>';
     var art = st.body.firstChild;
+    if (window.SdkX && FX.docFonts && FX.docFonts.length) SdkX.matchFont(FX.docFonts).then(function (fam) { if (fam && art) art.style.fontFamily = '"' + fam + '", inherit'; });
     function apply() {
       art.classList.toggle('two', cols === 2);
       Array.prototype.forEach.call(st.el.querySelectorAll('[data-c]'), function (b) { b.classList.toggle('on', +b.dataset.c === cols); });

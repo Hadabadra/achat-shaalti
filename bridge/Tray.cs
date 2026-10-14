@@ -24,7 +24,7 @@ public static class Tray
         _about = new ToolStripMenuItem("", null, (_, _) => AboutForm.Open());
         _unpair = new ToolStripMenuItem("", null, (_, _) => PairingForm.Open());
         _changelog = new ToolStripMenuItem("", null, (_, _) => ChangelogForm.Open());
-        _report = new ToolStripMenuItem("", null, (_, _) => Diagnostics_.Report());
+        _report = new ToolStripMenuItem("", null, (_, _) => ReportsForm.Open());
         menu.Items.AddRange(new ToolStripItem[] { _status, _about, _changelog, _report, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
 
         _icon = new NotifyIcon
@@ -41,6 +41,7 @@ public static class Tray
         {
             try
             {
+                if (OfflineMode.IsOn()) return; // #9: אוצריא במצב מנותק — בלי בדיקת עדכונים
                 var i = await UpdateApi.Check(false);
                 if (i.Newer) Invoke(() => _icon.ShowBalloonTip(8000, Lang.T(Program.AppName, Program.AppNameEn),
                     Lang.T("גרסה " + i.Latest + " זמינה. לחצו לעדכון.", "Version " + i.Latest + " is available. Click to update."), ToolTipIcon.Info));
@@ -78,7 +79,7 @@ public static class Tray
         _plugins.Text = Lang.T("פתח את תיקיית התוספים", "Open the plugins folder");
         _about.Text = Lang.T("אודות ועדכונים…", "About and updates…");
         _changelog.Text = Lang.T("יומן שינויים (מקומי)…", "Changelog (offline)…");
-        _report.Text = Lang.T("דיווח באג ואיסוף יומנים…", "Report a bug / collect logs…");
+        _report.Text = Lang.T("דיווחים: מה נשלח / הוספת תיאור…", "Reports: what was sent / add a description…");
         _install.Text = Lang.T("התקן/עדכן את התוספים באוצריא", "Install/update the plugins in Otzaria");
         _lang.Text = Lang.T("English", "עברית");
         _unpair.Text = Lang.T("צימוד תוספים…", "Plugin pairing…");
@@ -178,8 +179,13 @@ internal sealed class AboutForm : Form
         var row = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft, Padding = new Padding(80, 6, 0, 0) };
         row.Controls.AddRange(new Control[] { _check, _install });
 
-        Controls.AddRange(new Control[] { row, _state, link, zmanimLink, zmanimCredit, ded, ver, title, logo });
-        Shown += async (_, _) => await DoCheck(false);
+        if (OfflineMode.IsOn()) // #9: אוצריא במצב מנותק — מסתירים את אזור העדכונים
+            Controls.AddRange(new Control[] { zmanimLink, zmanimCredit, ded, ver, title, logo });
+        else
+        {
+            Controls.AddRange(new Control[] { row, _state, link, zmanimLink, zmanimCredit, ded, ver, title, logo });
+            Shown += async (_, _) => await DoCheck(false);
+        }
     }
 
     private static void OpenUrl(string url)

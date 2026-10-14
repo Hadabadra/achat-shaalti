@@ -249,7 +249,7 @@ a.btn { text-decoration: none; display: inline-flex; }
 :root { --fx-zoom: 0.9; --fx-prev-w: 22em; }
 .fx-shell, .fx-viewer, #dialogs, .fx-menu, #toasts { font-size: calc(var(--fx-zoom) * 1em); }
 .fx-split {
-  flex: 0 0 auto; width: 0.375em; cursor: col-resize; position: relative; outline: none;
+  flex: 0 0 auto; width: 0.625em; cursor: col-resize; position: relative; outline: none; z-index: 2;
   background: transparent; touch-action: none;
 }
 .fx-split::after {
@@ -341,7 +341,7 @@ a.btn { text-decoration: none; display: inline-flex; }
 .fx-props-head .fx-ic .ic { width: 2em; height: 2em; }
 .fx-attrs { display: flex; flex-direction: column; gap: 0.5em; margin-top: 0.75em; }
 a.btn { text-decoration: none; display: inline-flex; }
-@media (max-width: 45em) { .fx-preview, #fx-split-prev, #fx-split-side { display: none; } }
+@media (max-width: 30em) { .fx-preview, #fx-split-prev, #fx-split-side { display: none; } }
 
 /* ---------- 2.0: מסך הגדרות בסגנון אוצריא ---------- */
 .fx-setpage {
@@ -489,3 +489,14 @@ mark.fx-hit.cur { background: #f6a21b; color: #1c1c1c; outline: 0.125em solid #f
 .fx-pol-add { display: flex; gap: 0.5em; flex-wrap: wrap; margin-top: 0.375em; }
 .fx-pol-add .input { flex: 1 1 14em; width: auto; }
 .fx-pol-min { max-width: 14em; }
+
+/* חבילה [ב]: פס מקום בכוננים */
+.fx-dbar { display: block; height: 6px; border-radius: 3px; background: var(--fx-line, rgba(127,127,127,.25)); overflow: hidden; margin-bottom: 2px; }
+.fx-dbar > i { display: block; height: 100%; background: var(--accent, #2b6cb0); }
+.fx-dbar.low > i { background: #c53030; }
+
+/* #18 (13.10.2026): סרגל הניווט (חזרה/רענון/נתיב/חיפוש) בתוך הסרגל העליון הקבוע — בלי שורה נוספת */
+.topbar .fx-nav { flex: 1 1 auto; min-width: 0; border-bottom: 0; padding: 0; gap: 0.125em; }
+.topbar .fx-nav .icon-btn { width: 2em; height: 2em; }
+.topbar .fx-crumbs, .topbar .fx-search .input { height: 2em; }
+.topbar .fx-search { flex-basis: 14em; }

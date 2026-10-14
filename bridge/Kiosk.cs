@@ -13,7 +13,7 @@ namespace OtzariaBridge;
 /// נעילה רכה: סגירת explorer, חסימת מקשים, מעקב שמחזיר את אוצריא לחזית, חסימת מנהל המשימות.
 /// נעילה קפדנית: כבויה כברירת מחדל; מופעלת רק כאשר הבקשה כוללת strict:true במפורש.
 /// </summary>
-public static class Kiosk
+public static partial class Kiosk
 {
     private const string PoliciesKey = @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
     private const string WinlogonKey = @"Software\Microsoft\Windows NT\CurrentVersion\Winlogon";
@@ -270,6 +270,7 @@ public static class Kiosk
         clockPosition = Config.Get("kiosk.clockPosition", "bottom-left"),
         restScreen = Config.Get("kiosk.restScreen", true),
         restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 0),
+        restZmanimSide = Config.Get("kiosk.restZmanimSide", "right"),
         zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
         zmanimCity = Config.Get("kiosk.zmanimCity", ""),
         zmanimElevation = Config.Get("kiosk.zmanimElevation", 0.0),
@@ -824,6 +825,8 @@ public static class Kiosk
         }
         string cp = b.Str("clockPosition");
         if (cp is "bottom-left" or "bottom-right" or "top-left" or "top-right") Config.Set("kiosk.clockPosition", cp);
+        string rzs = b.Str("restZmanimSide");
+        if (rzs is "left" or "right") Config.Set("kiosk.restZmanimSide", rzs);
         string sbp = b.Str("sideBarPosition");
         if (sbp is "left" or "right" or "top" or "bottom") Config.Set("kiosk.sideBarPosition", sbp);
         if (b.Has("openSections"))
@@ -1054,7 +1057,7 @@ public static class Kiosk
             for (int i = 0; i < 30 && Volatile.Read(ref _watchBusy) == 1; i++) Thread.Sleep(100);
             Tray.Invoke(RemoveHook);
             Overlay.HideAll();
-            RestoreWindowFrame();
+            RestoreWindowFrame(); UnblockClose();
             ClearRegistry();
             StartExplorer();
             Tray.SetKioskState(false);
@@ -1313,6 +1316,7 @@ public static class Kiosk
             if (Overlay.RestVisible) return;
             if (Config.Get("kiosk.maximizeOtzaria", true)) FitToScreen(hwnd);
             if (Config.Get("kiosk.fullscreenOtzaria", true)) MakeFullscreen(hwnd);
+            BlockClose(hwnd);
 
             GetWindowThreadProcessId(GetForegroundWindow(), out uint fgPid);
             if (fgPid == otz.Id || fgPid == Environment.ProcessId) return;

@@ -1,5 +1,8 @@
 # שער אריזה: נכשל אם נשאר סעיף פתוח ("- [ ]") בסעיף "חובה לפני אריזה" ב-docs/ROADMAP.md
 import sys, re
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8")
+    except Exception: pass
 s = open("docs/ROADMAP.md", encoding="utf-8").read()
 m = re.search(r"^### ⛔ חובה לפני אריזה.*?(?=^## |\Z)", s, re.S | re.M)
 if not m: sys.exit("לא נמצא הסעיף 'חובה לפני אריזה' ב-docs/ROADMAP.md")

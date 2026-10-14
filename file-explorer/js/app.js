@@ -550,7 +550,7 @@
       (subMeta ? '<span class="fx-sub-meta">' + FX.esc(subMeta) + '</span>' : '') + '</span></span>' +
       (S.cols.date !== false ? '<span class="fx-cell fx-cell-date">' + (e.modified ? FX.esc(FX.formatDate(e.modified)) : '') + '</span>' : '') +
       (S.cols.type !== false ? '<span class="fx-cell fx-cell-type">' + FX.esc(FX.typeLabel(e)) + '</span>' : '') +
-      (S.cols.size !== false ? '<span class="fx-cell fx-cell-size">' + FX.esc(size || '') + '</span>' : '') + where + '</div>';
+      (S.cols.size !== false ? '<span class="fx-cell fx-cell-size">' + (e.type === 'drive' && e.totalBytes ? '<span class="fx-dbar' + (e.freeBytes < e.totalBytes / 10 ? ' low' : '') + '"><i style="width:' + Math.round(100 - e.freeBytes * 100 / e.totalBytes) + '%"></i></span>' : '') + FX.esc(size || '') + '</span>' : '') + where + '</div>';
   }
 
   function renderList() {
@@ -679,7 +679,12 @@
     { id: 'openNewTab', icon: 'open', label: 'פתיחה בכרטיסייה חדשה', menuOnly: true },
     { id: 'openLocation', icon: 'folderOpen', label: 'פתיחת מיקום הקובץ', menuOnly: true },
     { id: 'copyPath', icon: 'copy', label: 'העתקה כנתיב', key: 'Ctrl+Shift+C', menuOnly: true },
-    { id: 'props', icon: 'info', label: 'מאפיינים', cap: 'properties', key: 'Alt+Enter' }
+    { id: 'eject', icon: 'usb', label: 'הוצאה בבטחה (USB)', menuOnly: true }, /* #20 */
+    { id: 'props', icon: 'info', label: 'מאפיינים', cap: 'properties', key: 'Alt+Enter' },
+    { id: 'zip', icon: 'copy', label: 'דחיסה ל-ZIP', menuOnly: true },
+    { id: 'unzip', icon: 'folderOpen', label: 'חילוץ כאן', menuOnly: true },
+    { id: 'sendTo', icon: 'usb', label: 'שליחה לכונן נייד', menuOnly: true },
+    { id: 'eject', icon: 'usb', label: 'הוצאה בטוחה', menuOnly: true }
   ];
   function inFolder() { return !S.isRoot && !S.search && !S.recycle; }
   function recycleCmdState(id) {
@@ -710,6 +715,8 @@
       case 'openNewTab': return { on: n === 1 && (sel[0].type === 'dir' || sel[0].type === 'drive') };
       case 'openLocation': return { on: n === 1 && !S.recycle && !!S.search };
       case 'copyPath': return { on: n >= 1 };
+      case 'eject': return { on: n === 1 && p.kind === 'bridge' && (sel[0].type === 'drive' || FX.win.isDriveRoot(sel[0].path)) && sel[0].driveType === 'removable' };
+      default: if (FX.packb && FX.packb.state) return FX.packb.state(id, sel, inFolder());
     }
     return { on: false };
   }
@@ -730,6 +737,17 @@
       return '<button class="btn btn-text fx-cmd" data-cmd="' + c.id + '" title="' + FX.esc(tip) + '"' + (st.on ? '' : ' disabled') + '>' +
         ic(c.icon) + '<span>' + (S.recycle && c.id === 'delete' ? 'מחיקה לצמיתות' : c.label) + '</span></button>';
     }).join('');
+  }
+  /* #20 (13.10.2026): הוצאת כונן USB בבטחה מתפריט הלחצן הימני — אותה קריאה כמו בתוסף ההגדרות */
+  async function ejectDrive(e) {
+    var letter = String(e.path || '').charAt(0).toUpperCase();
+    busy(true, 'מוציא את הכונן…');
+    try {
+      var r = await FX.Bridge.call('/sys/usb/eject', { letter: letter }, { timeoutMs: 30000 });
+      ui.toast((r && r.poweredOff ? 'ההתקן כובה. ' : '') + 'אפשר לנתק את הכונן ' + letter + ' בבטחה', 'success');
+    } catch (err) { opError(err, 'הוצאת הכונן נכשלה'); }
+    busy(false);
+    if (S.isRoot) go(S.path);
   }
   function run(id, ev) {
     var st = cmdState(id);
@@ -754,6 +772,8 @@
       case 'props': return props();
       case 'openNewTab': return newTab(selected()[0].path);
       case 'openLocation': return openLocation(selected()[0]);
+      case 'zip': case 'unzip': case 'sendTo': case 'eject': return FX.packb[id](selected(), S.path);
+      case 'eject': return ejectDrive(selected()[0]);
       case 'copyPath': return copyText(selected().map(function (x) { return S.prov.displayPath(x.path); }).join('\n')).then(function () { ui.toast('הנתיב הועתק', 'success'); });
     }
   }
@@ -1016,7 +1036,7 @@
   }
   function setCat(id) {
     var o = opts();
-    var ext = [['external', 'יישום חיצוני']];
+    var ext = [['external', 'יישום חיצוני'], ['ask', 'לשאול כל פעם']]; /* #16 */
     var pref = window.I18N ? window.I18N.pref() : 'auto';
     if (id === 'open') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('open') + 'ניווט בתיקיות</div>' +
       setRow('פתיחת תיקיות בקליק יחיד', 'קליק אחד (ללא Ctrl/Shift) על תיקייה ייכנס אליה מיד, כמו קליק כפול. בחירה מרובה עם Ctrl/Shift ממשיכה לעבוד כרגיל', setSwitch('singleClickOpen', !!o.singleClickOpen)) +
@@ -1053,8 +1073,7 @@
       setRow(b ? 'מחובר · גרסה ' + FX.esc(b.version || '?') : 'הגשר אינו מחובר', b ? '' : 'בלי הגשר הסייר עובד על תיקיות שאישרתם בלבד',
         b ? '<button type="button" class="btn btn-tonal" data-act="upd">בדיקת עדכונים</button>' : '') +
       '<div class="fx-upd muted small" data-slot="upd"></div>' +
-      '<div class="fx-set-actions"><button type="button" class="btn btn-tonal" data-act="changelog">יומן שינויים</button>' +
-      '<button type="button" class="btn btn-tonal" data-act="releases">עמוד ההוצאות</button></div></div>';
+      '</div>'; /* #19: יומן השינויים ועמוד ההוצאות נמצאים בגשר (אודות) */
   }
   function settingsDialog(cat) {
     var old = $('fx-setpage');
@@ -1231,6 +1250,14 @@
     var bk = FX.kindOf(e);
     if (!(await officeDocAllowed(bk))) { officeBlockedMessage(bk); return; }
     var kind = ext === 'pdf' ? 'pdf' : (ext === 'docx' || ext === 'doc') ? 'word' : FX.isTextExt(ext) ? 'text' : FX.isImageExt(ext) ? 'image' : '';
+    if (kind && o[kind] === 'ask') { /* #16 (13.10.2026): לשאול בכל פתיחה במה לפתוח */
+      var CH = { pdf: [['internal', 'צופה פנימי'], ['ocr', 'PDF+OCR']], word: [['two', 'שני טורים'], ['one', 'טור אחד'], ['wordplugin', 'וורד לאוצריא']],
+        text: [['internal', 'צופה פנימי']], image: [['internal', 'תצוגה מקדימה']] }[kind].concat(canExt ? [['external', 'יישום חיצוני']] : []);
+      var pick = await ui.dialog({ title: 'במה לפתוח?', icon: 'open', body: '<p>' + FX.esc(e.name) + '</p>',
+        actions: [{ label: 'ביטול', value: false }].concat(CH.map(function (c) { return { label: c[1], value: c[0] }; })) });
+      if (!pick) return;
+      o = Object.assign({}, o); o[kind] = pick;
+    }
     if (kind && o[kind] === 'external' && canExt) { openExternal(e); return; }
     if (kind === 'pdf' && o.pdf === 'ocr') { openInPdfPlugin(e); return; }
     if (kind === 'word' && o.word === 'wordplugin' && ext === 'docx') { openInWordPlugin(e); return; }
@@ -1285,6 +1312,7 @@
     var d;
     try { d = S.prov.kind === 'bridge' ? await S.prov.stat(path) : await S.prov.stat(path, e); }
     catch (err) { busy(false); opError(err, 'קריאת המאפיינים נכשלה'); return; }
+    if (d.type === 'dir' && S.prov.kind === 'bridge' && FX.packb) { var ds = await FX.packb.dirSize(d.path || path); if (ds) { d.size = ds.size; d.itemCount = ds.files + ds.dirs; } }
     busy(false);
     var name = d.name || (e ? e.name : S.prov.nameOf(path));
     var isDir = d.type === 'dir';
@@ -1418,6 +1446,7 @@
     if (sel.length) items.push('delete');
     if (S.prov.caps.reveal && sel.length) items.push('reveal');
     if (!sel.length && inFolder()) items.push('newFolder', 'newFile');
+    if (FX.packb) items = items.concat(FX.packb.items(sel, inFolder()));
     items.push('props');
     if (S.recycle) items = sel.length ? ['restore', 'delete'] : ['emptyBin'];
     var html = items.map(function (id) {
@@ -1710,11 +1739,41 @@
     connect(false);
   }
 
+  /* הרשאות SDK (sdk-extras.js): קיצור Ctrl+Shift+E, הדבקת נתיב מהלוח, ספרים בחיפוש הספרייה */
+  function sdkExtras() {
+    var X = window.SdkX; if (!X) return;
+    X.call('storage.get', { key: 'shortcut.explorer' }).then(function (r) {
+      var keys = (r && (r.value || r.data)) || 'Ctrl+Shift+E';
+      X.registerShortcut('open-explorer', keys, function () { X.call('plugin.openOther', { pluginId: X.self, param: null }); });
+    });
+    /* Ctrl+Shift+V: נתיב שהועתק מחוץ לאוצריא -> מעבר אליו */
+    document.addEventListener('keydown', function (e) {
+      if (!(e.ctrlKey && e.shiftKey && (e.key === 'V' || e.key === 'v'))) return;
+      e.preventDefault();
+      X.readClipboard().then(function (t) { t = t.replace(/^"|"$/g, ''); if (/^([a-z]:\\|\\\\)/i.test(t)) go(t); });
+    });
+    /* ספרים: storage 'library.folders' = רשימת תיקיות; PDF/Word מהן מופיעים בחיפוש הספרייה */
+    X.call('storage.get', { key: 'library.folders' }).then(async function (r) {
+      var dirs = (r && (r.value || r.data)) || [];
+      if (!Array.isArray(dirs) || !dirs.length || !FX.Bridge) return;
+      var books = [];
+      for (var i = 0; i < dirs.length && books.length < 2000; i++) {
+        var d; try { d = await FX.Bridge.call('/fs/list', { path: dirs[i] }, { timeoutMs: 60000 }); } catch (e) { continue; }
+        ((d && (d.entries || d.items)) || []).forEach(function (en) {
+          if (/\.(pdf|docx)$/i.test(en.name || '')) books.push({ id: en.path || FX.win.join(dirs[i], en.name), title: (en.name || '').replace(/\.[^.]+$/, ''), category: 'קבצים מהמחשב' });
+        });
+      }
+      if (books.length) X.setLibraryBooks(books);
+    });
+    X.onLibraryBookOpen(function (p) { var id = p && (p.id || p.bookId); if (id) go(id.replace(/[\\/][^\\/]*$/, '')); });
+  }
+
   function init() {
     if (window.Otzaria) {
       window.Otzaria.on('plugin.boot', boot);
       window.Otzaria.on('theme.changed', ui.applyTheme);
       window.Otzaria.on('reader.toolbar_item_clicked', onToolbarItem);
+      sdkExtras();
       window.Otzaria.on('plugin.suspended', function () { S.suspended = true; clearTimeout(S.probeTimer); clearTimeout(TU.poll); cancelSearch(); });
       window.Otzaria.on('plugin.resumed', function () {
         S.suspended = false;
