@@ -167,8 +167,18 @@
   /* options: title, body (html), icon, tone (danger|primary), actions [{label, value, kind}], fields [{name,label,type,placeholder,value,disabled}],
      onSubmit(values) -> may throw to keep dialog open (shows message), dismissible.
      disabled: השדה מושבת (data-locked) ונשאר מושבת גם אחרי מצב "שומר…"; onOpen יכול לשנות זאת עם ui.lockField */
+  /* C7: שדות עם more:true מקובצים לאזור מתקפל "עוד" (מוסתרים, לא נמחקים) */
   ui.fieldsHtml = function (fields) {
-    return (fields || []).map(function (f) {
+    var out = '', more = '';
+    (fields || []).forEach(function (f) {
+      var h = ui.fieldHtml(f);
+      if (f.more) more += h; else { if (more) { out += '<details class="field-more"><summary class="muted small">עוד…</summary>' + more + '</details>'; more = ''; } out += h; }
+    });
+    if (more) out += '<details class="field-more"><summary class="muted small">עוד…</summary>' + more + '</details>';
+    return out;
+  };
+  ui.fieldHtml = function (f) {
+    return [f].map(function (f) {
         if (f.type === 'note') {
           return '<div class="field-note muted small">' + f.label + '</div>';
         }

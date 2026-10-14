@@ -145,10 +145,8 @@ internal sealed class ReportsForm : Form
 
     public static void Open()
     {
-        if (_inst == null || _inst.IsDisposed) _inst = new ReportsForm();
-        _inst.Reload();
-        _inst.Show();
-        _inst.Activate();
+        Hub.Show("reports", () => _inst = new ReportsForm());
+        _inst?.Reload();
     }
 
     private ReportsForm()
@@ -202,10 +200,11 @@ internal sealed class ReportsForm : Form
     /// הדיווח עצמו טקסט בלבד (feedback.report), ולכן התמונה מצורפת לקובץ ה-zip של "איסוף יומנים".
     private void AttachShot()
     {
-        Hide();
+        var top = ParentForm ?? this;   // C1: מוטמע בחלון הטאבים
+        top.Hide();
         string path = null;
         try { System.Threading.Thread.Sleep(250); path = Screenshot.Capture(region: true); }
-        finally { Show(); Activate(); }
+        finally { top.Show(); top.Activate(); }
         if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
         try
         {

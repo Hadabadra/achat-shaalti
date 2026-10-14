@@ -294,7 +294,7 @@ public static partial class Kiosk
         openSections = OpenSections,
         allSections = AllSections,
         warnings = Warnings(),
-        schedule = new { enabled = ScheduleEnabled, start = ScheduleStart, end = ScheduleEnd, warn = ScheduleWarn },
+        schedule = new { enabled = ScheduleEnabled, start = ScheduleStart, end = ScheduleEnd, warn = ScheduleWarn, extra = SchedMulti.Extra },
         activatedBy = Config.Get<string>("kiosk.activatedBy", "manual"),
         twoFactor = TwoFactor.Enabled,
         twoFactorAvailable = TwoFactor.Available(),
@@ -384,7 +384,7 @@ public static partial class Kiosk
     {
         if (HardLock.Available) return; // כשיש שירות — הוא המתזמן
         // תזמון כבוי, או דילוג ידני, נחשבים כמו "מחוץ לחלון"
-        bool inWindow = ScheduleEnabled && !Skipping && Sched.InWindow(ScheduleStart, ScheduleEnd, DateTime.Now);
+        bool inWindow = ScheduleEnabled && !Skipping && SchedMulti.InAnyWindow(DateTime.Now);
         // פתיחה זמנית ממתינה: הנעילה שוחררה רק עד סוף הפתיחה, ו-TempTick הוא שמחזיר אותה (או לא, אם החלון הסתיים)
         if (TempUnlockPendingLocal) return;
         if (inWindow && !IsActive)
@@ -528,7 +528,7 @@ public static partial class Kiosk
         Config.Set(KTuUntil, "");
         Overlay.HideTempUnlock();
         bool bySchedule = Config.Get<string>("kiosk.activatedBy", "manual") == "schedule";
-        bool inWindow = ScheduleEnabled && !Skipping && Sched.InWindow(ScheduleStart, ScheduleEnd, DateTime.Now);
+        bool inWindow = ScheduleEnabled && !Skipping && SchedMulti.InAnyWindow(DateTime.Now);
         if (relock && !IsActive && (!bySchedule || inWindow))
         {
             Config.Log("temp unlock: " + reason + " — הנעילה חוזרת");
@@ -870,6 +870,7 @@ public static partial class Kiosk
         {
             if (sch.Has("enabled")) Config.Set("kiosk.schedule.enabled", sch.Bool("enabled"));
             if (sch.Has("warn")) Config.Set("kiosk.schedule.warn", sch.Bool("warn"));
+            SchedMulti.Apply(sch);
             string ss = sch.Str("start");
             if (ss != null)
             {

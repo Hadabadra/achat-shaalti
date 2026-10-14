@@ -394,9 +394,7 @@ internal sealed class ChangelogForm : Form
 
     public static void Open()
     {
-        if (_open is { IsDisposed: false }) { _open.Activate(); return; }
-        _open = new ChangelogForm();
-        _open.Show();
+        Hub.Show("changelog", () => _open = new ChangelogForm());
     }
 
     public static string LoadText()

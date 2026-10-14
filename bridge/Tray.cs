@@ -142,9 +142,7 @@ internal sealed class AboutForm : Form
 
     public static void Open()
     {
-        if (_open is { IsDisposed: false }) { _open.Activate(); return; }
-        _open = new AboutForm();
-        _open.Show();
+        Hub.Show("about", () => _open = new AboutForm());
     }
 
     private AboutForm()

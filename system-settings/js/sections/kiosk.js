@@ -87,7 +87,8 @@
         'מומלץ ליצור חשבון משתמש <b>רגיל (ללא הרשאות מנהל)</b> לעמדת הלימוד, ולהפעיל בו את הנעילה.</p></div>';
     }
 
-    html += '<div class="card subtle"><div class="card-title">זו נעילה "רכה" — להקשחה מלאה</div>' +
+    /* C6: מתקפל */
+    html += '<details class="card subtle"><summary class="card-title">זו נעילה "רכה" — להקשחה מלאה</summary>' +
       '<p class="muted">הנעילה רצה בהרשאות המשתמש ומונעת שימוש מזדמן. מי שמבין במחשבים יכול לעקוף אותה. ' +
       'כדי שתעמוד גם מול ניסיון מכוון, השלימו שכבות שאינן תלויות בתוכנה:</p>' +
       '<ul class="feature-list">' +
@@ -97,7 +98,7 @@
       '<li>' + ui.icon('shield') + '<span><b>חשבון משתמש רגיל</b> ללא הרשאות מנהל, וחשבון המנהל עם סיסמה שהתלמיד אינו יודע.</span></li>' +
       '<li>' + ui.icon('computer') + '<span><b>סינון תוכן על המחשב עצמו</b> (למשל נטפרי), ולא רק ברמת הרשת — כך מעבר לרשת אחרת אינו עוקף את הסינון.</span></li>' +
       '<li>' + ui.icon('lock') + '<span><b>Safe Mode:</b> במצב בטוח הגשר אינו עולה והנעילה אינה חלה. סיסמת BIOS שחוסמת את תפריט האתחול סוגרת גם את זה.</span></li>' +
-      '</ul></div>';
+      '</ul></details>';
 
     if (!st.hasPassword) {
       html += '<div class="card"><div class="card-title">שלב ראשון: הגדרת סיסמה</div>' +
@@ -755,11 +756,11 @@
     fields.push({ name: 'dafyomi', type: 'checkbox', label: 'דף יומי בשומר המסך', value: !!st.showDafYomi,
       hint: 'מסכת ודף נוכחיים לפי לוח דף היומי' });
     fields.push({ name: 'zmSide', type: 'select', label: 'עמודת זמני היום בשומר המסך', value: st.restZmanimSide || 'right', hint: 'הזמנים מוצגים בעמודה בצד, וההקדשה בתחתית בלי חפיפה', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }] });
-    fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
+    fields.push({ more: true, name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
       options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
       hint: 'מציג שורה מיוחדת בשומר המסך ביום הזה בכל שנה. ריק = כבוי. לא קשור בהכרח להקדשה הקבועה שבתוסף' });
-    fields.push({ name: 'yzDay', label: 'יום השנה: יום בחודש (1–30)', value: String(st.yahrzeitDay || 0), dir: 'ltr', placeholder: '0' });
-    fields.push({ name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
+    fields.push({ more: true, name: 'yzDay', label: 'יום השנה: יום בחודש (1–30)', value: String(st.yahrzeitDay || 0), dir: 'ltr', placeholder: '0' });
+    fields.push({ more: true, name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
     return { fields: fields, cityByName: cityByName };
   };
   SS.screensaverPayload = function (x) {
@@ -790,7 +791,6 @@
     fields.push({ name: 'reset', type: 'checkbox', label: 'ביטול נעילה בכיבוי המחשב', value: !!st.resetOnShutdown, hint: 'כבוי (ברירת מחדל): הנעילה נשמרת וחוזרת אחרי הפעלה מחדש. מסומן: בכיבוי או התנתקות הנעילה מתבטלת והמחשב עולה רגיל. לא פועל עם נעילה מוקשחת' });
     fields.push({ name: 'fs', type: 'checkbox', label: 'אוצריא במסך מלא', value: st.fullscreenOtzaria !== false, hint: 'בלי כותרת ומסגרת חלון' });
     fields.push({ name: 'ro', type: 'checkbox', label: 'מצב קריאה בלבד לקבצים', value: !!st.readOnly, hint: 'חוסם שינוי, מחיקה והעברה של קבצים בסייר בזמן נעילה' });
-    fields.push({ name: 'xls', type: 'checkbox', label: 'אפשור צפייה בקובצי Excel (xlsx) בסייר הקבצים', value: !!st.allowExcelDocs, hint: 'ברירת מחדל: בסייר הקבצים אפשר לצפות ולפתוח רק מסמכי Word. מצגות PowerPoint חסומות תמיד ואין אפשרות להתיר אותן; סימון כאן מתיר גם גיליונות Excel' });
     fields.push({ name: 'tfa', type: 'checkbox', label: 'אימות דו-שלבי (Windows Hello)', value: !!st.twoFactor,
       hint: (st.twoFactorAvailable ? 'ביטול הנעילה ושינוי ההגדרות ידרשו גם זיהוי פנים/טביעת אצבע/PIN, בנוסף לסיסמה. קוד השחזור ימשיך לעבוד לחירום.' : '⚠ Windows Hello אינו מוגדר במחשב הזה — הגדירו אותו ב-Windows כדי להפעיל') });
     /* פתיחה זמנית: אפשר להפעיל רק כשהאימות הדו-שלבי פעיל (או מסומן עכשיו בטופס הזה) */
@@ -809,6 +809,14 @@
     var sc = st.schedule || {};
     fields.push({ name: 'sched', type: 'checkbox', label: 'תזמון נעילה לפי שעות', value: !!sc.enabled, hint: 'נעילה אוטומטית בכל יום בין שעה לשעה (למשל 20:00 עד 02:00, כולל אחרי חצות). מחוץ לטווח המחשב פועל רגיל. ביטול ידני בתוך הטווח יחזור לנעילה' });
     /* #56/#57: זמנים מוכנים (סדרים) — בחירה ממלאת שעת התחלה וסיום. סדרים שנשמרו כאן נזכרים (ss.sedarim) */
+    function parseExtraSched(t) {
+      var out = [], ok = true;
+      String(t || '').split(/[,;\n]/).map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (s) {
+        var m = /^(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$/.exec(s);
+        if (m && m[1] !== m[2]) out.push({ start: m[1], end: m[2] }); else ok = false;
+      });
+      return ok ? out : null;
+    }
     var SEDARIM = [
       { label: "סדר א'", start: '09:00', end: '13:30' }, { label: "סדר ב'", start: '15:30', end: '19:00' },
       { label: "סדר ג'", start: '20:00', end: '22:00' }, { label: 'לילה', start: '22:00', end: '06:00' }
@@ -819,6 +827,10 @@
       hint: 'ממלא את שעות ההתחלה והסיום. אפשר לשנות אחר כך' });
     fields.push({ name: 'schedStart', label: 'שעת התחלה', type: 'time', value: sc.start || '20:00', dir: 'ltr' });
     fields.push({ name: 'schedEnd', label: 'שעת סיום', type: 'time', value: sc.end || '02:00', dir: 'ltr' });
+    /* C4: כמה זמני נעילה — חלונות נוספים מעבר לראשי */
+    fields.push({ name: 'schedExtra', label: 'זמני נעילה נוספים (הוסף זמן)', dir: 'ltr', placeholder: '08:00-13:00, 15:00-19:00',
+      value: (sc.extra || []).map(function (w) { return w.start + '-' + w.end; }).join(', '),
+      hint: 'כל זמן בתבנית התחלה-סיום, מופרדים בפסיק. חלים בנוסף לזמן הראשי (בנעילה הרכה; רכיב ההקשחה אוכף רק את הראשי)' });
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
     fields.push({
       name: 'pos', type: 'select', label: 'מיקום השעון', value: st.clockPosition || 'bottom-left',
@@ -857,6 +869,7 @@
         if (['right', 'left', 'top', 'bottom'].indexOf(x.sidePos) < 0) return 'מיקום סרגל לא תקין';
         if (x.sched && (!/^\d{1,2}:\d{2}$/.test(x.schedStart || '') || !/^\d{1,2}:\d{2}$/.test(x.schedEnd || ''))) return 'יש להזין שעת התחלה ושעת סיום לתזמון';
         if (x.sched && x.schedStart === x.schedEnd) return 'שעת ההתחלה והסיום של התזמון זהות';
+        if (parseExtraSched(x.schedExtra) === null) return 'זמני נעילה נוספים: יש להקליד בתבנית 08:00-13:00, מופרדים בפסיק';
         if (!/^\d{1,2}$/.test(String(x.tuMin).trim()) || +x.tuMin < 1 || +x.tuMin > 60) return 'פתיחה זמנית: משך בדקות בין 1 ל-60';
         if (x.tuPw && x.tuPw.length < 6) return 'סיסמת הפתיחה הזמנית חייבת להכיל לפחות 6 תווים';
         if (x.tuPw !== x.tuPw2) return 'סיסמאות הפתיחה הזמנית אינן תואמות';
@@ -883,9 +896,9 @@
         }
         await SS.bridge.call('/kiosk/settings', {
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
-          readOnly: !!x.ro, allowExcelDocs: !!x.xls, twoFactor: !!x.tfa, clock: !!x.clock, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos,
+          readOnly: !!x.ro, twoFactor: !!x.tfa, clock: !!x.clock, fullscreenOtzaria: !!x.fs, sideBar: !!x.side, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos,
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
-          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn },
+          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn, extra: parseExtraSched(x.schedExtra) || [] },
           tempUnlockEnabled: !!x.tu, tempUnlockMinutes: +String(x.tuMin).trim() || 30, tempUnlockPassword: x.tuPw || ''
         });
         return true;
