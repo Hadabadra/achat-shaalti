@@ -287,6 +287,18 @@ button, input, select { font-family: var(--font-ui); font-size: inherit; color: 
   font-size: 0.75em; font-weight: 600; background: var(--color-secondary-container); color: var(--color-on-secondary-container);
 }
 .chip.ok { background: color-mix(in srgb, var(--color-ok) 18%, transparent); color: var(--color-ok); }
+.chip.warn { background: color-mix(in srgb, var(--color-error) 16%, transparent); color: var(--color-error); }
+
+/* חשיפת פרטים טכניים מאחורי כפתור, בתוך טקסט/כרטיס רגיל (לא טופס) - ר' .field-group לגרסה בתוך טופס */
+.more-details { margin-top: 0.5em; }
+.more-details > summary {
+  cursor: pointer; color: var(--color-primary); font-size: 0.85em; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 0.3em; list-style: none; user-select: none;
+}
+.more-details > summary::-webkit-details-marker { display: none; }
+.more-details > summary::after { content: '▾'; font-size: 0.75em; }
+.more-details[open] > summary::after { content: '▴'; }
+.more-details-body { margin-top: 0.625em; display: flex; flex-direction: column; gap: 0.375em; }
 
 .bars { display: inline-flex; align-items: flex-end; gap: 0.125em; height: 1.125em; width: 1.375em; }
 .bars i { flex: 1; border-radius: 0.0938em; background: var(--color-outline-variant); }

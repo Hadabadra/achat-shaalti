@@ -84,7 +84,7 @@ public static class BiosHardening
                 var settings = HpSettings(out string err);
                 var usb = settings.FirstOrDefault(s => LooksLikeUsbBootSetting(s.name));
                 var bootMenu = settings.FirstOrDefault(s => LooksLikeBootMenuAuthSetting(s.name));
-                bool pwRequiresPhysical = HpPasswordRequiresPhysicalPresence();
+                var (pwIsSet, pwRequiresPhysical) = HpPasswordState();
                 return new
                 {
                     vendor,
@@ -95,11 +95,12 @@ public static class BiosHardening
                     wmiError = err,
                     usbBootSetting = usb.name == null ? null : new { name = usb.name, currentValue = usb.value, possibleValues = usb.possible },
                     bootMenuAuthSetting = bootMenu.name == null ? null : new { name = bootMenu.name, currentValue = bootMenu.value, possibleValues = bootMenu.possible },
+                    passwordIsSet = pwIsSet,
                     passwordRequiresPhysicalPresence = pwRequiresPhysical,
                     note = "נתמך בעיקר בדגמים עסקיים (EliteBook/EliteDesk/ProBook/Z). במחשבי צרכן (Pavilion/Envy וכו') ייתכן שהממשק אינו חשוף כלל. " +
-                        (pwRequiresPhysical
-                            ? "בדגם הזה HP חוסמת במכוון הגדרת סיסמת BIOS מרחוק (נדרשת נוכחות פיזית) - אומת בפועל על HP EliteBook 840 G8: " +
-                              "חסימת אתחול USB עדיין אפשרית מרחוק, אבל סיסמת ה-BIOS דורשת הגדרה ידנית ב-F10."
+                        (pwRequiresPhysical == true
+                            ? "בדגם הזה HP מסמנת את סיסמת ה-BIOS כ-RequiresPhysicalPresence - בחלק מהדגמים/גרסאות firmware זה חוסם כתיבה מרחוק " +
+                              "בפועל, באחרים זה רק תיאור. „הפעלת הקשחה” תנסה בכל זאת ותאמת מול התוצאה האמיתית (לא תדווח הצלחה בלי אישור)."
                             : "לא זוהתה הגבלת נוכחות-פיזית על סיסמת ה-BIOS בדגם הזה, אבל זה לא מבטיח הצלחה - ר' תוצאת /bios/harden בפועל."),
                 };
             }
@@ -423,36 +424,37 @@ public static class BiosHardening
     };
 
     /// <summary>
-    /// בודק אם "Setup Password" מסומנת ב-HP_BIOSPassword כ-RequiresPhysicalPresence (רוב דגמי Business) -
-    /// במקרה הזה HP חוסמת במכוון הגדרה/שינוי של הסיסמה הזו דרך WMI (גם עם קוד תשובה "הצלחה"), כדי שתוכנה
-    /// לא תוכל לנעול סיסמת BIOS בלי מישהו פיזית ליד המחשב. אומת בפועל על HP EliteBook 840 G8: הקריאה
-    /// "הצליחה" (קוד 0) אבל HP_BIOSPassword.IsSet נשאר 0 - הסיסמה מעולם לא נקבעה בפועל.
+    /// true/false/null (לא ידוע) אם "Setup Password" כבר מוגדרת בפועל, לפי HP_BIOSPassword.IsSet - מקור
+    /// האמת היחיד (בניגוד לקוד התשובה מ-SetBIOSSetting, שעלול לדווח "הצלחה" גם כשכלום לא קרה בפועל -
+    /// ר' ההערה ב-HpSetPassword). גם RequiresPhysicalPresence זמין כאן למי שרוצה אותו למידע בלבד.
     /// </summary>
-    private static bool HpPasswordRequiresPhysicalPresence()
+    private static (bool? isSet, bool? requiresPhysicalPresence) HpPasswordState()
     {
         try
         {
-            using var s = new ManagementObjectSearcher(@"root\hp\instrumentedBIOS", "SELECT RequiresPhysicalPresence FROM HP_BIOSPassword WHERE Name=\"Setup Password\"");
+            using var s = new ManagementObjectSearcher(@"root\hp\instrumentedBIOS", "SELECT IsSet, RequiresPhysicalPresence FROM HP_BIOSPassword WHERE Name=\"Setup Password\"");
             foreach (ManagementObject o in s.Get())
                 using (o)
-                    return Convert.ToInt32(o["RequiresPhysicalPresence"]) != 0;
+                    return (Convert.ToInt32(o["IsSet"]) != 0, Convert.ToInt32(o["RequiresPhysicalPresence"]) != 0);
         }
-        catch (Exception ex) { Config.Log("bios hp physical-presence check: " + ex.Message); }
-        return false; // לא ידוע - לא חוסמים את הניסיון בגלל זה, רק לא נסתמך על ההנחה
+        catch (Exception ex) { Config.Log("bios hp password state: " + ex.Message); }
+        return (null, null);
     }
 
+    /// <summary>
+    /// מנסה תמיד בפועל (לא מוותרים מראש על בסיס RequiresPhysicalPresence בלבד - יש דגמים/גרסאות
+    /// firmware שבהם זה בסך הכול תיאור של ההגדרה ולא חסימה מוחלטת של הכתיבה), ומוודא את התוצאה
+    /// האמיתית מול HP_BIOSPassword.IsSet אחרי הקריאה - כי קוד התשובה של SetBIOSSetting לבדו לא אמין:
+    /// אומת בפועל על HP EliteBook 840 G8 שהקריאה יכולה "להצליח" (קוד 0) בעוד IsSet נשאר 0.
+    /// </summary>
     private static (bool attempted, bool success, string message) HpSetPassword(string newBiosPassword)
     {
-        if (HpPasswordRequiresPhysicalPresence())
-            return (false, false, "HP חוסמת במכוון הגדרת סיסמת BIOS מרחוק בדגם הזה (RequiresPhysicalPresence) — " +
-                "זו הגנה מכוונת של HP נגד נעילת סיסמה מרחוק בלי נוכחות פיזית. יש להגדיר את הסיסמה ידנית: " +
-                "כניסה ל-BIOS (F10 באתחול) ← Security ← Setup Password.");
+        var (wasSet, requiresPhysical) = HpPasswordState();
         try
         {
             // ManagementClass(...).GetInstances() החזיר ריק אצל כמה משתמשים גם כש-root\hp\instrumentedBIOS
-            // בהחלט זמין (ר' HpSettings/HpPasswordRequiresPhysicalPresence למטה, ששתיהן קוראות מאותו namespace
-            // בהצלחה) - ManagementObjectSearcher עם שאילתת WQL הוא הדפוס שכבר מוכח עובד כאן, אז משתמשים באותו
-            // דפוס גם לכתיבה, במקום לסמוך על GetInstances() שמתנהג אחרת מול ה-provider הספציפי הזה
+            // בהחלט זמין (ר' HpSettings למטה, שקוראת מאותו namespace בהצלחה) - ManagementObjectSearcher עם
+            // שאילתת WQL הוא הדפוס שכבר מוכח עובד כאן, אז משתמשים באותו דפוס גם לכתיבה
             using var s = new ManagementObjectSearcher(@"root\hp\instrumentedBIOS", "SELECT * FROM HP_BIOSSettingInterface");
             foreach (ManagementObject o in s.Get())
             {
@@ -466,11 +468,18 @@ public static class BiosHardening
                     object[] args = { "Setup Password", "", "<utf-16/>" + newBiosPassword };
                     object res = o.InvokeMethod("SetBIOSSetting", args);
                     uint code = Convert.ToUInt32(res);
-                    bool ok = code == 0;
-                    return (true, ok, ok
-                        ? "סיסמת ה-BIOS הוגדרה בהצלחה"
-                        : "הגדרת סיסמת ה-BIOS נכשלה (קוד " + code + "): " + HpErrorText(code) +
-                          " — ייתכן שכבר מוגדרת סיסמה אחרת (לא נדרסת בלי לדעת אותה)");
+                    if (code != 0)
+                        return (true, false, "הגדרת סיסמת ה-BIOS נכשלה (קוד " + code + "): " + HpErrorText(code) +
+                            " — ייתכן שכבר מוגדרת סיסמה אחרת (לא נדרסת בלי לדעת אותה)");
+                    // קוד 0 לבדו לא מספיק - מוודאים מול IsSet שבאמת קרה משהו (ר' הערת המתודה)
+                    var (nowSet, _) = HpPasswordState();
+                    if (nowSet == true) return (true, true, "סיסמת ה-BIOS הוגדרה בהצלחה");
+                    if (nowSet == false)
+                        return (true, false, "הקריאה החזירה קוד הצלחה, אבל הסיסמה לא נקבעה בפועל (אומת מול HP_BIOSPassword.IsSet)" +
+                            (requiresPhysical == true ? " — ככל הנראה בגלל RequiresPhysicalPresence בדגם הזה" : "") +
+                            ". יש להגדיר ידנית: כניסה ל-BIOS (F10 באתחול) ← Security ← Setup Password.");
+                    // לא הצלחנו לקרוא IsSet בכלל (nowSet == null) - מדווחים לפי קוד התשובה בלבד, בלי להמציא ודאות
+                    return (true, true, "סיסמת ה-BIOS הוגדרה כנראה בהצלחה (קוד 0) - לא ניתן היה לאמת מול IsSet, מומלץ לבדוק ב-F10");
                 }
             }
             return (false, false, "לא נמצא ממשק HP_BIOSSettingInterface במחשב זה");

@@ -126,7 +126,10 @@
     if (!e) return 'שגיאה לא ידועה';
     var code = e.code || 'internal';
     var msg = e.message && /[֐-׿]/.test(e.message) && !(window.I18N && window.I18N.isEn() && ERR[e.code]) ? e.message : '';
-    if (code === 'wrong_password' || code === 'unsupported' || code === 'locked') {
+    /* unsupported אין בו טעם אבטחתי להסתיר את הסיבה הספציפית (בניגוד ל-wrong_password/locked, ששם
+       הסתרת פרטים מונעת דליפת מידע על ניסיונות כניסה) - ולכן לא ברשימה הזו. בלעדי זה אי אפשר היה
+       לדעת למה פעולה נכשלה ("לא נתמך במחשב זה" בלי שום הקשר) */
+    if (code === 'wrong_password' || code === 'locked') {
       if (msg && msg !== ERR[code] && /שני|נסו|המתן|המתינו/.test(msg)) return msg;
       return ERR[code];
     }
