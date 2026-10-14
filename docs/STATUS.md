@@ -31,3 +31,4 @@
 - צילומי המסך לחנות של הגדרות מערכת: `system-settings-screenshots/`.
 - 14.10: סבב E חלקי — E5/E6/E7 ✅; E9 חלקי (README); נותרו E1–E4, E8 (Windows/SignPath).
 - 14.10: E1/E4 בדיקות עצמיות אוטומטיות (SelfTestMore.cs); E2 ממצא 8 — עדכון עצמי מאומת של השירות (SvcUpdate.cs). שליחה ל-GitHub — ממתינה (A7).
+- 14.10: נוסף סבב F (ניקוי GitHub + גרסה רשמית) ב-ROUNDS-3.7.1.md.
