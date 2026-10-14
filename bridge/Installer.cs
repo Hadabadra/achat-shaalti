@@ -9,8 +9,8 @@ public static class Installer
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunValue = "OtzariaBridge";
-    private const string ShortcutName = "תוכנת חסימת אוצריא.lnk";
-    private static readonly string[] OldShortcutNames = { "גשר אוצריא.lnk", "תורת אסתר.lnk" }; // שמות קודמים, עד 3.0.0 ועד שינוי השם
+    private const string ShortcutName = "קיוסק אוצריא.lnk";
+    private static readonly string[] OldShortcutNames = { "גשר אוצריא.lnk", "תורת אסתר.lnk", "תוכנת חסימת אוצריא.lnk" }; // שמות קודמים, עד שינויי השם
 
     public static string InstalledExe => Path.Combine(Config.Dir, "OtzariaBridge.exe");
     public static string PluginsDir => Path.Combine(Config.Dir, "plugins");

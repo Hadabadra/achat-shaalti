@@ -1,4 +1,4 @@
-# תוכנת חסימת אוצריא (Otzaria Blocking Software) — חוזה API v1
+# קיוסק אוצריא (Otzaria Kiosk) — חוזה API v1
 
 שירות Windows מקומי שהתוספים "סייר קבצים" ו"הגדרות מערכת" פונים אליו דרך
 `Otzaria.call('network.fetchStream', ...)` עם ההרשאה `network.localhost`.

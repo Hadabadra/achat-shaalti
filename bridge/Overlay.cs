@@ -400,61 +400,6 @@ internal sealed class RestScreen : Form
             DrawZmanimColumn(g, zmItems, zmLeft ? colMargin : r.Width - colMargin - colW,
                 r.Height * 0.08f + dy, colW, r.Height - 70 * s - (r.Height * 0.08f + dy), s, gold);
 
-        // נר הנצחה + נוסח ההקדשה: בלוק קטן בשליש התחתון של המסך, בצד ההפוך לעמודת זמני היום
-        // (כדי שהמסך יהיה מאוזן: זמנים מצד אחד, הקדשה מהצד השני) - לא יותר במרכז כמו קודם
-        using var dedF = new Font("David", 12f, GraphicsUnit.Point);
-        using var dedNameF = new Font("David", 15f, FontStyle.Bold, GraphicsUnit.Point);
-        float dedW = zmItems.Count > 0 ? colW : Math.Min(260 * s, r.Width * 0.22f);
-        float dedX = zmItems.Count > 0 ? (zmLeft ? r.Width - colMargin - dedW : colMargin) : (r.Width - dedW) / 2f;
-        RectangleF Ded(float yy, float h) => new(dedX, yy, dedW, h);
-
-        float thirdTop = r.Height * (2f / 3f) + dy;
-        float standY = r.Height - 46 * s + dy;
-        float candleW = 15 * s, candleH = 54 * s;
-        float candleX = dedX + dedW / 2f - candleW / 2f, candleTop = standY - candleH;
-
-        // להבה: תזוזה אופקית איטית וחלקה בלבד (נראית טבעית); ריצוד מהיר ועדין משפיע רק על הגודל/בהירות,
-        // לא על המיקום - בניגוד לגרסה הקודמת שקפצה מהר וחזק גם בצד וגם בגודל ("מרצד בצורה מוזרה")
-        float sway = (float)Math.Sin(t * 1.1) * 3f * s;
-        float flick = (float)(Math.Sin(t * 6.1) * 0.5 + Math.Sin(t * 9.3 + 1) * 0.3);
-        float fh = (20 + flick * 1.5f) * s, fw = (9 + flick * 0.5f) * s;
-        float fx = candleX + candleW / 2f + sway, fy = candleTop - 4 * s;
-        // הילה
-        for (int i = 5; i >= 1; i--)
-        {
-            float rad = (14 + i * 9) * s;
-            using var glow = new SolidBrush(Color.FromArgb((int)(8 + 3 * (5 - i)), 255, 190, 110));
-            g.FillEllipse(glow, fx - rad, fy - fh * 0.5f - rad, rad * 2, rad * 2);
-        }
-        // גוף הנר (קבוע - לא זז, רק הלהבה זזה)
-        var body = new RectangleF(candleX, candleTop, candleW, candleH);
-        using (var cb = new LinearGradientBrush(body, Color.FromArgb(250, 244, 230), Color.FromArgb(200, 186, 160), 0f))
-            g.FillRectangle(cb, body);
-        using (var topE = new SolidBrush(Color.FromArgb(255, 252, 240)))
-            g.FillEllipse(topE, candleX, candleTop - 2.5f * s, candleW, 5 * s);
-        // פתיל (קבוע במרכז גוף הנר)
-        using (var wick = new Pen(Color.FromArgb(60, 45, 35), 1.4f * s))
-            g.DrawLine(wick, candleX + candleW / 2f, candleTop, candleX + candleW / 2f, candleTop - 4 * s);
-        // להבה: חיצונית כתומה ופנימית בהירה
-        using (var flame = new GraphicsPath())
-        {
-            flame.AddBezier(fx, fy - fh, fx + fw * 0.9f, fy - fh * 0.45f, fx + fw * 0.55f, fy, fx, fy);
-            flame.AddBezier(fx, fy, fx - fw * 0.55f, fy, fx - fw * 0.9f, fy - fh * 0.45f, fx, fy - fh);
-            using var fb = new PathGradientBrush(flame) { CenterColor = Color.FromArgb(255, 255, 245, 200), SurroundColors = new[] { Color.FromArgb(230, 255, 150, 40) } };
-            fb.CenterPoint = new PointF(fx, fy - fh * 0.3f);
-            g.FillPath(fb, flame);
-        }
-        // מעמד
-        using (var stand = new SolidBrush(Color.FromArgb(150, 120, 80)))
-        using (var sp = Overlay.Round(new Rectangle((int)(candleX + candleW / 2f - 26 * s), (int)standY, (int)(52 * s), (int)(6 * s)), (int)(3 * s)))
-            g.FillPath(stand, sp);
-
-        // נוסח ההנצחה מעל הנר, באותה עמודה
-        float ty = thirdTop + 4 * s;
-        g.DrawString("לעילוי נשמת הנערה הצדקנית", dedF, dim, Ded(ty, 20 * s), rtl);
-        g.DrawString("אסתר גיטה דינר ע\"ה", dedNameF, goldB, Ded(ty + 20 * s, 24 * s), rtl);
-        g.DrawString("בת רבי מיכאל שלום הלוי שיבדלט\"א · תנצב\"ה", dedF, dim, Ded(ty + 44 * s, 20 * s), rtl);
-
         // רמז קטן בתחתית; אין צורך בכפתור — כל לחיצה חוזרת
         _btn = Rectangle.Empty;
         g.DrawString(Lang.T("לחיצה או מקש כלשהו — חזרה לאוצריא", "Click or press any key to return to Otzaria"), hintF, dim,

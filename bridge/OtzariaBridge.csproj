@@ -11,8 +11,8 @@
     <AssemblyName>OtzariaBridge</AssemblyName>
     <RootNamespace>OtzariaBridge</RootNamespace>
     <Version>3.6.1</Version>
-    <Product>תוכנת חסימת אוצריא</Product>
-    <AssemblyTitle>תוכנת חסימת אוצריא - גמח תורת אסתר</AssemblyTitle>
+    <Product>קיוסק אוצריא</Product>
+    <AssemblyTitle>קיוסק אוצריא - תוכנה לחסימת המחשב ללימוד</AssemblyTitle>
     <Company>גמח תורת אסתר</Company>
     <ApplicationIcon>..\assets\icon.ico</ApplicationIcon>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>

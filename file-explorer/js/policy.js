@@ -134,7 +134,7 @@
     editorHtml: function () {
       if (!available()) {
         return '<div class="fx-set-card"><div class="fx-set-title">' + ic('lock') + 'נעילה והגבלה של הסייר</div>' +
-          '<p class="muted">הגדרות הנעילה דורשות את תוכנת חסימת אוצריא. בלעדיה הסייר מוגבל ממילא לתיקיות שאישרתם.</p></div>';
+          '<p class="muted">הגדרות הנעילה דורשות את קיוסק אוצריא. בלעדיה הסייר מוגבל ממילא לתיקיות שאישרתם.</p></div>';
       }
       var s = state || { mode: 'off', roots: [], unlockMinutes: 15, defaults: [], effective: 'open' };
       var chosen = (s.roots || []).map(function (r) { return String(r).toLowerCase(); });

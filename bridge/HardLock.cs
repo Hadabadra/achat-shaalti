@@ -546,7 +546,7 @@ public static class HardLock
                 Sc($"create {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"{Program.AppFullName}\"");
             else
                 Sc($"config {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= auto DisplayName= \"{Program.AppFullName}\"");
-            Sc($"description {ServiceName} \"{Program.AppFullName} — רכיב הנעילה המוקשחת, לעילוי נשמת אסתר גיטה דינר ע״ה\"");
+            Sc($"description {ServiceName} \"{Program.AppFullName} — רכיב הנעילה המוקשחת\"");
             Sc($"failure {ServiceName} reset= 86400 actions= restart/5000/restart/5000/restart/30000");
 
             using var sc = new ServiceController(ServiceName);
