@@ -97,6 +97,8 @@ public static class Program
             HardLock.StartSync();
             Kiosk.StartScheduler();
             Zmanim.StartAlerts(); // #33
+            Saver.Start(); // D2+D3
+            SelfTest.Init(); // D6
             // אכיפת FxPolicy/Kiosk.AllowedExtensions על דיאלוגי פתיחה/שמירה מקוריים של Windows בכל תהליך
             // (בעיה #53/וורד: "קובץ ← פתיחה ← עיון" בתוכנה חיצונית מאושרת עוקף את הסייר הפנימי). ר' DialogGuard.cs
             DialogGuard.Start();

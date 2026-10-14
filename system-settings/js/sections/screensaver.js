@@ -25,13 +25,25 @@
       '<div class="card"><div class="card-title">שומר מסך ומסך מנוחה</div>' +
       '<p class="muted">מסך המנוחה מציג שעה, תאריך עברי והקדשה בתחתית; זמני היום מוצגים בעמודה בצד שבוחרים כאן.</p>' +
       '<form class="ss-form" novalidate><div class="dlg-fields">' + ui.fieldsHtml(fields) + '</div>' +
-      '<div class="row-actions"><button class="btn btn-primary btn-lg" type="submit">' + ui.icon('check') + 'שמירה</button></div>' +
+      '<div class="row-actions"><button class="btn btn-primary btn-lg" type="submit">' + ui.icon('check') + 'שמירה</button>' +
+      (st.active ? '<button class="btn btn-lg ss-unlock" type="button">' + ui.icon('unlock') + 'ביטול הנעילה</button>' : '') + '</div>' +
       '</form></div>';
     var form = body.querySelector('form');
     var sel = form.querySelector('[name=zcity]'), loc = form.querySelector('[name=zloc]');
     if (sel && loc) sel.addEventListener('change', function () {
       var c = built.cityByName[sel.value];
       if (c && typeof c.lat === 'number' && typeof c.lng === 'number') loc.value = c.lat + ', ' + c.lng;
+    });
+    /* D1: ביטול הנעילה ישירות מהגדרות השומר (עם הסיסמה שבשדה למטה, או קוד שחזור) */
+    var unl = form.querySelector('.ss-unlock');
+    if (unl) unl.addEventListener('click', async function () {
+      var pw = (form.querySelector('[name=pw]').value || '').trim();
+      if (!pw) { ui.toast('יש להקליד את סיסמת הנעילה בשדה הסיסמה', 'error'); return; }
+      unl.disabled = true;
+      try {
+        await SS.bridge.call('/kiosk/disable', { password: /^[A-Za-z0-9]{4}(-[A-Za-z0-9]{4}){2}$/.test(pw) ? pw.replace(/-/g, '') : pw }, { timeoutMs: 30000 });
+        ui.toast('הנעילה בוטלה', 'success'); load(body);
+      } catch (err) { ui.error(err, 'ביטול הנעילה נכשל'); unl.disabled = false; }
     });
     form.addEventListener('submit', async function (e) {
       e.preventDefault();

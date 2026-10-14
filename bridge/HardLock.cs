@@ -598,6 +598,7 @@ public static class HardLock
                     ["recoveryHash"] = Config.Get<string>("kiosk.recoveryHash", ""),
                     ["recoverySalt"] = Config.Get<string>("kiosk.recoverySalt", ""),
                     ["twoFactor"] = Config.Get("kiosk.twoFactor", false),
+                    ["macKey"] = Convert.ToBase64String(PipeMac.EnsureKey()), // #32: גם ב-setup שמתוך ההתקנה המורמת
                 });
                 if (setupRes?["ok"]?.GetValue<bool>() != true)
                     SvcLog("install: setup נכשל: " + (setupRes?["message"]?.ToString() ?? "אין תשובה מהשירות"));

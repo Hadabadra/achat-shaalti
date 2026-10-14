@@ -189,11 +189,13 @@
             (f.hint ? '<small>' + f.hint + '</small>' : '') + '</span></label>';
         }
         if (f.type === 'select') {
+          /* D5: רשימת בחירה גלילה (כמו באוצריא) — חוץ מאופציות עם טקסט ארוך או רשימה של 2 */
+          var lb = !f.dropdown && f.options.length > 2 && f.options.every(function (o) { return String(o.label).length <= 30; });
           var opts = (f.options || []).map(function (o) {
             return '<option value="' + ui.esc(o.value) + '"' + (o.value === f.value ? ' selected' : '') + '>' + ui.esc(o.label) + '</option>';
           }).join('');
           return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
-            '<select class="input" name="' + f.name + '"' + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select>' + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
+            '<select class="input' + (lb ? ' listbox' : '') + '" name="' + f.name + '"' + (lb ? ' size="' + Math.min(f.options.length, 6) + '"' : '') + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select>' + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
         }
         return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
           '<input class="input" name="' + f.name + '" type="' + (f.type || 'text') + '"' +

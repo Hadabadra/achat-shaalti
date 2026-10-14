@@ -204,7 +204,7 @@ public static partial class Kiosk
 
     [StructLayout(LayoutKind.Sequential)] private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
     [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO lii);
-    private static long IdleMs()
+    internal static long IdleMs()
     {
         var lii = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
         return GetLastInputInfo(ref lii) ? unchecked((uint)Environment.TickCount - lii.dwTime) : 0;
@@ -270,6 +270,8 @@ public static partial class Kiosk
         clockPosition = Config.Get("kiosk.clockPosition", "bottom-left"),
         restScreen = Config.Get("kiosk.restScreen", true),
         restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 1),
+        saverWhenUnlocked = Config.Get("kiosk.saverWhenUnlocked", true), // D2
+        bootCover = Config.Get("kiosk.bootCover", true), // D3
         restZmanimSide = Config.Get("kiosk.restZmanimSide", "right"),
         zmanimLocation = Config.Get("kiosk.zmanimLocation", ""),
         zmanimCity = Config.Get("kiosk.zmanimCity", ""),
@@ -806,6 +808,8 @@ public static partial class Kiosk
         { string rcv = b.Str("restContent"); if (rcv is "full" or "zmanim" or "clock" or "verse") Config.Set("kiosk.restContent", rcv); }
         foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
+        if (b.Has("saverWhenUnlocked")) Config.Set("kiosk.saverWhenUnlocked", b.Bool("saverWhenUnlocked", true)); // D2
+        if (b.Has("bootCover")) Config.Set("kiosk.bootCover", b.Bool("bootCover", true)); // D3
         if (b.Has("restIdleMinutes")) Config.Set("kiosk.restIdleMinutes", (int)Math.Clamp(b.Long("restIdleMinutes", 0), 0, 240));
         if ((b.Has("zmanimCity") && b.Str("zmanimCity", "") != Config.Get("kiosk.zmanimCity", ""))
             || (b.Has("zmanimLocation") && (b.Str("zmanimLocation") ?? "").Trim() != Config.Get("kiosk.zmanimLocation", ""))
