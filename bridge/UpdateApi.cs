@@ -13,7 +13,7 @@ namespace OtzariaBridge;
 /// </summary>
 public static class UpdateApi
 {
-    public const string Repo = "YairDaniel11/otzaria-system-tools";
+    public const string Repo = "e0548433917-gif/achat-shaalti";
     public const string ReleasesUrl = "https://github.com/" + Repo + "/releases/latest";
     public const string AllReleasesUrl = "https://github.com/" + Repo + "/releases";
     private const string ApiUrl = "https://api.github.com/repos/" + Repo + "/releases?per_page=20";
@@ -123,6 +123,8 @@ public static class UpdateApi
                 try { latestBridgeVer = Parse((await Http.GetStringAsync(bridgeVerUrl)).Trim()); }
                 catch { /* ההשוואה תיכשל בבטחה (לא "newer") אם זה נכשל */ }
             }
+            // במאגר הראשי תגית ה-Release היא גרסת הגשר עצמה (v3.7.0) - אם אין BRIDGE_VERSION.txt משווים מול התגית
+            if (latestBridgeVer == null && bestTag != null) latestBridgeVer = Parse(bestTag.TrimStart('v', 'V'));
             var cur = Parse(Program.Version);
             _last = new Info(Program.Version, latestBridgeVer?.ToString(3), bestTag, latestBridgeVer != null && cur != null && latestBridgeVer > cur,
                 bestUrl ?? ReleasesUrl, exeUrl, sumsUrl, notes);
