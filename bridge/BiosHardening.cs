@@ -99,8 +99,9 @@ public static class BiosHardening
                     passwordRequiresPhysicalPresence = pwRequiresPhysical,
                     note = "נתמך בעיקר בדגמים עסקיים (EliteBook/EliteDesk/ProBook/Z). במחשבי צרכן (Pavilion/Envy וכו') ייתכן שהממשק אינו חשוף כלל. " +
                         (pwRequiresPhysical == true
-                            ? "בדגם הזה HP מסמנת את סיסמת ה-BIOS כ-RequiresPhysicalPresence - בחלק מהדגמים/גרסאות firmware זה חוסם כתיבה מרחוק " +
-                              "בפועל, באחרים זה רק תיאור. „הפעלת הקשחה” תנסה בכל זאת ותאמת מול התוצאה האמיתית (לא תדווח הצלחה בלי אישור)."
+                            ? "בדגם הזה HP מסמנת את סיסמת ה-BIOS כ-RequiresPhysicalPresence - לפי התיעוד הרשמי של HP, זה בעיקר אומר ששינוי בהגדרה " +
+                              "כזו ממתין לאישור על המסך באתחול הבא (ולא בהכרח חסימה מוחלטת של הכתיבה עצמה). „הפעלת הקשחה” תנסה בכל זאת ותאמת מול " +
+                              "התוצאה האמיתית (לא תדווח הצלחה בלי אישור); אם היא תדווח שהסיסמה עדיין לא נקבעה, הצעד הראשון הוא להפעיל מחדש ולבדוק אם מופיעה בקשת אישור במסך ה-BIOS."
                             : "לא זוהתה הגבלת נוכחות-פיזית על סיסמת ה-BIOS בדגם הזה, אבל זה לא מבטיח הצלחה - ר' תוצאת /bios/harden בפועל."),
                 };
             }
@@ -475,9 +476,13 @@ public static class BiosHardening
                     var (nowSet, _) = HpPasswordState();
                     if (nowSet == true) return (true, true, "סיסמת ה-BIOS הוגדרה בהצלחה");
                     if (nowSet == false)
-                        return (true, false, "הקריאה החזירה קוד הצלחה, אבל הסיסמה לא נקבעה בפועל (אומת מול HP_BIOSPassword.IsSet)" +
-                            (requiresPhysical == true ? " — ככל הנראה בגלל RequiresPhysicalPresence בדגם הזה" : "") +
-                            ". יש להגדיר ידנית: כניסה ל-BIOS (F10 באתחול) ← Security ← Setup Password.");
+                        return (true, false, "הקריאה החזירה קוד הצלחה, אבל הסיסמה עדיין לא מופיעה כנקבעת (אומת מול HP_BIOSPassword.IsSet)." +
+                            (requiresPhysical == true
+                                ? " בדגם הזה מסומן RequiresPhysicalPresence על ההגדרה - לפי התיעוד הרשמי של HP, ברוב המקרים זה "
+                                  + "אומר שהשינוי רק *ממתין לאישור על המסך באתחול הבא* (לא בהכרח חסימה מוחלטת של הכתיבה). "
+                                  + "כדאי קודם פשוט להפעיל מחדש את המחשב ולעקוב אחרי מסך ה-BIOS בתחילת האתחול — אם מופיעה שם בקשת אישור, יש לאשר אותה, ואז הסיסמה אמורה להיקבע בפועל. "
+                                  + "אם אחרי אתחול כזה הבדיקה עדיין מראה שהסיסמה לא נקבעה, רק אז יש להגדיר אותה ידנית: כניסה ל-BIOS (F10 באתחול) ← Security ← Setup Password."
+                                : ". יש להגדיר ידנית: כניסה ל-BIOS (F10 באתחול) ← Security ← Setup Password."));
                     // לא הצלחנו לקרוא IsSet בכלל (nowSet == null) - מדווחים לפי קוד התשובה בלבד, בלי להמציא ודאות
                     return (true, true, "סיסמת ה-BIOS הוגדרה כנראה בהצלחה (קוד 0) - לא ניתן היה לאמת מול IsSet, מומלץ לבדוק ב-F10");
                 }

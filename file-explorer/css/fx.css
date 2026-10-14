@@ -235,6 +235,16 @@ body.fx-busy .fx-list { pointer-events: none; opacity: 0.7; }
 /* אייקוני הקו של הסייר */
 svg.ic { fill: none; stroke: currentColor; stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; }
 svg.ic .fill { fill: currentColor; fill-opacity: 0.16; }
+/* איזון משקל חזותי בין 8 מצבי התצוגה: עובי הקו של ה-SVG קבוע ביחידות ה-viewBox (24x24), אז כשאותו
+   אייקון מוצג בגדלים שונים מאוד (18px ב"סמלים קטנים" עד 80px ב"סמלים גדולים מאוד") עובי הקו בפיקסלים
+   בפועל משתנה פי כמה - בגדלים הקטנים האייקון נראה דהוי/חלש, ובגדולים נראה מודגש/בולט מדי, אף שזה
+   מבנה ה-SVG זהה לגמרי ואותו צבע. מפצים בעובי קו הפוך לגודל כדי שהמשקל החזותי יישאר אחיד בין המצבים */
+.fx-list.m-xlicons .fx-ic svg.ic { stroke-width: 1.3; }
+.fx-list.m-licons .fx-ic svg.ic { stroke-width: 1.5; }
+.fx-list.m-micons .fx-ic svg.ic, .fx-list.m-content .fx-ic svg.ic { stroke-width: 1.7; }
+.fx-list.m-tiles .fx-ic svg.ic { stroke-width: 1.8; }
+.fx-list.m-sicons .fx-ic svg.ic { stroke-width: 2.2; }
+.fx-list.m-sicons .fx-ic svg.ic .fill { fill-opacity: 0.22; }
 /* נתיבי Windows נקראים משמאל לימין גם בממשק עברי */
 .fx-crumbs { direction: ltr; }
 .fx-crumb, .fx-crumb-static { unicode-bidi: isolate; }

@@ -34,10 +34,12 @@ public static class Server
     public const int FirstPort = 47917;
     public const int LastPort = 47921;
 
+    // TypeInfoResolver מפורש הכרחי (ר' הערה ב-HardLock.cs.Save) - למניעת אותו כשל גם בתגובות ה-HTTP
     public static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
     };
 
     private static readonly Dictionary<string, Func<JsonElement, Task<object>>> Routes = new(StringComparer.OrdinalIgnoreCase);
