@@ -718,7 +718,9 @@
       hint: 'שם הפרשה הקרובה (השבת הנוכחית/הבאה), מחושב על ידי ספריית Zmanim/KosherJava' });
     fields.push({ name: 'dafyomi', type: 'checkbox', label: 'דף יומי בשומר המסך', value: !!st.showDafYomi,
       hint: 'מסכת ודף נוכחיים לפי לוח דף היומי הסטנדרטי' });
-    fields.push({ name: 'zmSide', type: 'select', label: 'עמודת זמני היום בשומר המסך', value: st.restZmanimSide || 'right', hint: 'הזמנים מוצגים בעמודה בצד, וההקדשה בתחתית בלי חפיפה', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }] });
+    fields.push({ name: 'zmSide', type: 'select', label: 'עמודת זמני היום בשומר המסך', value: st.restZmanimSide || 'right', hint: 'הזמנים מוצגים בעמודה בצד; ההקדשה האישית (אם הוגדרה למטה) מוצגת בעמודה בצד הנגדי, בלי חפיפה', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }] });
+    fields.push({ name: 'dedication', label: 'הקדשה אישית בשומר המסך + נר דולק (אופציונלי)', value: st.dedicationText || '', placeholder: '',
+      hint: 'מוצגת בעמודה בצד הנגדי לזמני היום, עם נר מרצד. ריק = לא מוצג כלל' });
     fields.push({ name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
       options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
       hint: 'מציג שורה מיוחדת בשומר המסך ביום הזה בכל שנה. ריק = כבוי. לא קשור בהכרח להקדשה הקבועה שבתוסף' });
@@ -739,7 +741,8 @@
       zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
       zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
       showParsha: !!x.parsha, showDafYomi: !!x.dafyomi,
-      yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim()
+      yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim(),
+      dedicationText: (x.dedication || '').trim()
     };
   };
 
