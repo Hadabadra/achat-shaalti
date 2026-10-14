@@ -67,7 +67,7 @@ internal sealed class SideBar : Form
     public void Rebuild()
     {
         var list = new List<Item> { new Item { Name = Lang.T("אוצריא", "Otzaria"), Running = true, Icon = IconOf(Kiosk.OtzariaPath()) } };
-        try { foreach (var e in Programs.Load()) list.Add(new Item { Name = e.Name, Entry = e, Icon = IconOf(e.Path) }); } catch { }
+        try { foreach (var e in Programs.Load()) list.Add(new Item { Name = SideBarNames.Fix(e.Name, e.Path), Entry = e, Icon = IconOf(e.Path) }); } catch { }
         // #60 (גרסה מינימלית): גישה לחלונות הגשר בנעילה, מתוך הסרגל הקיים
         Bitmap bi = null; try { bi = Icon.ExtractAssociatedIcon(Environment.ProcessPath!)?.ToBitmap(); } catch { }
         list.Add(new Item { Name = Lang.T("אודות", "About"), Icon = bi, UiAction = () => AboutForm.Open() });
