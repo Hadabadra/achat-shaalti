@@ -114,6 +114,14 @@
 .fx-col-where { cursor: default; }
 .fx-sort-dir { font-size: 0.75em; }
 .fx-list { flex: 1 1 auto; overflow: auto; padding: 0.25em 0 1em; user-select: none; }
+/* פס גלילה דק ונקי (בלי כפתורי חץ למעלה/למטה של הדפדפן) - בלעדיו WebView2 מציג פס גלילה "קלאסי"
+   עם משולש חץ בראש, שנראה כמו רכיב תקול/לא ממוקם נכון מעל הכותרות/הסרגל כשאין רווח ברור מתחתיו */
+.fx-list { scrollbar-width: thin; }
+.fx-list::-webkit-scrollbar { width: 0.75em; }
+.fx-list::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+.fx-list::-webkit-scrollbar-track { background: transparent; }
+.fx-list::-webkit-scrollbar-thumb { background: var(--fx-line); border-radius: 0.5em; border: 0.1875em solid transparent; background-clip: padding-box; }
+.fx-list::-webkit-scrollbar-thumb:hover { background: var(--fx-shadow); background-clip: padding-box; }
 .fx-row {
   height: var(--fx-row-h); border-radius: 0.5em; margin: 0 0.375em; cursor: default;
   border: 0.0625em solid transparent;
