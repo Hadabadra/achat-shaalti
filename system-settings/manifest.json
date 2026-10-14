@@ -1,10 +1,10 @@
 {
   "id": "com.chadbedera.systemsettings",
   "name": "הגדרות מערכת",
-  "version": "3.7.0",
+  "version": "3.7.1",
   "description": "כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה, מקלדת, עכבר, מדפסות, USB, רשת, ומצב נעילה ללימוד. דורש את אחת שאלתי.",
   "author": "גמח תורת אסתר",
-  "homepage": "https://github.com/e0548433917-gif/otzaria-system-tools",
+  "homepage": "https://github.com/e0548433917-gif/achat-shaalti",
   "schemaVersion": 1,
   "sdkVersion": "1.x",
   "stability": "stable",
