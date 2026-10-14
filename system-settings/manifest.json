@@ -1,10 +1,10 @@
 {
-  "id": "com.chadbedera.systemsettings",
+  "id": "com.otzariakiosk.systemsettings",
   "name": "הגדרות מערכת",
   "version": "3.6.0",
   "description": "כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה, מקלדת, עכבר, מדפסות, USB, רשת, ומצב נעילה ללימוד. דורש את קיוסק אוצריא.",
   "author": "חד בדרא, יאיר דניאל",
-  "homepage": "https://github.com/e0548433917-gif/otzaria-system-tools",
+  "homepage": "https://github.com/YairDaniel11/otzaria-system-tools",
   "schemaVersion": 1,
   "sdkVersion": "1.x",
   "stability": "stable",

@@ -5,7 +5,7 @@
   var ui = SS.ui;
   SS.sections = SS.sections || [];
   SS.VERSION = '3.4.0';
-  SS.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
+  SS.BRIDGE_URL = 'https://github.com/YairDaniel11/otzaria-system-tools/releases/latest';
 
   var state = { current: null, connected: false, probeTimer: null, suspended: false, booted: false };
 

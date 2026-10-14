@@ -566,7 +566,7 @@
     return { vendor: M.bios.vendor, manufacturer: M.bios.manufacturer, model: M.bios.model, steps: steps };
   };
   mockRoutes['/sys/update-check'] = function () {
-    return { current: '3.0.0', latest: '3.0.0', newer: false, canInstall: false, url: 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest' };
+    return { current: '3.0.0', latest: '3.0.0', newer: false, canInstall: false, url: 'https://github.com/YairDaniel11/otzaria-system-tools/releases/latest' };
   };
   mockRoutes['/sys/update-install'] = function () { return { started: false, message: 'הגשר מעודכן (3.0.0)' }; };
 

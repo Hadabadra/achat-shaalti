@@ -53,8 +53,8 @@ Filename: "{app}\OtzariaBridge.exe"; Parameters: "--install --quiet"; StatusMsg:
 // השם בדיסק), אז סורקים את כל תת-התיקיות של <id>\ ובודקים את המניפסט של כל אחת.
 // רק אם הבדיקה האוטומטית לא מצליחה תוך זמן סביר, שואלים את המשתמש כגיבוי.
 const
-  FxPluginId = 'com.chadbedera.fileexplorer';
-  SettingsPluginId = 'com.chadbedera.systemsettings';
+  FxPluginId = 'com.otzariakiosk.fileexplorer';
+  SettingsPluginId = 'com.otzariakiosk.systemsettings';
 
 var
   PluginsConfirmed: Boolean;

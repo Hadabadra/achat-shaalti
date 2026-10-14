@@ -6,8 +6,8 @@
   FX.ui = ui;
   FX.t = window.I18N ? window.I18N.t : function (x) { return x; };
   FX.VERSION = '3.4.0';
-  FX.CHANGELOG_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/blob/main/CHANGELOG.md';
-  FX.BRIDGE_URL = 'https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest';
+  FX.CHANGELOG_URL = 'https://github.com/YairDaniel11/otzaria-system-tools/blob/main/CHANGELOG.md';
+  FX.BRIDGE_URL = 'https://github.com/YairDaniel11/otzaria-system-tools/releases/latest';
 
   var LS = 'fx.view';
   var S = {
@@ -1114,7 +1114,7 @@
       if (act === 'close') { close(); return; }
       if (act === 'fb') { sendFeedback(); return; }
       if (act === 'changelog') { openUrl(FX.CHANGELOG_URL); return; }
-      if (act === 'releases') { openUrl('https://github.com/e0548433917-gif/otzaria-system-tools/releases/latest'); return; }
+      if (act === 'releases') { openUrl('https://github.com/YairDaniel11/otzaria-system-tools/releases/latest'); return; }
       if (act === 'reset') {
         if (!(await ui.confirm('איפוס הגדרות', '<p>להחזיר את הגדרות הסייר לברירת המחדל?</p>', 'איפוס'))) return;
         saveOpts(Object.assign({}, OPT_DEF)); FX.layout.setZoom(0.9); FX.layout.setMode('details'); FX.layout.setPanes(false, false);

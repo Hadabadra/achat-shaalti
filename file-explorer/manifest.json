@@ -1,5 +1,5 @@
 {
-  "id": "com.chadbedera.fileexplorer",
+  "id": "com.otzariakiosk.fileexplorer",
   "name": "סייר קבצים",
   "version": "3.6.0",
   "description": "סייר קבצים מתוך אוצריא: עיון, העתקה, גזירה, הדבקה, מחיקה, שינוי שם, תצוגה מקדימה וחיפוש קבצים. דורש את קיוסק אוצריא; בלעדיה — תיקיות שאושרו.",
@@ -56,5 +56,5 @@
       ]
     }
   },
-  "homepage": "https://github.com/e0548433917-gif/otzaria-system-tools"
+  "homepage": "https://github.com/YairDaniel11/otzaria-system-tools"
 }
