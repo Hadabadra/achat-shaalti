@@ -291,6 +291,7 @@ public static partial class Kiosk
         venueName = Config.Get("kiosk.venueName", ""),
         fullscreenOtzaria = Config.Get("kiosk.fullscreenOtzaria", true),
         sideBar = Config.Get("kiosk.sideBar", true),
+        barPrograms = Config.Get("kiosk.barPrograms", !Config.Get("kiosk.sideBar", true)), // D4
         sideBarIconsOnly = Config.Get("kiosk.sideBarIconsOnly", false),
         sideBarPosition = Config.Get("kiosk.sideBarPosition", "right"),
         resetOnShutdown = Config.Get("kiosk.resetOnShutdown", false),
@@ -806,7 +807,7 @@ public static partial class Kiosk
         ApplyTempUnlockSettings(b);
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
         { string rcv = b.Str("restContent"); if (rcv is "full" or "zmanim" or "clock" or "verse") Config.Set("kiosk.restContent", rcv); }
-        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi" })
+        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "barPrograms", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("saverWhenUnlocked")) Config.Set("kiosk.saverWhenUnlocked", b.Bool("saverWhenUnlocked", true)); // D2
         if (b.Has("bootCover")) Config.Set("kiosk.bootCover", b.Bool("bootCover", true)); // D3

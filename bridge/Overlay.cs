@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Globalization;
@@ -172,7 +174,7 @@ internal sealed class ClockBar : Form
         Cursor = Cursors.Hand;
         RightToLeft = RightToLeft.Yes;
         _tick.Tick += (_, _) => Refresh_();
-        Click += (_, _) => Overlay.BringOtzaria(IntPtr.Zero);
+        MouseClick += (_, e) => { if (!BarProgramClick(e.Location)) Overlay.BringOtzaria(IntPtr.Zero); }; // D4
         Refresh_();
         _tick.Start();
     }
@@ -267,11 +269,57 @@ internal sealed class ClockBar : Form
         float right = r.Right - pad - logo - ScaleX(8);
         var brand = new RectangleF(right - ScaleX(480), 0, ScaleX(480), h);
         g.DrawString(Lang.T(Program.AppFullName, Program.AppFullNameEn), mf, fore, brand, rtl);
+        // D4: תוכנות מותרות בשורה (כשהסרגל הצדדי כבוי, או לפי kiosk.barPrograms)
+        var bsz = g.MeasureString(Lang.T(Program.AppFullName, Program.AppFullNameEn), mf);
+        PaintBarPrograms(g, (int)(right - bsz.Width - ScaleX(24)), h);
         string left = _time + "   " + _heb + "   " + _date + (_bat.Length > 0 ? "   " + _bat : "");
         var sz = g.MeasureString(left, mf);
         g.DrawString(left, mf, fore, new RectangleF(pad, 0, sz.Width + ScaleX(8), h), new StringFormat { LineAlignment = StringAlignment.Center });
     }
     private static Icon AppIcon() => Overlay.AppIcon();
+
+    // ===== D4: התוכנות המותרות בתוך שורת המשימות של הנעילה =====
+    private List<(Programs.Entry entry, Bitmap icon, string name)> _progs;
+    private DateTime _progsAt;
+    private readonly List<(Rectangle rect, Programs.Entry entry)> _hits = new();
+
+    private static bool ShowBarPrograms => Config.Get("kiosk.barPrograms", !Config.Get("kiosk.sideBar", true));
+
+    private void PaintBarPrograms(Graphics g, int startRight, int h)
+    {
+        _hits.Clear();
+        if (!ShowBarPrograms) return;
+        try
+        {
+            if (_progs == null || (DateTime.Now - _progsAt).TotalSeconds > 30)
+            {
+                if (_progs != null) foreach (var p in _progs) p.icon?.Dispose();
+                _progs = Programs.Load().Select(e => (e, SideBar.IconOf(e.Path), SideBarNames.Fix(e.Name, e.Path))).ToList();
+                _progsAt = DateTime.Now;
+            }
+            int sz = h - ScaleX(12), gap = ScaleX(6), x = startRight;
+            using var f = new Font("Segoe UI", 9f, GraphicsUnit.Point);
+            using var b = new SolidBrush(ForeColor);
+            foreach (var (entry, icon, name) in _progs)
+            {
+                x -= sz;
+                if (x < ScaleX(420)) break; // לא לדרוס את השעה והתאריך משמאל
+                var rc = new Rectangle(x, (h - sz) / 2, sz, sz);
+                if (icon != null) g.DrawImage(icon, rc);
+                else g.DrawString(name.Length > 0 ? name[..1] : "?", f, b, rc, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+                _hits.Add((rc, entry));
+                x -= gap;
+            }
+        }
+        catch (Exception ex) { Config.Log("bar programs: " + ex.Message); }
+    }
+
+    private bool BarProgramClick(Point p)
+    {
+        foreach (var (rect, entry) in _hits)
+            if (rect.Contains(p)) { try { Programs.Activate(entry); } catch (Exception ex) { Config.Log("bar program: " + ex.Message); } return true; }
+        return false;
+    }
 
     protected override void Dispose(bool disposing)
     {

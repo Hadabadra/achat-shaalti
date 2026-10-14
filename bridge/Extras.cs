@@ -84,7 +84,7 @@ internal sealed class SideBar : Form
     }
 
     /// <summary>האייקון המקורי של קובץ ההפעלה (מה-exe עצמו); null אם אין קובץ או שהשליפה נכשלה</summary>
-    private static Bitmap IconOf(string path)
+    internal static Bitmap IconOf(string path)
     {
         try
         {
