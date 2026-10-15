@@ -28,7 +28,23 @@ public static class Tray
         _shot = new ToolStripMenuItem("", null, (_, _) => _invoker.BeginInvoke(() => { _menu.Close(); Thread.Sleep(250); Screenshot.Capture(false); }));
         _shotRegion = new ToolStripMenuItem("", null, (_, _) => _invoker.BeginInvoke(() => { _menu.Close(); Thread.Sleep(250); Screenshot.Capture(true); }));
         // משוב 15.10 (תיקון): במגש נשארים כל הפריטים; הקיצור הוא בסרגל הנעילה (Extras.cs)
-        menu.Items.AddRange(new ToolStripItem[] { _status, _about, _changelog, _report, _shot, _shotRegion, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
+        // משוב 15.10: סמל ברקע בפינה (לפי בחירה) + גודל
+        var wm = new ToolStripMenuItem(Lang.En ? "Corner logo" : "סמל ברקע בפינה");
+        var wmOn = new ToolStripMenuItem(Lang.En ? "Show" : "הצג", null, (_, _) => Watermark.Toggle());
+        wm.DropDownItems.Add(wmOn);
+        wm.DropDownItems.Add(new ToolStripSeparator());
+        foreach (var (n, he, en) in new[] { (48, "קטן", "Small"), (72, "בינוני", "Medium"), (112, "גדול", "Large") })
+        {
+            var it = new ToolStripMenuItem(Lang.En ? en : he, null, (_, _) => Watermark.SetSize(n)) { Tag = n };
+            wm.DropDownItems.Add(it);
+        }
+        wm.DropDownOpening += (_, _) =>
+        {
+            wmOn.Checked = Config.Get("watermark.enabled", false);
+            foreach (ToolStripItem x in wm.DropDownItems)
+                if (x is ToolStripMenuItem m && m.Tag is int sz) m.Checked = sz == Config.Get("watermark.size", 72);
+        };
+        menu.Items.AddRange(new ToolStripItem[] { _status, _about, _changelog, _report, _shot, _shotRegion, wm, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
 
         _icon = new NotifyIcon
         {

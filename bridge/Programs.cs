@@ -377,6 +377,10 @@ public static class Programs
             found.Add(new { name, path, procs = string.Join(", ", procs) });
         foreach (var (name, path, procs) in KnownUtilities())
             found.Add(new { name, path, procs = string.Join(", ", procs) });
+        // משוב 15.10: כל התוכנות המותקנות מתפריט התחל (Excel, מחשבון וכו') — להצעה בלבד, לא אוטומטי
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, path) in StartMenuApps())
+            if (seen.Add(path)) found.Add(new { name, path, procs = System.IO.Path.GetFileNameWithoutExtension(path) });
         return new { found = found.ToArray() };
     }
 
@@ -386,6 +390,38 @@ public static class Programs
     /// תורנית" בלבד ודולק כברירת מחדל - תוסף מערכת לא אמור להתווסף לרשימה המותרת בלי אישור מפורש).
     /// נתיבים ידועים בלבד (בלי חיפוש בכוננים) - אלה כלי מערכת במקום קבוע, לא תוכנות שמתקינים לבד.
     /// </summary>
+    /// <summary>קיצורי דרך בתפריט התחל (משותף + משתמש) שמפנים ל-exe קיים; בלי מסירי התקנה וחסומים</summary>
+    private static List<(string name, string path)> StartMenuApps()
+    {
+        var res = new List<(string, string)>();
+        try
+        {
+            var t = Type.GetTypeFromProgID("WScript.Shell");
+            if (t == null) return res;
+            dynamic sh = Activator.CreateInstance(t);
+            foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), Environment.GetFolderPath(Environment.SpecialFolder.Programs) })
+            {
+                if (!Directory.Exists(root)) continue;
+                foreach (var lnk in Directory.EnumerateFiles(root, "*.lnk", SearchOption.AllDirectories).Take(400))
+                {
+                    try
+                    {
+                        string target = (string)sh.CreateShortcut(lnk).TargetPath;
+                        string name = System.IO.Path.GetFileNameWithoutExtension(lnk);
+                        if (string.IsNullOrEmpty(target) || !target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || !ExeExists(target)) continue;
+                        if (Regex.IsMatch(name + " " + target, @"(?i)uninstall|unins\d|הסר|setup|update|readme")) continue;
+                        if (Blocked.Contains(System.IO.Path.GetFileNameWithoutExtension(target))) continue;
+                        res.Add((name.Length > 60 ? name[..60] : name, target));
+                    }
+                    catch { }
+                    if (res.Count >= 150) break;
+                }
+            }
+        }
+        catch (Exception ex) { Config.Log("programs: תפריט התחל: " + ex.Message); }
+        return res.OrderBy(x => x.Item1).ToList();
+    }
+
     private static IEnumerable<(string name, string path, string[] procs)> KnownUtilities()
     {
         string sys32 = Environment.GetFolderPath(Environment.SpecialFolder.System);

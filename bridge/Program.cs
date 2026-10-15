@@ -95,6 +95,7 @@ public static class Program
             Screenshot.Init(); // #60
             Outbox.Init();
             GhRelay.Init();
+            Watermark.Init();
             Reports.Init();
             Port = Server.Start();
             Kiosk.RestoreOnStartup();
