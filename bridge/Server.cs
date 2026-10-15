@@ -179,7 +179,9 @@ public static class Server
             string section = Kiosk.SectionOf(path, body);
             if (section != null) Kiosk.EnsureSectionAllowed(section);
 
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             object data = await handler(body);
+            if (sw.ElapsedMilliseconds > 1500) Program.Log("slow " + path + " " + sw.ElapsedMilliseconds + "ms"); /* משוב 3.9: לאתר מה מאט את טאב הנעילה */
             await WriteOk(ctx, data);
         }
         catch (Exception ex)

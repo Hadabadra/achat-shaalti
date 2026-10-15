@@ -33,8 +33,16 @@
   async function loadInner(body, lim, setStep) {
     var st;
     /* מצב הנעילה חיוני - ממתינים לו בלי תקרה (המונה ממשיך), ובכשל אמיתי מנסים שוב אוטומטית פעמיים */
+    /* משוב 3.9: הטאב נפתח מיד כמו שאר הטאבים - מהמצב האחרון שנשמר, ומתעדכן כשהגשר עונה */
+    var live = body.__kioskLive || SS.bridge.call('/kiosk/status', {}, { timeoutMs: 120000 }); body.__kioskLive = null;
+    if (!body.__kioskShown) {
+      var cached = null;
+      try { cached = JSON.parse(localStorage.getItem('ss.kiosk.status') || 'null'); } catch (e) { cached = null; }
+      if (cached) { body.__kioskShown = true; render(body, cached, [], [], [], null); body.__kioskLive = live; live.then(function () { load(body); }).catch(function () {}); return; }
+    }
+    body.__kioskShown = false;
     for (var i = 0; ; i++) {
-      try { st = await SS.bridge.call('/kiosk/status', {}, { timeoutMs: 120000 }); break; }
+      try { st = await (i === 0 ? live : SS.bridge.call('/kiosk/status', {}, { timeoutMs: 120000 })); try { localStorage.setItem('ss.kiosk.status', JSON.stringify(st)); } catch (e) { } break; }
       catch (e) { if (i >= 2) throw e; setStep('מצב נעילה (ניסיון ' + (i + 2) + ')'); await new Promise(function (r) { setTimeout(r, 1000); }); }
     }
     try { }
