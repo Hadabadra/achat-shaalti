@@ -230,6 +230,14 @@
     if (S.prov && S.prov.kind === 'bridge' && isLinkError(e)) connect(false);
   }
 
+  /* 4ג (לפי בחירה): תיקיות הגישה המהירה כספרים בספריית אוצריא; כבוי = רשימה ריקה */
+  function publishLibFolders() {
+    if (!window.SdkX || !SdkX.setLibraryBooks) return;
+    var on = !!opts().libFolders;
+    SdkX.setLibraryBooks(on ? (S.known || []).filter(function (k) { return k.path && k.path.indexOf('::') !== 0; })
+      .map(function (k) { return { id: k.path, title: k.name, categoryPath: '/סייר קבצים' }; }) : []);
+  }
+
   /* ---------- סרגל צד: מיקומים ---------- */
   async function renderSide() {
     var side = $('fx-side');
@@ -237,6 +245,7 @@
     try {
       var r = await S.prov.roots();
       S.known = r.known || [];
+      publishLibFolders();
       html += '<button class="nav-item" data-path="">' + ic(S.prov.kind === 'bridge' ? 'pc' : 'star') + '<span>' + FX.esc(S.prov.rootLabel) + '</span></button>';
       if (S.known.length) {
         html += '<div class="fx-side-label">' + (S.prov.kind === 'bridge' ? 'גישה מהירה' : 'תיקיות שאושרו') + '</div>';
@@ -269,6 +278,20 @@
     });
   }
 
+  /* ---------- 4ב: ספריית אוצריא כתיקייה וירטואלית (library.getTree; ספר נפתח בעיון) ---------- */
+  var OTZ = '::otzaria';
+  function isOtz(p) { return typeof p === 'string' && p.indexOf(OTZ) === 0; }
+  async function otzList(path) {
+    var cat = path.slice(OTZ.length) || '';
+    var t = await window.Otzaria.call('library.getTree', { path: cat || '/', includeBooks: !!cat });
+    t = t && (t.data !== undefined ? t.data : t);
+    if (!t) throw new Error('הקטגוריה לא נמצאה');
+    var ents = (t.categories || []).map(function (c) { return { name: c.title, path: OTZ + c.path, type: 'dir' }; })
+      .concat((t.books || []).map(function (b) { return { name: b.title, path: OTZ + '#' + (b.id || b.title), type: 'file', otzBook: b }; }));
+    var up = cat.replace(/\/[^\/]*$/, '');
+    return { path: path, entries: ents, isRoot: false, parent: cat ? (up ? OTZ + up : OTZ) : '' };
+  }
+
   /* ---------- טעינת תיקייה ---------- */
   async function load(path, push) {
     cancelSearch();
@@ -277,7 +300,7 @@
     $('fx-list').innerHTML = '<div class="fx-empty">' + ui.loading('טוען…') + '</div>';
     var r;
     try {
-      r = await S.prov.list(path, { showHidden: S.showHidden });
+      r = isOtz(path) ? await otzList(path) : await S.prov.list(path, { showHidden: S.showHidden });
     } catch (e) {
       if (id !== S.loadId) return;
       opError(e, 'פתיחת התיקייה נכשלה');
@@ -290,12 +313,14 @@
     S.path = r.path;
     S.isRoot = !!r.isRoot;
     S.recycle = !!r.recycle;
+    S.otz = isOtz(r.path);
     S.parent = r.parent;
     S.truncated = !!r.truncated;
     var ents = r.entries || [];
     if (r.isRoot && r.known && r.known.length && S.prov.kind === 'bridge') {
       ents = r.known.map(function (k) { return { name: k.name, path: k.path, type: 'dir', icon: k.icon }; }).concat(ents);
     }
+    if (r.isRoot && window.Otzaria) ents = [{ name: 'ספריית אוצריא', path: OTZ, type: 'dir' }].concat(ents); /* 4ב */
     S.entries = ents;
     S.sel = {}; S.anchor = -1; S.focus = -1;
     $('fx-search').value = '';
@@ -316,6 +341,7 @@
     if (S.search) { exitSearch(); return; }
     if (S.isRoot) return;
     if (S.recycle) { go(''); return; }
+    if (S.otz) { go(S.parent || ''); return; }
     var par = S.prov.parentOf(S.path);
     go(par == null ? '' : par);
   }
@@ -335,6 +361,14 @@
     var c = $('fx-crumbs');
     if (S.search) {
       c.innerHTML = '<span class="fx-crumb-static">' + ic('search') + 'תוצאות חיפוש: <b>' + FX.esc(S.search.query) + '</b> ב-' + FX.esc(S.prov.displayPath(S.search.root)) + '</span>';
+      updateNavBtns();
+      return;
+    }
+    if (S.otz) {
+      var segs = S.path.slice(OTZ.length).split('/').filter(Boolean), acc = '';
+      c.innerHTML = '<button class="fx-crumb" data-path="">' + FX.esc(S.prov.rootLabel) + '</button><span class="fx-crumb-sep">' + ic('chevron') + '</span>' +
+        '<button class="fx-crumb" data-path="' + OTZ + '">ספריית אוצריא</button>' +
+        segs.map(function (g) { acc += '/' + g; return '<span class="fx-crumb-sep">' + ic('chevron') + '</span><button class="fx-crumb" data-path="' + FX.esc(OTZ + acc) + '">' + FX.esc(g) + '</button>'; }).join('');
       updateNavBtns();
       return;
     }
@@ -678,6 +712,7 @@
     { id: 'open', icon: 'open', label: 'פתיחה', key: 'Enter' },
     { id: 'reveal', icon: 'reveal', label: 'הצגה בסייר של Windows', cap: 'reveal' },
     { id: 'openNewTab', icon: 'open', label: 'פתיחה בכרטיסייה חדשה', menuOnly: true },
+    { id: 'openInReader', icon: 'open', label: 'פתיחה בעיון של אוצריא', menuOnly: true }, /* 4א */
     { id: 'openLocation', icon: 'folderOpen', label: 'פתיחת מיקום הקובץ', menuOnly: true },
     { id: 'copyPath', icon: 'copy', label: 'העתקה כנתיב', key: 'Ctrl+Shift+C', menuOnly: true },
     { id: 'eject', icon: 'usb', label: 'הוצאה בבטחה (USB)', menuOnly: true }, /* #20 */
@@ -687,6 +722,16 @@
     { id: 'sendTo', icon: 'usb', label: 'שליחה לכונן נייד', menuOnly: true },
     { id: 'eject', icon: 'usb', label: 'הוצאה בטוחה', menuOnly: true }
   ];
+  /* 4א: קובץ שהוא ספר אישי בספריית אוצריא — פותחים אותו בעיון של אוצריא (התאמה לפי שם הספר) */
+  async function openInReader(e) {
+    var stem = String(e.name || '').replace(/\.[^.]+$/, '');
+    var list = null;
+    try { list = await window.Otzaria.call('library.findBooks', { query: stem, limit: 20 }); } catch (err) { list = null; }
+    list = list && (list.data !== undefined ? list.data : list);
+    var hit = Array.isArray(list) && (list.find(function (b) { return b && b.title === stem; }) || (list.length === 1 ? list[0] : null));
+    if (!hit) { ui.toast('הקובץ לא נמצא כספר בספריית אוצריא', 'info'); return; }
+    try { await window.Otzaria.call('reader.openBook', hit); } catch (err) { ui.toast('הפתיחה בעיון נכשלה', 'error'); }
+  }
   function inFolder() { return !S.isRoot && !S.search && !S.recycle; }
   function recycleCmdState(id) {
     var n = selected().length;
@@ -714,6 +759,7 @@
       case 'reveal': return { on: n >= 1 && p.caps.reveal && sel[0].type !== 'drive' };
       case 'props': return { on: (n === 1 || inFolder()) && p.caps.properties };
       case 'openNewTab': return { on: n === 1 && (sel[0].type === 'dir' || sel[0].type === 'drive') };
+      case 'openInReader': return { on: n === 1 && sel[0].type !== 'dir' && sel[0].type !== 'drive' && /\.(txt|docx?|pdf|html?)$/i.test(sel[0].name || '') && !!window.Otzaria };
       case 'openLocation': return { on: n === 1 && !S.recycle && !!S.search };
       case 'copyPath': return { on: n >= 1 };
       case 'eject': return { on: n === 1 && p.kind === 'bridge' && (sel[0].type === 'drive' || FX.win.isDriveRoot(sel[0].path)) && sel[0].driveType === 'removable' };
@@ -772,6 +818,7 @@
       case 'reveal': return S.prov.reveal(selected()[0].path).catch(function (e) { opError(e, 'ההצגה נכשלה'); });
       case 'props': return props();
       case 'openNewTab': return newTab(selected()[0].path);
+      case 'openInReader': return openInReader(selected()[0]);
       case 'openLocation': return openLocation(selected()[0]);
       case 'zip': case 'unzip': case 'sendTo': case 'eject': return FX.packb[id](selected(), S.path);
       case 'eject': return ejectDrive(selected()[0]);
@@ -1016,7 +1063,7 @@
 
   /* ---------- הגדרות פתיחה (לכל צופה, נשמרות בדפדפן) ---------- */
   var OPT_KEY = 'fx.options';
-  var OPT_DEF = { pdf: 'internal', word: 'two', text: 'internal', image: 'internal', singleClickOpen: false, askApp: true };
+  var OPT_DEF = { pdf: 'internal', word: 'two', text: 'internal', image: 'internal', singleClickOpen: false, askApp: true, libFolders: false };
   function opts() {
     var o = {};
     try { o = JSON.parse(localStorage.getItem(OPT_KEY) || '{}') || {}; } catch (e) { o = {}; }
@@ -1063,6 +1110,7 @@
       setRow('קובצי טקסט', '', seg('text', o.text, [['internal', 'צופה פנימי']].concat(ext))) +
       setRow('תמונות', '', seg('image', o.image, [['internal', 'תצוגה מקדימה']].concat(ext))) +
       setRow('לשאול באיזו תוכנה לפתוח', 'בכל פתיחה ביישום חיצוני מוצג חלון הבחירה של Windows, במקום לפתוח תמיד באותה תוכנה. בנעילה — תמיד תוכנת ברירת המחדל.', setSwitch('askApp', o.askApp !== false)) +
+      setRow('תיקיות הגישה המהירה בספריית אוצריא', 'תיקיות הגישה המהירה מוצגות בספרייה תחת "סייר קבצים", ולחיצה פותחת אותן בסייר. רק התיקיות — לא הקבצים.', setSwitch('libFolders', !!o.libFolders)) +
       '<p class="muted small">פתיחה ביישום חיצוני דורשת את אחת שאלתי; בלעדיו הקובץ נפתח בצופה הפנימי.</p></div>';
     if (id === 'view') return '<div class="fx-set-card"><div class="fx-set-title">' + ic('grid') + 'תצוגת הקבצים</div>' +
       setRow('פריסה', 'כמו בתפריט "תצוגה" של סייר הקבצים של Windows', seg('mode', FX.layout.mode(), [
@@ -1143,6 +1191,10 @@
         saveOpts(Object.assign({}, OPT_DEF)); FX.layout.setZoom(0.9); FX.layout.setMode('details'); FX.layout.setPanes(false, false);
         S.showHidden = false; savePrefs(); refresh(); if (window.I18N) window.I18N.set('auto');
         showCat('general'); ui.toast('ההגדרות אופסו', 'success'); return;
+      }
+      if (t.dataset.sw === 'libFolders') {
+        var ol = Object.assign({}, opts()); ol.libFolders = !ol.libFolders;
+        saveOpts(ol); t.classList.toggle('on', ol.libFolders); t.setAttribute('aria-checked', ol.libFolders ? 'true' : 'false'); publishLibFolders(); return;
       }
       if (t.dataset.sw === 'askApp') {
         var oa = Object.assign({}, opts()); oa.askApp = oa.askApp === false;
@@ -1261,6 +1313,7 @@
   async function openEntry(e, find) {
     if (!e) return;
     if (S.recycle) { ui.toast('כדי לפתוח פריט יש לשחזר אותו קודם', 'info'); return; }
+    if (e.otzBook) { try { await window.Otzaria.call('reader.openBook', e.otzBook); } catch (err) { ui.toast('הפתיחה בעיון נכשלה', 'error'); } return; }
     if (e.type === 'dir' || e.type === 'drive') { go(e.path); return; }
     var ext = FX.extOf(e.name);
     var o = opts();
@@ -1853,8 +1906,16 @@
       window.Otzaria.on('plugin.page_opened', function (ev) { /* #56: נפתח מתוסף אחר — {view:'settings', cat} */
         var pr = ev && (ev.param || (ev.data && ev.data.param));
         if (pr && pr.view === 'settings') settingsDialog(pr.cat || 'security');
+        else if (pr && pr.path && S.prov) go(pr.path);
       });
       window.Otzaria.on('reader.toolbar_item_clicked', onToolbarItem);
+      window.Otzaria.on('library.providerBook.openRequested', function (ev) { /* 4ג: תיקייה מהספרייה */
+        var p = ev && (ev.id || (ev.data && ev.data.id));
+        if (!p) return;
+        if (window.SdkX && SdkX.openSelf) SdkX.openSelf({ path: p });
+        var start = Date.now();
+        (function wait() { if (S.prov) { go(p); return; } if (Date.now() - start < 8000) setTimeout(wait, 150); })();
+      });
       sdkExtras();
       window.Otzaria.on('plugin.suspended', function () { S.suspended = true; clearTimeout(S.probeTimer); clearTimeout(TU.poll); cancelSearch(); });
       window.Otzaria.on('plugin.resumed', function () {

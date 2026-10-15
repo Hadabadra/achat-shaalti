@@ -381,6 +381,7 @@
 
 ## שילוב עם הספרייה — 15.10.2026 (לפני 3.9.0)
 - ✅ 4ד: מסכי "הגדרות מערכת" כספרים בספרייה (ספק `systemsettings`, contributes.startup.libraryBooks + setProviderBooks; לחיצה → openSelf({section}); מטופל גם ברקע).
-- ⛔ 4א: ב-SDK (Otzaria dev) אין נתיב מקומי לספר — openBookFile מחזיר token/url בלבד, getBookMetadata בלי path. אי אפשר "להציג בסייר". לא הוצהרה הרשאה reader.context_menu.
-- ⏳ 4ב: אפשרי (library.getTree + reader.openBook — ההרשאות כבר בסייר), טרם מומש: תיקייה וירטואלית "ספריית אוצריא" בסייר.
-- ⏳ 4ג: בסייר אין כיום קריאה ל-setProviderBooks (רק עטיפה ב-sdk-extras) — אין מה להעביר להצהרה. אם ימומש: provider באותיות קטנות; openAction תומך רק בפקודות הצהרתיות (reader.openBook, localService.post…), לא בפתיחת קובץ — לכן בלי openAction והלחיצה מגיעה כ-library.providerBook.openRequested.
+- ✅ 4א (הפוך, לפי בקשה): בסייר — "פתיחה בעיון של אוצריא" לקובץ שהוא ספר אישי (findBooks לפי שם → reader.openBook).
+- ✅ 4ב: תיקייה וירטואלית "ספריית אוצריא" בשורש הסייר (::otzaria, getTree), ספר נפתח בעיון.
+- ✅ 4ג (לפי בחירה, כבוי כברירת מחדל): תיקיות הגישה המהירה כספרים תחת "סייר קבצים" (ספק fxfolders); לחיצה פותחת בסייר. בלי openAction (לא תומך בפתיחת קובץ) → openRequested.
+- ✅ סמל ברקע בפינה (Watermark.cs, לפי בחירה מהמגש + גודל), כפתורי "נעילה מיידית" ו"סייר קבצים" בסרגל הקורא, זיהוי תוכנות מתפריט התחל ברשימת התוכנות המותרות.

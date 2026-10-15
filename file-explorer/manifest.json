@@ -71,6 +71,14 @@
           "key": "ctrl+shift+alt+e",
           "command": "openExplorer"
         }
+      ],
+      "libraryBooks": [
+        {
+          "id": "fx-folders",
+          "provider": "fxfolders",
+          "title": "סייר קבצים",
+          "icon": "folder_24_regular"
+        }
       ]
     }
   },
