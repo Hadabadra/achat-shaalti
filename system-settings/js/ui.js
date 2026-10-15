@@ -189,8 +189,8 @@
             (f.hint ? '<small>' + f.hint + '</small>' : '') + '</span></label>';
         }
         if (f.type === 'select') {
-          /* D5: רשימת בחירה גלילה (כמו באוצריא) — חוץ מאופציות עם טקסט ארוך או רשימה של 2 */
-          var lb = !f.dropdown && f.options.length > 2 && f.options.every(function (o) { return String(o.label).length <= 30; });
+          /* בחירה: תפריט נפתח */
+          var lb = !!f.listbox; /* תפריט נפתח כברירת מחדל (משוב 15.10) — רשימה פתוחה רק אם מבקשים במפורש */
           var opts = (f.options || []).map(function (o) {
             return '<option value="' + ui.esc(o.value) + '"' + (o.value === f.value ? ' selected' : '') + '>' + ui.esc(o.label) + '</option>';
           }).join('');

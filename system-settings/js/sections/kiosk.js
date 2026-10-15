@@ -786,8 +786,12 @@
       ],
       hint: 'ישן: קירוב NOAA פשוט, הנץ/שקיעה בגובה פני הים בלבד, זמנים מעטים. חדש: ספריית KosherJava, זמנים הלכתיים מלאים עם תיקון גובה, אך קוד צד-שלישי שעלול להיבדל מעט בזמנים גבוליים' });
     /* #33: התראה לפני זמן נבחר */
-    fields.push({ name: 'zalert', type: 'select', label: 'התראה לפני זמן', value: st.zmanimAlert || '',
-      options: [{ value: '', label: 'ללא' }].concat(ZMAN_FIELDS.map(function (z) { return { value: z.id, label: z.label }; })) });
+    /* כמה התראות במקביל (משוב 15.10): רשימת זמנים מופרדת בפסיקים ב-kiosk.zmanimAlert */
+    var zAlerts = String(st.zmanimAlert || '').toLowerCase().split(',');
+    fields.push({ name: 'zalertHead', type: 'note', label: 'התראה לפני זמנים (אפשר לבחור כמה):' });
+    ZMAN_FIELDS.forEach(function (z) {
+      fields.push({ name: 'za_' + z.id, type: 'checkbox', label: z.label, value: zAlerts.indexOf(z.id.toLowerCase()) >= 0 });
+    });
     fields.push({ name: 'zalertmin', label: 'כמה דקות לפני', value: String(st.zmanimAlertMinutes || 10), dir: 'ltr' });
     fields.push({ name: 'zelev', label: 'גובה מעל פני הים במיקום (מטרים)', value: String(st.zmanimElevation || 0), dir: 'ltr', placeholder: '0',
       hint: 'משפיע רק כשנבחר מנוע הגיבוי "חדש" (KosherJava) למעלה. 0 עד 5000 מטר' });
@@ -822,7 +826,7 @@
     return {
       restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, restContent: x.rcontent || 'full', showParsha: !!x.parsha, showDafYomi: !!x.dafyomi,
       zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
-      zmanimElevation: +String(x.zelev).trim() || 0, zmanimAlert: x.zalert || '', zmanimAlertMinutes: +String(x.zalertmin).trim() || 10, zmanimFallbackEngine: x.zengine,
+      zmanimElevation: +String(x.zelev).trim() || 0, zmanimAlert: ZMAN_FIELDS.filter(function (z) { return x['za_' + z.id]; }).map(function (z) { return z.id; }).join(','), zmanimAlertMinutes: +String(x.zalertmin).trim() || 10, zmanimFallbackEngine: x.zengine,
       zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
       zmanimShow: ZMAN_FIELDS.filter(function (z) { return x['zm_' + z.id]; }).map(function (z) { return z.id; }),
       yahrzeitMonth: (x.yzMonth || '').trim(), yahrzeitDay: +String(x.yzDay).trim() || 0, yahrzeitLabel: (x.yzLabel || '').trim()
