@@ -73,7 +73,7 @@
     });
     var pairs = (pairsRes && pairsRes.clients) || [];
 
-    render(body, st, progs, found, pairs, bios);
+    render(body, st, progs, found, pairs, bios, backup);
   }
 
   var detPromise = null, detResult = null;
@@ -99,7 +99,7 @@
   /* ספירה לאחור חיה של הפתיחה הזמנית בכרטיס המצב (מתאפסת בכל רינדור) */
   var tempTimer = null;
 
-  function render(body, st, progs, found, pairs, bios) {
+  function render(body, st, progs, found, pairs, bios, backup) {
     var active = !!st.active;
     var tu = st.tempUnlock || {};
     clearInterval(tempTimer); tempTimer = null;
