@@ -44,8 +44,10 @@ internal static class Outbox
             if (files.Length >= MaxFiles) return;
             string body = "סוג: " + kind + "\nגרסת גשר: " + Program.Version + "\nמערכת: " + Environment.OSVersion +
                           "\nנעילה פעילה: " + Kiosk.IsActive + "\nזמן: " + DateTime.Now.ToString("s") + "\n\n" + Clean(text);
-            File.WriteAllText(Path.Combine(Dir, DateTime.Now.ToString("yyyyMMdd-HHmmss-fff") + "-" + kind + ".txt"),
-                body.Length > 4000 ? body[..4000] : body, new UTF8Encoding(false));
+            string id = DateTime.Now.ToString("yyyyMMdd-HHmmss-fff") + "-" + kind;
+            if (body.Length > 4000) body = body[..4000];
+            File.WriteAllText(Path.Combine(Dir, id + ".txt"), body, new UTF8Encoding(false));
+            GhRelay.Queue(id, body); // #65
         }
         catch { }
     }
