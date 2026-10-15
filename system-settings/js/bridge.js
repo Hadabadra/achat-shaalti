@@ -103,6 +103,8 @@
       await loadToken();
       var res = await real.callOnce(path, body, opts);
       if (res.unpaired) {
+        /* #69: מופע הרקע לא פותח חלון צימוד בגשר בלי שהמשתמש ביקש */
+        if (SS.bridge.noPair) throw BridgeError('forbidden', 'not paired');
         SS.bridge.onPairing && SS.bridge.onPairing(true);
         try { await real.pair(); } finally { SS.bridge.onPairing && SS.bridge.onPairing(false); }
         res = await real.callOnce(path, body, opts);

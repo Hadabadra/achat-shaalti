@@ -25,7 +25,8 @@
     "events.subscribe:calendar.city_changed",
     "navigation.write",
     "app.shortcuts",
-    "app.startup_contributions"
+    "app.startup_contributions",
+    "app.run_on_startup"
   ],
   "network": {
     "enabled": true,
@@ -56,7 +57,14 @@
           "key": "ctrl+shift+alt+l",
           "command": "openLockSettings"
         }
+      ],
+      "activationEvents": [
+        "app.startup",
+        "calendar.city_changed"
       ]
+    },
+    "background": {
+      "entrypoint": "background.html"
     }
   }
 }

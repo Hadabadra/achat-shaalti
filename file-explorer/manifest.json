@@ -29,7 +29,8 @@
     "fonts.local.read",
     "library.books.provide",
     "library.books.read",
-    "reader.open"
+    "reader.open",
+    "library.content.read"
   ],
   "network": {
     "enabled": true,

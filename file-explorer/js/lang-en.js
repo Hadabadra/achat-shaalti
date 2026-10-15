@@ -406,6 +406,9 @@
   I.add({ 'יש להזין נתיב מלא, למשל C:\\Users\\שם\\Desktop': 'Enter a full path, e.g. C:\\Users\\name\\Desktop', 'השם אינו יכול לכלול את התווים \\ / : * ? " < > |': 'The name can\'t contain the characters \\ / : * ? " < > |' });
   /* #69: השלמת תרגום (סבב G וכל המסכים). מחרוזות מורכבות מתורגמות לפי חלקים ב-i18n.js */
   I.add({
+    'פתיחה בקורא של אוצריא · לחיצה ימנית: הקובץ המקורי (PDF/Word)': 'Open in the Otzaria reader · right-click: the original file (PDF/Word)',
+    'לספר הזה אין קובץ PDF או Word מקורי — נפתח בקורא של אוצריא': 'This book has no original PDF or Word file — opening in the Otzaria reader',
+    'קובץ גדול מ-15MB — פתחו אותו בקורא של אוצריא': 'File larger than 15MB — open it in the Otzaria reader',
     'אפשר להפעיל מחדש בהגדרות התוספים של אוצריא.': 'You can turn it back on in Otzaria\'s plugin settings.',
     'חלונית פרטים': 'Details pane',
     'ניקוי החיפוש': 'Clear search',

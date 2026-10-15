@@ -130,3 +130,7 @@
 ## i18n
 - `node tools/i18n-missing.js <plugin>` מדפיס מחרוזות עבריות בלי תרגום. מה שנשאר מכוון: נתוני הדמה ב-js/bridge.js, אותיות גימטריה (מטופלות בקוד), מילות חיפוש, ונוסח הקדשה.
 - i18n.js מתרגם מחרוזת מורכבת לפי חלקים (מילים שלמות, מהארוך לקצר) רק אם לא נשאר עברית.
+
+## מופע רקע של הגדרות מערכת (#69)
+- `contributes.background.entrypoint = background.html` (בלי ממשק) + `startup.activationEvents: ["app.startup", "calendar.city_changed"]` + הרשאת `app.run_on_startup` (כבויה עד שהמשתמש מאשר בבאנר).
+- background.js: רק אם יש `bridgeToken` ב-storage (בלי חלון צימוד מהרקע — `SS.bridge.noPair`), ורק אם הגשר עונה. מריץ `SS.sync.zmanim()` ו-`SS.sync.lockCalendar()` (js/sync.js, משותף לדף) ואז `plugin.backgroundDone`.

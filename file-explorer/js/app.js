@@ -1411,9 +1411,15 @@
       var list = (r && (r.data || r.result)) || (Array.isArray(r) ? r : []);
       if (!list.length) { host.hidden = true; host.innerHTML = ''; return; }
       host.innerHTML = '<span class="fx-libhits-title">' + ic('book') + 'בספריית אוצריא:</span>' + list.map(function (b, i) {
-        return '<button type="button" class="fx-libhit" data-i="' + i + '" title="פתיחה בקורא של אוצריא">' + ui.esc(b.title || b.bookId || '') + '</button>';
+        return '<button type="button" class="fx-libhit" data-i="' + i + '" title="פתיחה בקורא של אוצריא · לחיצה ימנית: הקובץ המקורי (PDF/Word)">' + ui.esc(b.title || b.bookId || '') + '</button>';
       }).join('');
       host.hidden = false;
+      /* #69 (library.content.read): לחיצה ימנית — הקובץ המקורי שמאחורי ספר PDF/Word בספרייה, בצופה PDF+OCR או בוורד לאוצריא */
+      host.oncontextmenu = function (e) {
+        var btn = e.target.closest('.fx-libhit'); if (!btn) return;
+        e.preventDefault();
+        openLibraryFile(list[+btn.dataset.i] || {});
+      };
       host.onclick = function (e) {
         var btn = e.target.closest('.fx-libhit'); if (!btn) return;
         var b = list[+btn.dataset.i] || {};
@@ -1423,6 +1429,26 @@
         }, function () { ui.toast('לא ניתן לפתוח את הספר', 'error'); });
       };
     }, function () { if (my === libSeq) { host.hidden = true; host.innerHTML = ''; } });
+  }
+
+  async function openLibraryFile(b) {
+    var id = b.bookUid ? { bookUid: b.bookUid } : { bookId: b.bookId || b.title };
+    busy(true, 'מכין את הקובץ…');
+    try {
+      var r = await FX.callHost('library.openBookFile', Object.assign({ access: 'read' }, id));
+      var ext = String((r && r.name) || '').split('.').pop().toLowerCase();
+      var target = ext === 'pdf' ? [PDF_PLUGIN, 'צופה PDF+OCR'] : ext === 'docx' ? [WORD_PLUGIN, 'וורד לאוצריא'] : null;
+      if (!target) { busy(false); ui.toast('לספר הזה אין קובץ PDF או Word מקורי — נפתח בקורא של אוצריא', 'info'); window.Otzaria.call('reader.openBook', id); return; }
+      if (r.size > PLUGIN_MAX) throw FX.OpError('too_large', 'קובץ גדול מ-15MB — פתחו אותו בקורא של אוצריא');
+      var blob = await (await fetch(r.url)).blob();
+      var dataUrl = await new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res(String(fr.result).replace(/^data:[^;]*/, 'data:' + MIME[ext])); }; fr.onerror = rej; fr.readAsDataURL(blob); });
+      await openInPlugin(target[0], { name: r.name, dataUrl: dataUrl });
+      busy(false);
+    } catch (err) {
+      busy(false);
+      if (String(err && err.code).indexOf('not_found') >= 0) ui.toast('לא ניתן לפתוח את הספר', 'error');
+      else opError(err, 'לא ניתן לפתוח את הספר');
+    }
   }
 
   function cancelSearch() {
