@@ -16,6 +16,7 @@
     "app.open_url",
     "plugin.open_other",
     "calendar.read",
+    "published_data.write",
     "events.subscribe:settings.changed",
     "events.subscribe:plugin.permissions_changed",
     "app.info.read",

@@ -309,7 +309,7 @@ public static partial class Kiosk
         openSections = OpenSections,
         allSections = AllSections,
         warnings = Warnings(),
-        schedule = new { enabled = ScheduleEnabled, start = ScheduleStart, end = ScheduleEnd, warn = ScheduleWarn, extra = SchedMulti.Extra, days = PackG.Days }, recoverySaved = PackG.RecoverySaved,
+        schedule = new { enabled = ScheduleEnabled, start = ScheduleStart, end = ScheduleEnd, warn = ScheduleWarn, extra = SchedMulti.Extra, days = PackG.Days, showInCalendar = Config.Get("kiosk.schedule.showInCalendar", false) }, recoverySaved = PackG.RecoverySaved,
         activatedBy = Config.Get<string>("kiosk.activatedBy", "manual"),
         twoFactor = TwoFactor.Enabled,
         twoFactorAvailable = TwoFactor.Available(),
@@ -787,6 +787,17 @@ public static partial class Kiosk
         // קוד שחזור פטור מ-2FA (ביטול חירום); סיסמה רגילה דורשת גם Windows Hello אם מופעל
         if (!viaRecovery) TwoFactor.Require("ביטול נעילת המחשב");
         if (HardLock.Available) HardLock.Disable(pw);
+        // ביטול ידני בתוך חלון מתוזמן: בלי זה התזמון ינעל מחדש תוך שניות וה"ביטול" לא יתפוס עד סוף החלון (שעות).
+        // מדלגים על יתרת החלון הנוכחי — החלון הבא (מחר) יחול כרגיל.
+        if (ScheduleEnabled && Config.Get<string>("kiosk.activatedBy", "manual") == "schedule" && SchedMulti.InAnyWindow(DateTime.Now))
+        {
+            var end = SchedMulti.CurrentWindowEnd(DateTime.Now);
+            Config.Set("kiosk.schedule.skipUntil", end.ToString("o"));
+            Config.Save();
+            if (HardLock.Available)
+                try { HardLock.Skip(pw, end.ToString("o")); } catch (Exception ex) { Config.Log("hardlock skip (disable): " + ex.Message); }
+            Config.Log("schedule: ביטול ידני בתוך חלון מתוזמן — דילוג עד " + end);
+        }
         EndTempUnlockLocal("הנעילה בוטלה ידנית", relock: false); // ביטול מלא: הנעילה לא תחזור בתום הפתיחה הזמנית
         Release();
         return new { active = false };
@@ -921,6 +932,7 @@ public static partial class Kiosk
         {
             if (sch.Has("enabled")) Config.Set("kiosk.schedule.enabled", sch.Bool("enabled"));
             if (sch.Has("warn")) Config.Set("kiosk.schedule.warn", sch.Bool("warn"));
+            if (sch.Has("showInCalendar")) Config.Set("kiosk.schedule.showInCalendar", sch.Bool("showInCalendar"));
             SchedMulti.Apply(sch);
             PackG.ApplyDays(sch);
             string ss = sch.Str("start");

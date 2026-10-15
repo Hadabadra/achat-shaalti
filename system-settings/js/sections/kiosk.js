@@ -968,6 +968,35 @@
     fields.push({ name: 'schedDays', label: 'ימים בשבוע לנעילה המתוזמנת', placeholder: 'א ב ג ד ה ו ש',
       value: (sc.days && sc.days.length ? sc.days : [0, 1, 2, 3, 4, 5, 6]).map(function (d) { return DAYN[d]; }).join(' '),
       hint: 'אותיות הימים מופרדות ברווח, למשל „א ב ג ד ה” — בלי שבת ויום שישי. חל על כל זמני הנעילה. חלון שנמשך אחרי חצות שייך ליום שבו התחיל' });
+    /* #60: קורא סדרים מתוכן קובץ ייצוא (JSON גמיש או שורות טקסט) ומוסיף ל-ss.sedarim. מחזיר כמה נוספו */
+    function importSedarim(text) {
+      var found = [];
+      var reTime = /([01]?\d|2[0-3]):([0-5]\d)/g;
+      function pushItem(label, start, end) {
+        if (!/^\d{1,2}:\d{2}$/.test(start || '') || !/^\d{1,2}:\d{2}$/.test(end || '') || start === end) return;
+        found.push({ label: String(label || 'סדר').slice(0, 30), start: start, end: end });
+      }
+      var data = null; try { data = JSON.parse(text); } catch (e) { data = null; }
+      function walk(o) {
+        if (!o || typeof o !== 'object') return;
+        if (Array.isArray(o)) { o.forEach(walk); return; }
+        var s = o.start || o.from || o.begin, e = o.end || o.to || o.finish;
+        var lbl = o.label || o.name || o.title || o.seder;
+        if (s && e) pushItem(lbl, String(s).trim(), String(e).trim());
+        Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') walk(o[k]); });
+      }
+      if (data) walk(data);
+      else String(text).split(/\r?\n/).forEach(function (line) { // חלופת טקסט: "שם 09:00-13:30"
+        var t = line.match(reTime); if (t && t.length >= 2) pushItem(line.replace(reTime, '').replace(/[-–,:]/g, ' ').trim(), t[0], t[1]);
+      });
+      if (!found.length) return 0;
+      var mine = []; try { mine = JSON.parse(localStorage.getItem('ss.sedarim') || '[]') || []; } catch (e) { mine = []; }
+      var seen = {}; mine.forEach(function (s) { seen[s.start + '-' + s.end] = 1; });
+      var added = 0;
+      found.forEach(function (s) { var k = s.start + '-' + s.end; if (!seen[k]) { seen[k] = 1; mine.push(s); added++; } });
+      try { localStorage.setItem('ss.sedarim', JSON.stringify(mine.slice(-20))); } catch (e) { /* כלום */ }
+      return added;
+    }
     function parseDays(t) {
       var out = []; var ok = true;
       String(t || '').replace(/[׳'",]/g, ' ').split(/\s+/).filter(Boolean).forEach(function (w) {
@@ -976,6 +1005,8 @@
       return ok && out.length ? out.sort() : null;
     }
     fields.push({ name: 'schedWarn', type: 'checkbox', label: 'התראה לפני נעילה מתוזמנת', value: sc.warn !== false, hint: 'אם יושבים מול המחשב — תופיע התראה 5 דקות ודקה לפני הנעילה, עם אפשרות לבטל את הנעילה הקרובה בסיסמה' });
+    /* #63: הצגת זמני הנעילה בלוח השנה של אוצריא (מתג; הפרסום עצמו נעשה בתוך אוצריא דרך publishedData) */
+    fields.push({ name: 'schedCalendar', type: 'checkbox', label: 'הצג את זמני הנעילה בלוח השנה של אוצריא', value: !!sc.showInCalendar, hint: 'כל זמני הנעילה המתוזמנים יופיעו כאירועים בלוח השנה של אוצריא לשבוע הקרוב, ויתעדכנו אוטומטית. כיבוי המתג מסיר אותם' });
     fields.push({
       name: 'pos', type: 'select', label: 'שעון / שורת משימות', value: st.clockPosition || 'bottom-left',
       options: [
@@ -996,7 +1027,7 @@
       { g: { type: 'group', icon: 'shield', label: 'אבטחה', hint: 'אימות דו-שלבי, ביטול נעילה בכיבוי' }, n: ['tfa', 'reset'] },
       { g: { type: 'group', icon: 'key', label: 'פתיחה זמנית בסיסמה נפרדת', hint: 'לתת למישהו את המחשב לזמן קצר בלי לגלות את הסיסמה הראשית' }, n: ['tu', 'tuMin', 'tuPw', 'tuPw2'] },
       { g: { type: 'group', icon: 'unlock', label: 'מה פתוח בזמן נעילה', hint: 'אילו מסכי הגדרות נגישים לתלמיד בזמן נעילה' }, n: all.map(function (id) { return 'sec_' + id; }) },
-      { g: { type: 'group', icon: 'clock', label: 'תזמון נעילה לפי שעות', hint: 'נעילה אוטומטית מתחילה ונגמרת בשעה קבועה כל יום' }, n: ['sched', 'schedPreset', 'schedStart', 'schedEnd', 'schedExtra', 'schedDays', 'schedWarn'] }
+      { g: { type: 'group', icon: 'clock', label: 'תזמון נעילה לפי שעות', hint: 'נעילה אוטומטית מתחילה ונגמרת בשעה קבועה כל יום' }, n: ['sched', 'schedPreset', 'schedStart', 'schedEnd', 'schedExtra', 'schedDays', 'schedWarn', 'schedCalendar'] }
     ];
     var byName = {}; fields.forEach(function (f) { byName[f.name] = f; });
     var used = {}, grouped = [];
@@ -1013,6 +1044,24 @@
         var a = slot.querySelector('[name=schedStart]'), b = slot.querySelector('[name=schedEnd]'), c = slot.querySelector('[name=sched]');
         if (a) a.value = s.start; if (b) b.value = s.end; if (c) c.checked = true;
       });
+      /* #60: ייבוא סדרים מקובץ הייצוא של התוסף "שמירת סדרים" (אין API לקריאה ישירה בין תוספים) */
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'btn subtle'; btn.style.marginTop = '4px';
+      btn.textContent = 'ייבוא סדרים מקובץ';
+      var fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.json,.txt,application/json'; fi.style.display = 'none';
+      btn.addEventListener('click', function () { fi.click(); });
+      fi.addEventListener('change', function () {
+        var f = fi.files && fi.files[0]; if (!f) return;
+        var rd = new FileReader();
+        rd.onload = function () {
+          var added = importSedarim(String(rd.result || ''));
+          if (added > 0) { ui.toast('יובאו ' + added + ' סדרים — נשמרו ברשימת הזמנים המוכנים', 'success'); }
+          else ui.toast('לא נמצאו סדרים בקובץ (מצופה JSON עם label/start/end או start-end)', 'warn');
+          fi.value = '';
+        };
+        rd.readAsText(f);
+      });
+      ps.parentNode.appendChild(btn); ps.parentNode.appendChild(fi);
     }, 0);
     var ok = await ui.inlineForm(slot, {
       title: 'הגדרות נעילה', icon: 'edit',
@@ -1056,13 +1105,13 @@
           password: x.pw, allowOpenExtensions: parseExt(x.ext), otzariaPath: x.path.trim(),
           readOnly: !!x.ro, twoFactor: !!x.tfa, clock: !!x.clock, venueName: (x.venue || '').trim(), fullscreenOtzaria: !!x.fs, sideBar: !!x.side, barPrograms: !!x.barProgs, sideBarIconsOnly: !!x.sideIcons, sideBarPosition: x.sidePos, resetOnShutdown: !!x.reset, clockPosition: x.pos,
           openSections: all.filter(function (id) { return x['sec_' + id]; }),
-          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn, extra: parseExtraSched(x.schedExtra) || [], days: parseDays(x.schedDays) || [] },
+          schedule: { enabled: !!x.sched, start: x.schedStart, end: x.schedEnd, warn: !!x.schedWarn, extra: parseExtraSched(x.schedExtra) || [], days: parseDays(x.schedDays) || [], showInCalendar: !!x.schedCalendar },
           tempUnlockEnabled: !!x.tu, tempUnlockMinutes: +String(x.tuMin).trim() || 30, tempUnlockPassword: x.tuPw || ''
         });
         return true;
       }
     });
-    if (ok) { ui.toast('ההגדרות נשמרו', 'success'); if (SS.pushZmanimNow) SS.pushZmanimNow(); load(body); }
+    if (ok) { ui.toast('ההגדרות נשמרו', 'success'); if (SS.pushZmanimNow) SS.pushZmanimNow(); if (SS.pushLockCalendar) SS.pushLockCalendar(); load(body); }
   }
 
   /* מדיניות סייר הקבצים נערכת בתוסף "סייר קבצים" עצמו; כאן רק מפנים אליה */

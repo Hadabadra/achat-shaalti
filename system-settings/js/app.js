@@ -85,6 +85,60 @@
   /* נקרא גם מיד אחרי חיבור/שחזור, וגם אחרי שמירת הגדרות הנעילה, כדי שהתצוגה תתעדכן בלי לחכות דקה */
   SS.pushZmanimNow = function () { clearTimeout(zmanimTimer); pushZmanimCache().finally(scheduleZmanim); };
 
+  /* #63: הצגת זמני הנעילה בלוח השנה של אוצריא. רק כאן (בתוך אוצריא) אפשר publishedData.*.
+     מפרסמים את חלונות הנעילה ל-7 הימים הקרובים כאירועים, ומסירים אירועים ישנים/כבויים. */
+  var EVT_PREFIX = 'achat-shaalti:lock:';
+  function isoWithOffset(d) {
+    var off = -d.getTimezoneOffset(), sg = off >= 0 ? '+' : '-', a = Math.abs(off);
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':00' +
+      sg + p(Math.floor(a / 60)) + ':' + p(a % 60);
+  }
+  function lockWindows(sc) {
+    var wins = [{ start: sc.start, end: sc.end }].concat(sc.extra || []);
+    var days = (sc.days && sc.days.length) ? sc.days : [0, 1, 2, 3, 4, 5, 6];
+    var out = [];
+    for (var i = 0; i < 7; i++) {
+      var day = new Date(); day.setHours(0, 0, 0, 0); day.setDate(day.getDate() + i);
+      if (days.indexOf(day.getDay()) < 0) continue;
+      wins.forEach(function (w, wi) {
+        var ms = /^(\d{1,2}):(\d{2})$/.exec(w.start || ''), me = /^(\d{1,2}):(\d{2})$/.exec(w.end || '');
+        if (!ms || !me) return;
+        var s = new Date(day); s.setHours(+ms[1], +ms[2], 0, 0);
+        var e = new Date(day); e.setHours(+me[1], +me[2], 0, 0);
+        if (e <= s) e.setDate(e.getDate() + 1); /* חוצה חצות */
+        out.push({ key: EVT_PREFIX + i + ':' + wi, start: s, end: e });
+      });
+    }
+    return out;
+  }
+  async function pushLockCalendar() {
+    if (!window.Otzaria || !state.connected) return;
+    var st; try { st = await SS.bridge.call('/kiosk/status'); } catch (e) { return; }
+    var sc = st.schedule || {};
+    var want = (sc.showInCalendar && sc.enabled) ? lockWindows(sc) : [];
+    var wantKeys = {};
+    for (var i = 0; i < want.length; i++) {
+      wantKeys[want[i].key] = 1;
+      try {
+        await window.Otzaria.call('publishedData.upsert', {
+          type: 'calendar.event', scope: 'global', key: want[i].key,
+          payload: { title: 'נעילת אחת שאלתי', startsAt: isoWithOffset(want[i].start), endsAt: isoWithOffset(want[i].end), source: 'אחת שאלתי', importance: 'normal' }
+        });
+      } catch (e) { /* פרסום אירוע בודד אינו קריטי */ }
+    }
+    /* הסרת אירועים שלנו שכבר לא רלוונטיים (כיבוי, שינוי שעות, או ישנים) */
+    try {
+      var own = unwrapOtzaria(await window.Otzaria.call('publishedData.listOwn')) || [];
+      for (var j = 0; j < own.length; j++) {
+        var k = own[j] && own[j].key;
+        if (typeof k === 'string' && k.indexOf(EVT_PREFIX) === 0 && !wantKeys[k])
+          try { await window.Otzaria.call('publishedData.remove', { type: 'calendar.event', scope: 'global', key: k }); } catch (e) { /* לא קריטי */ }
+      }
+    } catch (e) { /* listOwn לא זמין — מדלגים */ }
+  }
+  SS.pushLockCalendar = function () { pushLockCalendar(); };
+
   function sectionById(id) {
     return SS.sections.find(function (s) { return s.id === id; });
   }
@@ -338,6 +392,7 @@
       setTimeout(prewarm, 300);
     }
     SS.pushZmanimNow();
+    SS.pushLockCalendar();
     pushTheme();
     return true;
   }

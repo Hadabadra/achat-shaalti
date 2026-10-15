@@ -4,6 +4,10 @@
   var I = window.I18N;
   var t = function (s) { return I.t(s); };
   I.add({
+    'הצג את זמני הנעילה בלוח השנה של אוצריא': 'Show lock times in the Otzaria calendar',
+    'כל זמני הנעילה המתוזמנים יופיעו כאירועים בלוח השנה של אוצריא לשבוע הקרוב, ויתעדכנו אוטומטית. כיבוי המתג מסיר אותם': 'All scheduled lock times appear as events in the Otzaria calendar for the coming week and update automatically. Turning it off removes them',
+    'ייבוא סדרים מקובץ': 'Import sedarim from a file',
+    'לא נמצאו סדרים בקובץ (מצופה JSON עם label/start/end או start-end)': 'No sedarim found in the file (expects JSON with label/start/end or start-end)',
     'סרגל התוכנות: אייקונים בלבד': 'Programs bar: icons only',
     'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה': 'A narrower bar without names. Off (default): icon with the program name next to it',
     'מיקום סרגל התוכנות': 'Programs bar position',

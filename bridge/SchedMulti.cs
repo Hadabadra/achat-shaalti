@@ -20,6 +20,28 @@ internal static class SchedMulti
         (Sched.InWindow(Kiosk.ScheduleStart, Kiosk.ScheduleEnd, now) && PackG.WindowDayAllowed(Kiosk.ScheduleStart, now)) ||
         Config.GetList(Key).Select(s => s.Split('-')).Any(p => p.Length == 2 && Sched.InWindow(p[0], p[1], now) && PackG.WindowDayAllowed(p[0], now));
 
+    /// <summary>סוף החלון המתוזמן שבתוכו אנו נמצאים כעת — הרגע שבו המחשב יוצא מכל חלונות הנעילה.
+    /// משמש כדי ש"ביטול נעילה" ידני בתוך חלון מתוזמן לא יידרס מיד על ידי התזמון שינעל מחדש.
+    /// חלון החוצה חצות מטופל: אם אנו בזנב שאחרי חצות הסוף הוא היום, אחרת מחר.</summary>
+    public static DateTime CurrentWindowEnd(DateTime now)
+    {
+        DateTime best = now;
+        void Consider(string start, string end)
+        {
+            if (!Sched.InWindow(start, end, now)) return;
+            var s = Sched.ParseTime(start); var e = Sched.ParseTime(end);
+            if (s == null || e == null) return;
+            DateTime endAt = e <= s
+                ? (now.TimeOfDay < e ? now.Date + e.Value : now.Date.AddDays(1) + e.Value) // חוצה חצות
+                : now.Date + e.Value;
+            if (endAt > best) best = endAt;
+        }
+        Consider(Kiosk.ScheduleStart, Kiosk.ScheduleEnd);
+        foreach (var p in Config.GetList(Key).Select(s => s.Split('-')).Where(p => p.Length == 2))
+            Consider(p[0], p[1]);
+        return best;
+    }
+
     public static void Apply(JsonElement sch)
     {
         if (!sch.TryGetProperty("extra", out var ex) || ex.ValueKind != JsonValueKind.Array) return;
