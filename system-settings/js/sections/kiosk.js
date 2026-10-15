@@ -1090,7 +1090,12 @@
         { value: 'bar-top', label: 'שורת משימות למעלה' }
       ]
     });
-    fields.splice.apply(fields, [secIdx + 1, 0].concat(secFields));
+    /* משוב 3.9: השורה המקורית (c0c7cd7) הפנתה ל-secIdx/secFields שלא הוגדרו → ReferenceError, ו"הגדרות נעילה" נתקע ב"טוען".
+       כאן נבנות תיבות "מה פתוח בזמן נעילה" (הקבוצה למטה מסדרת אותן לפי השם sec_<id>) */
+    var openSet = st.openSections || [];
+    all.forEach(function (id) {
+      fields.push({ name: 'sec_' + id, type: 'checkbox', label: SECTION_NAMES[id] || id, value: openSet.indexOf(id) >= 0 });
+    });
     /* 049b564 (יאיר): הטופס מחולק לקבוצות מתקפלות לפי נושא (ר' ui.fieldsHtml) — כל קבוצה סגורה חוץ מהראשונה.
        השדות נבנים כמו קודם (כולל שינויי 15.10) ומסודרים כאן לתוך הקבוצות. סיסמת הנעילה מעל הקבוצות (חובה לשמירה). */
     var GROUPS = [

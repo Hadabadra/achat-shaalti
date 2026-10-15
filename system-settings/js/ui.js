@@ -211,7 +211,6 @@
           return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span><textarea class="input" rows="' + (f.rows || 3) + '" name="' + f.name + '"' +
             (f.placeholder ? ' placeholder="' + ui.esc(f.placeholder) + '"' : '') + '>' + ui.esc(f.value || '') + '</textarea>' + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
         }
-        if (f.type === 'pills') { f.items.forEach(function (it) { var e = form.querySelector('[name="' + it.name + '"]'); if (e) v[it.name] = e.checked; }); return; }
       if (f.type === 'checkpair') {
           /* שורה אחת: תיבת סימון + מתג קטן בצד (משוב 15.10: "להציג" + "התראה" לכל זמן) */
           return '<div class="check-pair"><label class="check-row switch-row"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + '>' +
@@ -249,6 +248,7 @@
     (fields || []).forEach(function (f) {
       if (f.type === 'note' || f.type === 'group') return;
       var inp = form.querySelector('[name="' + f.name + '"]');
+      if (f.type === 'pills') { f.items.forEach(function (it) { var e = form.querySelector('[name="' + it.name + '"]'); if (e) v[it.name] = e.checked; }); return; }
       if (f.type === 'checkpair') { var i2 = form.querySelector('[name="' + f.name2 + '"]'); if (i2) v[f.name2] = i2.checked; }
       if (inp) v[f.name] = (f.type === 'checkbox' || f.type === 'checkpair') ? inp.checked : inp.value;
     });
