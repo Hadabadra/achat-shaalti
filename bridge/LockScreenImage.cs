@@ -10,7 +10,7 @@ namespace OtzariaBridge;
 /// <summary>
 /// משוב 15.10: תמונת מסך הנעילה של Windows = מסך המנוחה (פסוק, סמל, זמני היום, הקדשה).
 /// kiosk.lockScreenImage (ברירת מחדל כבוי). מתעדכן כל 30 דקות (הזמנים משתנים) דרך
-/// Windows.System.UserProfile.LockScreen.SetImageFileAsync — עובד למשתמש רגיל ב-Windows 10/11, כש"זרקור Windows" כבוי.
+/// Windows.System.UserProfile.LockScreen.SetImageFileAsync — עובד למשתמש רגיל ב-Windows 10/11, "זרקור Windows" מכובה אוטומטית (HKCU).
 /// שם קובץ מתחלף (a/b) כי Windows שומר במטמון לפי שם.
 /// </summary>
 internal static class LockScreenImage
@@ -19,6 +19,18 @@ internal static class LockScreenImage
     private static bool _flip;
 
     public static void Start() => _timer ??= new System.Threading.Timer(_ => Tray.Invoke(Update), null, 20_000, 30 * 60_000);
+
+    /// <summary>"זרקור Windows" מחליף את תמונת מסך הנעילה — מכבים אותו למשתמש הנוכחי (HKCU, בלי הרשאות מנהל)</summary>
+    private static void DisableSpotlight()
+    {
+        try
+        {
+            using var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager");
+            k.SetValue("RotatingLockScreenEnabled", 0, Microsoft.Win32.RegistryValueKind.DWord);
+            k.SetValue("RotatingLockScreenOverlayEnabled", 0, Microsoft.Win32.RegistryValueKind.DWord);
+        }
+        catch (Exception ex) { Config.Log("lockscreen spotlight: " + ex.Message); }
+    }
 
     public static void Update()
     {
@@ -38,6 +50,7 @@ internal static class LockScreenImage
                 rs.Render(g, new Rectangle(0, 0, w, h), 0f, h / 1080f * 1.25f);
                 bmp.Save(path, ImageFormat.Png);
             }
+            DisableSpotlight();
             Task.Run(async () =>
             {
                 try

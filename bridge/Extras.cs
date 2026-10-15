@@ -72,10 +72,8 @@ internal sealed class SideBar : Form
         try { foreach (var e in Programs.Load()) list.Add(new Item { Name = SideBarNames.Fix(e.Name, e.Path), Entry = e, Icon = IconOf(e.Path) }); } catch { }
         // #60 (גרסה מינימלית): גישה לחלונות הגשר בנעילה, מתוך הסרגל הקיים
         Bitmap bi = null; try { bi = Icon.ExtractAssociatedIcon(Environment.ProcessPath!)?.ToBitmap(); } catch { }
-        list.Add(new Item { Name = Lang.T("אודות", "About"), Icon = bi, UiAction = () => AboutForm.Open() });
-        list.Add(new Item { Name = Lang.T("דיווחים", "Reports"), Icon = bi, UiAction = () => ReportsForm.Open() });
-        list.Add(new Item { Name = Lang.T("מה חדש", "Changelog"), Icon = bi, UiAction = () => ChangelogForm.Open() });
-        list.Add(new Item { Name = Lang.T("צילום מסך", "Screenshot"), Icon = bi, UiAction = () => { Thread.Sleep(200); Screenshot.Capture(false); } });
+        // משוב 15.10: בסרגל הנעילה פריט אחד — החלון הראשי עם כל הטאבים (אודות, מה חדש, דיווחים, צימוד, כלים וצילום מסך)
+        list.Add(new Item { Name = Lang.T(Program.AppName, Program.AppNameEn), Icon = bi, UiAction = () => AboutForm.Open() });
         foreach (var old in _items) old.Icon?.Dispose();
         _items = list;
         if (_items.Count <= 1) { Hide(); return; }   // אין תוכנות מותרות — אין מה להציג

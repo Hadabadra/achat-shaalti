@@ -27,9 +27,8 @@ public static class Tray
         _report = new ToolStripMenuItem("", null, (_, _) => ReportsForm.Open());
         _shot = new ToolStripMenuItem("", null, (_, _) => _invoker.BeginInvoke(() => { _menu.Close(); Thread.Sleep(250); Screenshot.Capture(false); }));
         _shotRegion = new ToolStripMenuItem("", null, (_, _) => _invoker.BeginInvoke(() => { _menu.Close(); Thread.Sleep(250); Screenshot.Capture(true); }));
-        // משוב 15.10: כל השאר טאבים בחלון הראשי — במגש רק שורה ראשית אחת + יציאה
-        _about.Font = new Font(menu.Font, FontStyle.Bold);
-        menu.Items.AddRange(new ToolStripItem[] { _status, _about, new ToolStripSeparator(), _exit });
+        // משוב 15.10 (תיקון): במגש נשארים כל הפריטים; הקיצור הוא בסרגל הנעילה (Extras.cs)
+        menu.Items.AddRange(new ToolStripItem[] { _status, _about, _changelog, _report, _shot, _shotRegion, _install, _plugins, _unpair, _lang, new ToolStripSeparator(), _exit });
 
         _icon = new NotifyIcon
         {
@@ -83,7 +82,7 @@ public static class Tray
         _shot.Text = Lang.T("צילום מסך (Ctrl+Shift+F11)", "Screenshot (Ctrl+Shift+F11)");
         _shotRegion.Text = Lang.T("צילום אזור (Ctrl+Shift+F12)", "Region screenshot (Ctrl+Shift+F12)");
         _plugins.Text = Lang.T("פתח את תיקיית התוספים", "Open the plugins folder");
-        _about.Text = Lang.T(Program.AppName, Program.AppNameEn);
+        _about.Text = Lang.T("אודות ועדכונים…", "About and updates…");
         _changelog.Text = Lang.T("יומן שינויים (מקומי)…", "Changelog (offline)…");
         _report.Text = Lang.T("דיווחים: מה נשלח / הוספת תיאור…", "Reports: what was sent / add a description…");
         _install.Text = Lang.T("התקן/עדכן את התוספים באוצריא", "Install/update the plugins in Otzaria");
