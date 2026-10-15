@@ -1,7 +1,7 @@
 {
   "id": "com.chadbedera.systemsettings",
   "name": "הגדרות מערכת",
-  "version": "3.9.0",
+  "version": "3.9.1",
   "description": "כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה, מקלדת, עכבר, מדפסות, USB, רשת, ומצב נעילה ללימוד. דורש את אחת שאלתי.",
   "author": "גמח תורת אסתר",
   "homepage": "https://github.com/e0548433917-gif/achat-shaalti",

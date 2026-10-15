@@ -14,8 +14,25 @@
   });
 
   async function load(body) {
+    /* משוב 3.9: הטאב נתקע ב"טוען" בלי לדעת על מה ולכמה זמן. עכשיו: מונה שניות + שם השלב,
+       ותקרת זמן לכל קריאה איטית (BIOS/צימוד/קודים) - מה שלא חזר בזמן מוצג בלעדיו */
+    var t0 = Date.now(), step = 'מצב נעילה';
+    var tick = setInterval(function () {
+      var el = body.querySelector('.ss-load-step');
+      if (!el) { var d = document.createElement('div'); d.className = 'ss-load-step muted'; body.appendChild(d); el = d; }
+      el.textContent = 'שלב: ' + step + ' · ' + Math.round((Date.now() - t0) / 1000) + ' שנ\' (בדרך כלל עד 5 שנ\')';
+    }, 500);
+    function lim(p, ms, name) {
+      return Promise.race([p.catch(function () { return null; }), new Promise(function (r) { setTimeout(function () { r(null); }, ms); })])
+        .then(function (v) { step = name + ' ✓'; return v; });
+    }
+    try { await loadInner(body, lim, function (n) { step = n; }); }
+    finally { clearInterval(tick); }
+  }
+
+  async function loadInner(body, lim, setStep) {
     var st;
-    try { st = await SS.bridge.call('/kiosk/status'); }
+    try { st = await lim(SS.bridge.call('/kiosk/status'), 8000, 'מצב נעילה'); if (!st) throw new Error('הגשר לא ענה בזמן על מצב הנעילה'); }
     catch (e) { body.innerHTML = ui.errorBox(e, function () { load(body); }); return; }
     if (SS.bridge.health) { SS.bridge.health.kioskActive = !!st.active; SS.setStatus(true); if (SS.syncLock) SS.syncLock(SS.bridge.health); }
 
@@ -23,14 +40,15 @@
        שזמן הטעינה הכולל היה סכום הזמנים של כל חמש הקריאות ביחד. "זיהוי תוכנות" (סריקת כוננים) ו-
        "מצב BIOS" (שאילתות WMI) הן הכי איטיות, ולכן הרגישו שהכל "תקוע". עכשיו רצות במקביל - הזמן
        הכולל הוא רק הזמן של האיטית מביניהן, לא הסכום */
+    setStep('תוכנות, צימוד ו-BIOS');
     var results = await Promise.all([
-      SS.bridge.call('/kiosk/programs').catch(function () { return null; }),
+      lim(SS.bridge.call('/kiosk/programs'), 5000, 'תוכנות'),
       /* משוב 15.10: זיהוי תוכנות (סריקת כוננים) איטי והשהה את כל הטאב — כולל ריבוע הגדרות הנעילה.
          התוצאה נשמרת למשך הסשן; אם עוד לא מוכנה אחרי 1.5 שנ' מציגים בלעדיה ומשלימים כשהיא מגיעה */
       detectFast(body),
-      SS.bridge.call('/pair/list', {}).catch(function () { return null; }),
-      SS.bridge.call('/bios/status', {}).catch(function () { return null; }),
-      SS.bridge.call('/kiosk/recovery/backup/status', {}).catch(function () { return null; }) /* #69 */
+      lim(SS.bridge.call('/pair/list', {}), 4000, 'צימוד'),
+      lim(SS.bridge.call('/bios/status', {}), 4000, 'BIOS'),
+      lim(SS.bridge.call('/kiosk/recovery/backup/status', {}), 4000, 'קודי שחזור') /* #69 */
     ]);
     var pr = results[0], det = results[1], pairsRes = results[2], bios = results[3], backup = results[4];
 

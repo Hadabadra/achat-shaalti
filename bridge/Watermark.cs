@@ -37,15 +37,61 @@ internal static class Watermark
         _f?.Close(); _f = null;
         if (!Config.Get("watermark.enabled", false)) return;
         int size = Config.Get("watermark.size", 72);
+        /* משוב 3.9: TransparencyKey (מג'נטה) השאיר הילה ורודה ומטושטשת סביב הסמל המוחלק.
+           עכשיו: הקטנה איכותית מהאייקון הגדול + חלון שכבתי עם אלפא לכל פיקסל (UpdateLayeredWindow) */
         Bitmap bmp;
-        try { bmp = new Icon(Overlay.AppIcon(), 256, 256).ToBitmap(); } catch { return; }
-        _f = new ClickThrough { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, TopMost = true, Opacity = 0.35,
-            StartPosition = FormStartPosition.Manual, BackColor = Color.Magenta, TransparencyKey = Color.Magenta, Size = new Size(size, size) };
-        _f.Controls.Add(new PictureBox { Dock = DockStyle.Fill, Image = bmp, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.Magenta });
+        try
+        {
+            using var src = new Icon(Overlay.AppIcon(), 256, 256).ToBitmap();
+            bmp = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using var g = Graphics.FromImage(bmp);
+            g.Clear(Color.Transparent);
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+            g.DrawImage(src, new Rectangle(0, 0, size, size));
+        }
+        catch { return; }
         var wa = Screen.PrimaryScreen!.WorkingArea;
-        _f.Location = new Point(wa.Left + 12, wa.Bottom - size - 12);
+        _f = new ClickThrough { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, TopMost = true,
+            StartPosition = FormStartPosition.Manual, Size = new Size(size, size), Location = new Point(wa.Left + 12, wa.Bottom - size - 12) };
         _f.Show();
+        SetAlphaBitmap(_f, bmp, 110);
+        bmp.Dispose();
     });
+
+    [StructLayout(LayoutKind.Sequential)] private struct PT { public int x, y; }
+    [StructLayout(LayoutKind.Sequential)] private struct SZ { public int cx, cy; }
+    [StructLayout(LayoutKind.Sequential, Pack = 1)] private struct BLEND { public byte op, flags, alpha, fmt; }
+    [DllImport("user32.dll")] private static extern bool UpdateLayeredWindow(IntPtr h, IntPtr dst, ref PT pos, ref SZ sz, IntPtr src, ref PT srcPos, int key, ref BLEND bl, int flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr h);
+    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr h, IntPtr dc);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
+    [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr dc);
+    [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr o);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr o);
+
+    private static void SetAlphaBitmap(Form f, Bitmap bmp, byte opacity)
+    {
+        IntPtr screen = GetDC(IntPtr.Zero), mem = CreateCompatibleDC(screen), hb = IntPtr.Zero, old = IntPtr.Zero;
+        try
+        {
+            hb = bmp.GetHbitmap(Color.FromArgb(0));
+            old = SelectObject(mem, hb);
+            var sz = new SZ { cx = bmp.Width, cy = bmp.Height };
+            var pos = new PT { x = f.Left, y = f.Top };
+            var zero = new PT();
+            var bl = new BLEND { op = 0, flags = 0, alpha = opacity, fmt = 1 /* AC_SRC_ALPHA */ };
+            UpdateLayeredWindow(f.Handle, screen, ref pos, ref sz, mem, ref zero, 0, ref bl, 2 /* ULW_ALPHA */);
+        }
+        finally
+        {
+            ReleaseDC(IntPtr.Zero, screen);
+            if (hb != IntPtr.Zero) { SelectObject(mem, old); DeleteObject(hb); }
+            DeleteDC(mem);
+        }
+    }
 
     private sealed class ClickThrough : Form
     {
