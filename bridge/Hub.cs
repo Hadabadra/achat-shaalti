@@ -10,7 +10,9 @@ namespace OtzariaBridge;
 internal sealed class Hub : Form
 {
     private static Hub _inst;
-    private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
+    private readonly TabControl _tabs = new() { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, ItemSize = new Size(0, 1), SizeMode = TabSizeMode.Fixed };
+    // משוב 15.10: רשימת הטאבים בצד (ימין בעברית — Dock.Left מתהפך ב-RightToLeftLayout) במקום כותרות למעלה
+    private readonly FlowLayoutPanel _side = new() { Dock = DockStyle.Left, Width = 170, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(6, 10, 6, 6), BackColor = SystemColors.ControlLight };
     private readonly Dictionary<string, TabPage> _pages = new();
 
     private static bool _filling;
@@ -41,7 +43,18 @@ internal sealed class Hub : Form
         Size = new Size(760, 620);
         MinimumSize = new Size(520, 420);
         Controls.Add(_tabs);
-        _tabs.SelectedIndexChanged += (_, _) => { if (_tabs.SelectedTab != null) Text = Program.AppName + " — " + _tabs.SelectedTab.Text; };
+        Controls.Add(_side);
+        _tabs.SelectedIndexChanged += (_, _) => { if (_tabs.SelectedTab != null) Text = Program.AppName + " — " + _tabs.SelectedTab.Text; PaintSide(); };
+    }
+
+    private void PaintSide()
+    {
+        foreach (Control c in _side.Controls)
+        {
+            bool sel = c.Tag == _tabs.SelectedTab;
+            c.BackColor = sel ? SystemColors.Window : SystemColors.ControlLight;
+            c.Font = new Font(Font, sel ? FontStyle.Bold : FontStyle.Regular);
+        }
     }
 
     private void Open(string key, Func<Form> make, bool select)
@@ -54,13 +67,19 @@ internal sealed class Hub : Form
             f.FormBorderStyle = FormBorderStyle.None;
             f.Dock = DockStyle.Fill;
             page.Controls.Add(f);
-            f.FormClosed += (_, _) => { _tabs.TabPages.Remove(page); _pages.Remove(key); if (_tabs.TabCount == 0) Close(); };
+            var btn = new Button { Text = f.Text, Width = 156, Height = 36, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleRight, Margin = new Padding(0, 0, 0, 4), Tag = page, Cursor = Cursors.Hand };
+            btn.FlatAppearance.BorderSize = 0;
+            if (Lang.En) btn.TextAlign = ContentAlignment.MiddleLeft;
+            btn.Click += (_, _) => _tabs.SelectedTab = page;
+            _side.Controls.Add(btn);
+            f.FormClosed += (_, _) => { _tabs.TabPages.Remove(page); _pages.Remove(key); _side.Controls.Remove(btn); if (_tabs.TabCount == 0) Close(); };
             _pages[key] = page;
             _tabs.TabPages.Add(page);
             f.Show();
         }
         if (!select) return;
         _tabs.SelectedTab = page;
+        PaintSide();
         if (!Visible) Show();
         if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
         Activate();

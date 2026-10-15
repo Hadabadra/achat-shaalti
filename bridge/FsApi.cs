@@ -653,6 +653,9 @@ public static class FsApi
             if (Directory.Exists(path) || e is ".lnk" or ".url" or ".scf" or ".appref-ms")
                 throw FxPolicy.Outside("במצב מוגבל אי אפשר לפתוח תיקיות וקיצורי דרך בסייר Windows");
         }
+        // משוב 15.10: קובץ הפעלה — רק התוכנה שלנו או תוכנה מהרשימה (תורניות/מותרות), בלי חלון "כיצד לפתוח" של Windows
+        if (File.Exists(path) && Path.GetExtension(path).Equals(".exe", StringComparison.OrdinalIgnoreCase))
+            return OpenExe(path);
         if (Kiosk.IsActive)
         {
             string ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
@@ -669,6 +672,30 @@ public static class FsApi
         }
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
         return new { opened = true };
+    }
+
+    private static object OpenExe(string path)
+    {
+        string full = Path.GetFullPath(path);
+        string name = Path.GetFileNameWithoutExtension(full);
+        // הגשר עצמו — פותחים את החלון הראשי במקום להריץ עותק נוסף
+        if (string.Equals(full, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase)
+            || name.Equals("OtzariaBridge", StringComparison.OrdinalIgnoreCase))
+        {
+            Tray.Invoke(Hub.ShowMain);
+            return new { opened = true, app = "self" };
+        }
+        // תוכנה מרשימת התוכנות התורניות/המותרות — אותה הפעלה כמו מסרגל התוכנות (בלי כפילות אם כבר פתוחה)
+        var hit = Programs.Load().FirstOrDefault(e => string.Equals(Path.GetFullPath(e.Path), full, StringComparison.OrdinalIgnoreCase));
+        if (hit != null) { Programs.Activate(hit); return new { opened = true, app = hit.Name }; }
+        // קובץ ההתקנה/העדכון שלנו (לא בזמן נעילה)
+        bool ours = name.Contains("achat", StringComparison.OrdinalIgnoreCase) || name.Contains("אחת שאלתי") || name.Contains("OtzariaBridge", StringComparison.OrdinalIgnoreCase);
+        if (ours && !Kiosk.IsActive)
+        {
+            Process.Start(new ProcessStartInfo(full) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(full) });
+            return new { opened = true, app = "setup" };
+        }
+        throw BridgeException.Forbidden("אפשר להפעיל מהסייר רק את אחת שאלתי ואת התוכנות שברשימת התוכנות התורניות. להוספת תוכנה: הגדרות מערכת ← נעילה ← תוכנות");
     }
 
     private static object Reveal(JsonElement b)
