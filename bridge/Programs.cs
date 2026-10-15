@@ -762,15 +762,12 @@ public static class Programs
     }
 
     /// <summary>
-    /// תהליך שהתחיל בין 3 שניות לפני הפתיחה דרך הגשר לבין 10 דקות אחריה (כמו חלון הגיזום של Launched -
-    /// ר' IsLaunchedTree). תוכנות UWP/מודרניות (כלי חיתוך, פתקים דביקים, שעון) מפעילות את תהליך-העזר
-    /// האמיתי שלהן (ScreenClippingHost וכו', לרוב לא דרך ApplicationFrameHost/COM activation ולכן גם
-    /// לא נתפס ב-IsLaunchedTree) רק כשלוחצים על פעולה בפועל בתוכם - לא בהכרח מיד עם הפתיחה; 90 שניות
-    /// היה קצר מדי וגרם לחלון העזר "להיעלם ולחזור" כש-ShouldYieldTo דחה אותו כ"לא מוכר"
+    /// תהליך שהתחיל בין 3 שניות לפני הפתיחה דרך הגשר לבין 90 שניות אחריה. הורחב פעם ל-10 דקות והוחזר:
+    /// זה לא פתר את בעיית כלי החיתוך, והרחבה כזו מתירה כל תהליך שנפתח אחרי תוכנה מותרת (דפדפן מקישור וכו')
     private static bool IsNewAfterLaunch(Process p)
     {
         if (!StartedAfterLaunch(p)) return false;
-        try { return p.StartTime.ToUniversalTime() <= LastLaunchAt.AddMinutes(10); }
+        try { return p.StartTime.ToUniversalTime() <= LastLaunchAt.AddSeconds(90); }
         catch { return false; }
     }
 

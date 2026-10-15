@@ -809,7 +809,9 @@
       return { name: 'sec_' + id, type: 'checkbox', label: 'פתוח בנעילה: ' + (SECTION_NAMES[id] || id), value: open.indexOf(id) >= 0 };
     });
     fields.splice.apply(fields, [secIdx + 1, 0].concat(secFields));
-    fields.push({ name: 'pw', label: st.hasPassword ? 'סיסמת נעילה' : 'סיסמת נעילה (עוד לא הוגדרה — אפשר להשאיר ריק)', type: 'password', dir: 'ltr' });
+    /* בראש הרשימה (לפני הקבוצה הראשונה): שדה שאחרי {type:'group'} נכנס לתוך הקבוצה, ובסוף הרשימה זו
+       קבוצה סגורה ("תזמון נעילה") - הסיסמה נעלמה מהעין והשמירה נכשלה עם "יש להקליד את סיסמת הנעילה" */
+    fields.unshift({ name: 'pw', label: st.hasPassword ? 'סיסמת נעילה (נדרשת לשמירה)' : 'סיסמת נעילה (עוד לא הוגדרה — אפשר להשאיר ריק)', type: 'password', dir: 'ltr' });
     var slot = body.querySelector('[data-slot=kset]'); if (!slot) return;
     var ok = await ui.inlineForm(slot, {
       title: 'הגדרות נעילה', icon: 'edit',

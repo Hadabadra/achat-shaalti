@@ -43,6 +43,7 @@ public static class Overlay
 
     public static void ShowRest(IntPtr otzaria, bool idle = false) => Tray.Invoke(() =>
     {
+        if (EmergencyForm.IsOpen) return; // חלון ביטול חירום פתוח - לא מכסים אותו
         var screens = Screen.AllScreens;
         // התאמה למספר המסכים (גם אם השתנה: חיבור/ניתוק מסך בזמן ריצה)
         while (_rest.Count < screens.Length) _rest.Add(new RestScreen());

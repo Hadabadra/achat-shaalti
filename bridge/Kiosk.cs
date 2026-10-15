@@ -1074,7 +1074,8 @@ public static partial class Kiosk
             Config.Set("kiosk.active", false);
             Config.Set("kiosk.confirmed", false);
             if (!keepStrict) Config.Set("kiosk.strict", false);
-            Config.Save();
+            // כשל בשמירה (נעילת קובץ של אנטי-וירוס, דיסק מלא) לא יעצור את שאר השחרור - אחרת נשאר מצב חצי-משוחרר
+            try { Config.Save(); } catch (Exception ex) { Config.Log("release save: " + ex.Message); }
             _watchdog?.Dispose();
             _watchdog = null;
             // ממתינים שסבב שומר שכבר רץ יסתיים, כדי שלא יסגור את explorer מיד אחרי שהופעל מחדש
@@ -1137,8 +1138,12 @@ public static partial class Kiosk
     /// </summary>
     public static bool EmergencyRelease(string code)
     {
-        if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
-        try { HardLock.EmergencyDisable(code); } catch (Exception ex) { Config.Log("emergency: " + ex.Message); }
+        // כשהשירות מותקן הוא מקור האמת לקוד השחזור (בחשבון Windows אחר אין hash מקומי בכלל) - פונים אליו קודם,
+        // ורק אם הוא לא אישר בודקים מול ה-hash המקומי. קודם נבדק רק המקומי, אז קוד נכון נדחה כשהדגל המקומי לא תאם
+        bool svcOk = false;
+        try { if (HardLock.Available || HardLock.ServiceActive) svcOk = HardLock.EmergencyDisable(code); }
+        catch (Exception ex) { Config.Log("emergency: " + ex.Message); }
+        if (!svcOk && !Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
         EndTempUnlockLocal("ביטול חירום בקוד שחזור", relock: false);
         Release();
         Config.Log("kiosk: הנעילה בוטלה בקיצור חירום עם קוד שחזור");
@@ -1482,7 +1487,9 @@ public static partial class Kiosk
             // Ctrl+Alt+Shift+F12: חלון קוד שחזור לביטול חירום של הנעילה
             if (ctrl && alt && vk == 0x7B && (GetAsyncKeyState(0x10) & 0x8000) != 0 && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104))
             {
-                Tray.Invoke(EmergencyForm.Open);
+                // לא מריצים כאן ישירות: ה-hook רץ בחוט ה-UI, ו-Tray.Invoke מריץ סינכרונית כשכבר בו -
+                // פתיחת טופס + BringToFront + קריאת pipe לשירות בתוך callback חורגים מ-300ms ו-Windows מתעלמת מה-hook
+                Task.Run(() => { try { Tray.Invoke(EmergencyForm.Open); } catch (Exception ex) { Config.Log("emergency open: " + ex.Message); } });
                 return (IntPtr)1;
             }
             if (block) return (IntPtr)1;
