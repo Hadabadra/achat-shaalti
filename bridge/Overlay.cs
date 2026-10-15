@@ -491,7 +491,7 @@ internal sealed class RestScreen : Form
         // "fixed" (ברירת מחדל) — ההקדשה בגבולות קבועים בתחתית הצד שמול הזמנים; "column" — עמודת הקדשה של יאיר עם נר.
         // הנר מרצד רק אם kiosk.restCandleFlicker (ברירת מחדל: כבוי — שומר מסך בלי תזוזה חוץ מהחותמת).
         bool dedColumn = Config.Get("kiosk.restDedicationStyle", "fixed") == "column";
-        bool candleFlicker = Config.Get("kiosk.restCandleFlicker", false);
+        bool candleFlicker = Config.Get("kiosk.restCandleFlicker", true);
         // טקסט אחד לשני הסגנונות: הנוסח המותאם (kiosk.restDedicationText); אם ריק — ההקדשה האישית של יאיר (kiosk.dedicationText); אחרת הקבועה
         string dedication = Config.Get("kiosk.restDedicationText", "").Trim();
         if (dedication.Length == 0) dedication = Config.Get("kiosk.dedicationText", "").Trim();
@@ -519,7 +519,12 @@ internal sealed class RestScreen : Form
         // סבב B: הפסוק של "אחת שאלתי" (תהלים כז, ד)
         if (shVerse)
         {
-            g.DrawString("אַחַת שָׁאַלְתִּי מֵאֵת ה' אוֹתָהּ אֲבַקֵּשׁ", verseF, goldB, Line(y, 56 * s), rtl);
+            /* משוב 3.9: השורה הייתה רחבה מהמלבן ו"אבקש" נחתך — מקטינים את הגופן עד שהשורה נכנסת */
+            const string v1 = "אַחַת שָׁאַלְתִּי מֵאֵת ה' אוֹתָהּ אֲבַקֵּשׁ";
+            var vf = verseF;
+            for (int k = 0; k < 12 && g.MeasureString(v1, vf).Width > W * 0.96f; k++) vf = new Font(vf.FontFamily, vf.Size * 0.92f, vf.Style, vf.Unit);
+            var noWrap = (StringFormat)rtl.Clone(); noWrap.FormatFlags |= StringFormatFlags.NoWrap;
+            g.DrawString(v1, vf, goldB, Line(y, 56 * s), noWrap);
             g.DrawString("שִׁבְתִּי בְּבֵית ה' כָּל יְמֵי חַיַּי", verseF, goldB, Line(y + 54 * s, 56 * s), rtl);
             y += 54 * s;
         }
@@ -534,11 +539,10 @@ internal sealed class RestScreen : Form
         float tilt = (float)Math.Sin(t * 0.25) * 6f;
         if (shLogo)
         {
-            var gs = g.Save();
-            g.TranslateTransform(cx, y + icoSize / 2f + bob);
-            g.RotateTransform(tilt);
-            g.DrawImage(BrandArt.Big, -icoSize / 2f, -icoSize / 2f, icoSize, icoSize);
-            g.Restore(gs);
+            /* משוב 3.9: בלי סיבוב ובלי שינוי גודל בזמן ציור (שניהם טשטשו) — תמונה מוכנה בגודל המדויק, במיקום שלם בפיקסלים */
+            int px = (int)Math.Round(icoSize);
+            g.DrawImageUnscaled(BrandArt.Sized(px), (int)Math.Round(cx - px / 2f), (int)Math.Round(y + bob));
+            _ = tilt;
             y += icoSize + 20 * s;
         }
 

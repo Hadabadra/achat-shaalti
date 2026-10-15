@@ -39,6 +39,7 @@
     <EmbeddedResource Include="plugins\*.otzplugin" LogicalName="plugins.%(Filename)%(Extension)" />
     <!-- יומן השינויים מוטמע, כדי שיהיה זמין במגש בלי רשת -->
     <EmbeddedResource Include="..\CHANGELOG.md" LogicalName="CHANGELOG.md" />
+    <EmbeddedResource Include="..\assets\icon-source.png" LogicalName="brand-1024.png" />
   </ItemGroup>
 
   <!-- חושף internal (למשל Kiosk.NormalizeRecovery) לפרויקט הבדיקות בלבד -->

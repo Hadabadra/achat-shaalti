@@ -167,7 +167,7 @@
       otzariaPath: 'C:\\Program Files\\Otzaria\\otzaria.exe', blockTaskManager: true,
       allowOpenExtensions: ['pdf', 'txt'], warnings: [], readOnly: false, allowExcelDocs: false, twoFactor: false, twoFactorAvailable: true, clock: true, clockPosition: 'bottom-left', venueName: '', dedicationText: '',
       restScreen: true, restIdleMinutes: 0, zmanimLocation: '', zmanimCity: '', zmanimShow: [], zmanimDiaspora: false,
-      candleLightingMinutes: 18, zmanimElevation: 0, zmanimFallbackEngine: 'noaa', showParsha: false, showDafYomi: false, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
+      candleLightingMinutes: 18, zmanimElevation: 0, zmanimFallbackEngine: 'noaa', showParsha: true, showDafYomi: true, yahrzeitMonth: '', yahrzeitDay: 0, yahrzeitLabel: '', fullscreenOtzaria: true,
       sideBar: true, sideBarIconsOnly: false, sideBarPosition: 'right', restZmanimSide: 'right', resetOnShutdown: false,
       activatedBy: 'manual',
       /* פתיחה זמנית (תואם ל-Kiosk.TempUnlockStatus בגשר); active/secondsLeft/until מחושבים ב-/kiosk/status */

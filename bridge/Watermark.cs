@@ -40,18 +40,7 @@ internal static class Watermark
         /* משוב 3.9: TransparencyKey (מג'נטה) השאיר הילה ורודה ומטושטשת סביב הסמל המוחלק.
            עכשיו: הקטנה איכותית מהאייקון הגדול + חלון שכבתי עם אלפא לכל פיקסל (UpdateLayeredWindow) */
         Bitmap bmp;
-        try
-        {
-            using var src = new Icon(Overlay.AppIcon(), 256, 256).ToBitmap();
-            bmp = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-            using var g = Graphics.FromImage(bmp);
-            g.Clear(Color.Transparent);
-            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-            g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
-            g.DrawImage(src, new Rectangle(0, 0, size, size));
-        }
+        try { bmp = new Bitmap(BrandArt.Sized(size)); }
         catch { return; }
         var wa = Screen.PrimaryScreen!.WorkingArea;
         _f = new ClickThrough { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, TopMost = true,

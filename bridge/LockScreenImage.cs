@@ -34,7 +34,7 @@ internal static class LockScreenImage
 
     public static void Update()
     {
-        if (!Config.Get("kiosk.lockScreenImage", false)) return;
+        if (!Config.Get("kiosk.lockScreenImage", true)) return;
         try
         {
             var scr = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, 1920, 1080);

@@ -163,7 +163,7 @@ internal static class Zmanim
     /// </summary>
     private static string ParshaLine(DateTime now)
     {
-        if (!Config.Get("kiosk.showParsha", false)) return null;
+        if (!Config.Get("kiosk.showParsha", true)) return null;
         try
         {
             var jc = new global::Zmanim.JewishCalendar.JewishCalendar();
@@ -182,7 +182,7 @@ internal static class Zmanim
     /// <summary>מסכת ודף של דף היומי הנוכחי, בעברית (עם גימטריה, "כ״ה") ובאנגלית, ישירות משני ה-API הציבוריים של הספרייה</summary>
     private static string DafYomiLine(DateTime now)
     {
-        if (!Config.Get("kiosk.showDafYomi", false)) return null;
+        if (!Config.Get("kiosk.showDafYomi", true)) return null;
         try
         {
             var daf = global::Zmanim.JewishCalendar.YomiCalculator.GetDafYomiBavli(now.Date);
