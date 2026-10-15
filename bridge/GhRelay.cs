@@ -13,12 +13,13 @@ internal static class GhRelay
 {
     private static string Dir => Path.Combine(Config.Dir, "outbox", "gh");
     private static System.Threading.Timer _t;
+    private const string DefaultUrl = "https://achat-relay.e0548433917.workers.dev"; // #65; "" ב-config מכבה
 
     public static void Init() => _t = new System.Threading.Timer(_ => { try { Flush().Wait(); } catch { } }, null, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(10));
 
     public static void Queue(string id, string body)
     {
-        if (string.IsNullOrEmpty(Config.Get("diag.relayUrl", ""))) return;
+        if (string.IsNullOrEmpty(Config.Get("diag.relayUrl", DefaultUrl))) return;
         try
         {
             Directory.CreateDirectory(Dir);
@@ -30,7 +31,7 @@ internal static class GhRelay
 
     private static async Task Flush()
     {
-        string url = Config.Get("diag.relayUrl", "");
+        string url = Config.Get("diag.relayUrl", DefaultUrl);
         if (string.IsNullOrEmpty(url) || !url.StartsWith("https://") || !Directory.Exists(Dir)) return;
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         string tail = "";
