@@ -13,11 +13,21 @@ internal sealed class Hub : Form
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
     private readonly Dictionary<string, TabPage> _pages = new();
 
+    private static bool _filling;
+    /// <summary>משוב 15.10: בכל פתיחה החלון מכיל את כל הטאבים, והטאב המבוקש נבחר</summary>
     public static void Show(string key, Func<Form> make)
     {
         if (_inst == null || _inst.IsDisposed) _inst = new Hub();
-        _inst.Open(key, make);
+        if (_filling) { _inst.Open(key, make, select: false); return; }
+        _filling = true;
+        try { AboutForm.Open(); ChangelogForm.Open(); ReportsForm.Open(); PairingForm.Open(); ToolsForm.Open(); }
+        catch (Exception ex) { Config.Log("hub fill: " + ex.Message); }
+        finally { _filling = false; }
+        _inst.Open(key, make, select: true);
     }
+
+    /// <summary>פתיחת החלון הראשי (לחיצה על "אחת שאלתי" במגש)</summary>
+    public static void ShowMain() => AboutForm.Open();
 
     private Hub()
     {
@@ -34,7 +44,7 @@ internal sealed class Hub : Form
         _tabs.SelectedIndexChanged += (_, _) => { if (_tabs.SelectedTab != null) Text = Program.AppName + " — " + _tabs.SelectedTab.Text; };
     }
 
-    private void Open(string key, Func<Form> make)
+    private void Open(string key, Func<Form> make, bool select)
     {
         if (!_pages.TryGetValue(key, out var page) || page.IsDisposed || page.Controls.Count == 0)
         {
@@ -49,6 +59,7 @@ internal sealed class Hub : Form
             _tabs.TabPages.Add(page);
             f.Show();
         }
+        if (!select) return;
         _tabs.SelectedTab = page;
         if (!Visible) Show();
         if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
