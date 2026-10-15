@@ -384,7 +384,7 @@
     fb.innerHTML = window.Feedback.ICON;
     fb.addEventListener('click', function () {
       window.Feedback.open({
-        ui: ui, plugin: 'הגדרות מערכת', version: SS.VERSION,
+        ui: ui, plugin: 'הגדרות מערכת', version: SS.VERSION, bridge: SS.bridge,
         extra: function () { return ['גשר: ' + (state.connected ? 'מחובר' : 'לא מחובר')]; }
       });
     });

@@ -94,7 +94,7 @@ public static class Program
             Tray.Init();
             Screenshot.Init(); // #60
             Outbox.Init();
-            GhRelay.Init();
+            GhRelay.Init(); GhFeedback.Register();
             Watermark.Init();
             Reports.Init();
             Port = Server.Start();

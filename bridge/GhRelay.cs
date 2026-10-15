@@ -29,6 +29,8 @@ internal static class GhRelay
         catch { }
     }
 
+    public static void Kick() => Task.Run(async () => { try { await Task.Delay(3000); await Flush(); } catch { } });
+
     private static async Task Flush()
     {
         string url = Config.Get("diag.relayUrl", DefaultUrl);
@@ -39,13 +41,26 @@ internal static class GhRelay
         foreach (var f in Directory.GetFiles(Dir, "*.txt").OrderBy(x => x).Take(5))
         {
             string text = Scrub(File.ReadAllText(f));
+            string kind = "auto", repo = "", plugin = "", pv = "";
+            if (text.StartsWith("#meta "))
+            {
+                var parts = text.Split("\n\n", 2);
+                foreach (var kv in parts[0][6..].Split(';'))
+                {
+                    var x = kv.Split('=', 2); if (x.Length < 2) continue;
+                    if (x[0] == "kind") kind = x[1]; else if (x[0] == "repo") repo = x[1]; else if (x[0] == "plugin") plugin = x[1]; else if (x[0] == "pv") pv = x[1];
+                }
+                text = parts.Length > 1 ? parts[1] : "";
+            }
+            bool manual = kind == "manual";
             string first = text.Split("\n\n", 2).Last().Split('\n')[0].Trim();
             var payload = JsonSerializer.Serialize(new
             {
-                title = "[auto] " + (first.Length > 90 ? first[..90] : first),
-                fingerprint = Fingerprint(first),
+                title = (manual ? "[משוב] " : "[auto] ") + (first.Length > 90 ? first[..90] : first),
+                fingerprint = Fingerprint(manual ? text + f : first),
                 version = Program.Version,
-                body = Cut(text + (tail.Length > 0 ? "\n\n----- יומן מקוצר -----\n" + tail : ""))
+                kind, repo, plugin, pluginVersion = pv,
+                body = Cut(manual ? text : text + (tail.Length > 0 ? "\n\n----- יומן מקוצר -----\n" + tail : ""))
             });
             try
             {

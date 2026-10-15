@@ -1237,7 +1237,7 @@
 
   function sendFeedback() {
     window.Feedback.open({
-      ui: ui, plugin: 'סייר קבצים', version: FX.VERSION,
+      ui: ui, plugin: 'סייר קבצים', version: FX.VERSION, bridge: FX.Bridge,
       extra: function () {
         var b = FX.Bridge && FX.Bridge.info;
         return ['מצב: ' + (S.prov ? S.prov.kind : '?'), 'גשר: ' + (b ? (b.version || '?') : 'לא מחובר')];

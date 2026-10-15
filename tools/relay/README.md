@@ -29,3 +29,10 @@ curl -X POST https://achat-relay.<שם>.workers.dev -H "content-type: applicatio
 - כפילות: issue פתוח עם אותו fingerprint חוסם דיווח חוזר.
 - גוף עד 8000 תווים, ו-`@` מנוטרל כדי שלא יהיו תיוגים.
 - משתמש יכול לכבות את הדיווח האוטומטי (`diag.autoReport`). זה מכבה גם את השליחה לכאן.
+
+## #70 — משוב ידני וריפואים נוספים
+- המתווך מקבל גם `kind: "manual"` (משוב משתמש, תווית `user-feedback`) ו-`repo` אופציונלי.
+- משתנה סביבה חדש `GH_REPOS` — רשימה סגורה מופרדת בפסיקים, למשל:
+  `e0548433917-gif/achat-shaalti,e0548433917-gif/pdf-viewer,e0548433917-gif/pdf-ocr-library,e0548433917-gif/madaei-hatanach`
+- הטוקן `GH_TOKEN` צריך הרשאת Issues: write לכל הריפואים ברשימה.
+- אחרי עדכון הקוד: `wrangler deploy` מחדש.
