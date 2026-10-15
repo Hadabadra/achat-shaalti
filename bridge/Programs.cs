@@ -23,6 +23,15 @@ public static class Programs
     private const int GraceSeconds = 30;
 
     // מעטפות ומנהלי מערכת שאסור להוסיף לרשימה (עוקף את הנעילה)
+    /// <summary>קיום קובץ הפעלה — כולל "כינוי הפעלה" של אפליקציית חנות (קובץ reparse של 0 בתים ב-WindowsApps שלפעמים File.Exists מחזיר עליו false)</summary>
+    internal static bool ExeExists(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+        if (File.Exists(path)) return true;
+        try { var fi = new FileInfo(path); return (fi.Attributes & FileAttributes.ReparsePoint) != 0 && (fi.Attributes & FileAttributes.Directory) == 0; }
+        catch { return false; }
+    }
+
     private static readonly HashSet<string> Blocked = new(StringComparer.OrdinalIgnoreCase)
     {
         "explorer", "cmd", "powershell", "pwsh", "wscript", "cscript", "mshta", "regedit",
@@ -190,7 +199,7 @@ public static class Programs
 
     public static bool Activate(Entry e)
     {
-        if (!File.Exists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);
+        if (!ExeExists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);
         GraceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
         IntPtr h = ExistingWindow(e);
         if (h != IntPtr.Zero)
@@ -200,13 +209,22 @@ public static class Programs
             return true;
         }
         LastLaunchAt = DateTime.UtcNow;
-        using (var started = Process.Start(new ProcessStartInfo(e.Path)
+        // משוב 15.10: כלי Windows מהחנות (כלי חיתוך, פנקס רשימות...) הם "כינויי הפעלה" ב-WindowsApps —
+        // אין להם תיקיית עבודה רגילה ו-Process.Start עלול להיכשל/להחזיר null; מנסים שוב בלי תיקיית עבודה.
+        try
         {
-            UseShellExecute = true,
-            WorkingDirectory = System.IO.Path.GetDirectoryName(e.Path),
-        }))
-        {
+            using var started = Process.Start(new ProcessStartInfo(e.Path) { UseShellExecute = true, WorkingDirectory = System.IO.Path.GetDirectoryName(e.Path) });
             if (started != null) RememberLaunched(started.Id);
+        }
+        catch (Exception ex1)
+        {
+            Config.Log("launch retry " + e.Path + ": " + ex1.Message);
+            try
+            {
+                using var started = Process.Start(new ProcessStartInfo(e.Path) { UseShellExecute = true });
+                if (started != null) RememberLaunched(started.Id);
+            }
+            catch (Exception ex2) { throw new BridgeException("launch_failed", "הפעלת התוכנה נכשלה: " + ex2.Message, 500); }
         }
         Task.Run(() => Focus(e));
         return false;
@@ -308,7 +326,7 @@ public static class Programs
         if (name.Length == 0 || name.Length > 60) throw BridgeException.BadRequest("יש להזין שם באורך של עד 60 תווים");
         if (!System.IO.Path.IsPathRooted(path) || !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             throw BridgeException.BadRequest("יש להזין נתיב מלא לקובץ הפעלה (exe)");
-        if (!File.Exists(path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + path);
+        if (!ExeExists(path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + path);
         string stem = System.IO.Path.GetFileNameWithoutExtension(path);
         if (Blocked.Contains(stem)) throw BridgeException.Forbidden("אי אפשר להוסיף את התוכנה הזו לרשימה");
 
@@ -372,15 +390,26 @@ public static class Programs
     {
         string sys32 = Environment.GetFolderPath(Environment.SpecialFolder.System);
         string winApps = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps");
+        string win = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var list = new (string name, string[] procs, string[] candidates)[]
         {
             ("כלי חיתוך (צילום מסך)", new[] { "SnippingTool" }, new[] { System.IO.Path.Combine(sys32, "SnippingTool.exe"), System.IO.Path.Combine(winApps, "SnippingTool.exe") }),
             ("פתקים דביקים", new[] { "Microsoft.Notes" }, new[] { System.IO.Path.Combine(winApps, "StickyNotes.exe"), System.IO.Path.Combine(winApps, "Microsoft.MicrosoftStickyNotes.exe") }),
             ("שעון וטיימר", new[] { "Time", "ApplicationFrameHost" }, new[] { System.IO.Path.Combine(winApps, "Time.exe") }),
+            // משוב 15.10: עוד כלים מובנים (נתיבים קבועים של Windows 10/11)
+            ("פנקס רשימות", new[] { "notepad", "Notepad" }, new[] { System.IO.Path.Combine(winApps, "notepad.exe"), System.IO.Path.Combine(sys32, "notepad.exe"), System.IO.Path.Combine(win, "notepad.exe") }),
+            ("מחשבון", new[] { "CalculatorApp", "Calculator", "calc", "ApplicationFrameHost" }, new[] { System.IO.Path.Combine(sys32, "calc.exe") }),
+            ("צייר (Paint)", new[] { "mspaint" }, new[] { System.IO.Path.Combine(winApps, "mspaint.exe"), System.IO.Path.Combine(sys32, "mspaint.exe") }),
+            ("WordPad", new[] { "wordpad" }, new[] { System.IO.Path.Combine(pf, "Windows NT", "Accessories", "wordpad.exe") }),
+            ("מפת תווים", new[] { "charmap" }, new[] { System.IO.Path.Combine(sys32, "charmap.exe") }),
+            ("מקלדת על המסך", new[] { "osk" }, new[] { System.IO.Path.Combine(sys32, "osk.exe") }),
+            ("זכוכית מגדלת", new[] { "Magnify" }, new[] { System.IO.Path.Combine(sys32, "Magnify.exe") }),
+            ("מקליט קול", new[] { "SoundRec", "VoiceRecorder" }, new[] { System.IO.Path.Combine(winApps, "SoundRec.exe") }),
         };
         foreach (var u in list)
         {
-            string hit = u.candidates.FirstOrDefault(File.Exists);
+            string hit = u.candidates.FirstOrDefault(ExeExists);
             if (hit != null) yield return (u.name, hit, u.procs);
         }
     }

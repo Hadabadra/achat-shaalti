@@ -86,3 +86,15 @@ body.ss-compact .nav-item { justify-content: center; padding-inline: 0.625em; }
 select.input.listbox { height: auto; padding: 4px; overflow-y: auto; background-image: none; }
 select.input.listbox option { padding: 6px 10px; border-radius: 6px; }
 select.input.listbox option:checked { background: var(--accent, #2b6cb0); color: #fff; }
+
+/* משוב 15.10: שורת "להציג" + מתג "התראה" */
+.check-pair{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.check-pair .check-row{flex:1;min-width:0}
+.mini-switch{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--muted,#777);flex-shrink:0;user-select:none}
+.mini-switch input{position:absolute;opacity:0;width:0;height:0}
+.mini-track{position:relative;width:30px;height:16px;border-radius:8px;background:var(--border,#ccc);transition:background .15s}
+.mini-track::after{content:"";position:absolute;top:2px;inset-inline-start:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:inset-inline-start .15s}
+.mini-switch input:checked + .mini-track{background:var(--accent,#2b6cb0)}
+.mini-switch input:checked + .mini-track::after{inset-inline-start:16px}
+.mini-switch input:checked ~ .mini-text{color:var(--text,inherit)}
+.mini-switch input:focus-visible + .mini-track{outline:2px solid var(--accent,#2b6cb0);outline-offset:2px}

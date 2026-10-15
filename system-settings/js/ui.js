@@ -183,6 +183,13 @@
         if (f.type === 'note') {
           return '<div class="field-note muted small">' + f.label + '</div>';
         }
+        if (f.type === 'checkpair') {
+          /* שורה אחת: תיבת סימון + מתג קטן בצד (משוב 15.10: "להציג" + "התראה" לכל זמן) */
+          return '<div class="check-pair"><label class="check-row"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + '>' +
+            '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label + '</span></label>' +
+            '<label class="mini-switch" title="' + ui.esc(f.label2) + '"><input type="checkbox" name="' + f.name2 + '"' + (f.value2 ? ' checked' : '') + '>' +
+            '<span class="mini-track"></span><span class="mini-text">' + ui.esc(f.label2) + '</span></label></div>';
+        }
         if (f.type === 'checkbox') {
           return '<label class="check-row' + (f.disabled ? ' is-disabled' : '') + '"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + (f.disabled ? ' disabled data-locked' : '') + '>' +
             '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label +
@@ -211,7 +218,8 @@
     (fields || []).forEach(function (f) {
       if (f.type === 'note') return;
       var inp = form.querySelector('[name="' + f.name + '"]');
-      if (inp) v[f.name] = f.type === 'checkbox' ? inp.checked : inp.value;
+      if (f.type === 'checkpair') { var i2 = form.querySelector('[name="' + f.name2 + '"]'); if (i2) v[f.name2] = i2.checked; }
+      if (inp) v[f.name] = (f.type === 'checkbox' || f.type === 'checkpair') ? inp.checked : inp.value;
     });
     return v;
   };

@@ -788,19 +788,16 @@
     /* #33: התראה לפני זמן נבחר */
     /* כמה התראות במקביל (משוב 15.10): רשימת זמנים מופרדת בפסיקים ב-kiosk.zmanimAlert */
     var zAlerts = String(st.zmanimAlert || '').toLowerCase().split(',');
-    fields.push({ name: 'zalertHead', type: 'note', label: 'התראה לפני זמנים (אפשר לבחור כמה):' });
-    ZMAN_FIELDS.forEach(function (z) {
-      fields.push({ name: 'za_' + z.id, type: 'checkbox', label: z.label, value: zAlerts.indexOf(z.id.toLowerCase()) >= 0 });
-    });
-    fields.push({ name: 'zalertmin', label: 'כמה דקות לפני', value: String(st.zmanimAlertMinutes || 10), dir: 'ltr' });
+    fields.push({ name: 'zalertmin', label: 'התראה: כמה דקות לפני הזמן (מסמנים "התראה" ליד כל זמן ברשימה למטה)', value: String(st.zmanimAlertMinutes || 10), dir: 'ltr' });
     fields.push({ name: 'zelev', label: 'גובה מעל פני הים במיקום (מטרים)', value: String(st.zmanimElevation || 0), dir: 'ltr', placeholder: '0',
       hint: 'משפיע רק כשנבחר מנוע הגיבוי "חדש" (KosherJava) למעלה. 0 עד 5000 מטר' });
     fields.push({ name: 'diaspora', type: 'checkbox', label: 'חוץ לארץ (יום טוב שני)', value: !!st.zmanimDiaspora,
       hint: 'משפיע על זיהוי כניסת/יציאת חג של יום טוב שני של גלויות' });
     fields.push({ name: 'candle', label: 'הדלקת נרות: דקות לפני השקיעה', value: String(st.candleLightingMinutes != null ? st.candleLightingMinutes : 18), dir: 'ltr', placeholder: '18' });
-    fields.push({ name: 'zshowHead', type: 'note', label: 'אילו זמנים להציג בשומר המסך:' });
+    fields.push({ name: 'zshowHead', type: 'note', label: 'אילו זמנים להציג בשומר המסך, ועל אילו לקבל התראה:' });
     ZMAN_FIELDS.forEach(function (z) {
-      fields.push({ name: 'zm_' + z.id, type: 'checkbox', label: z.label, value: zmanShow.indexOf(z.id.toLowerCase()) >= 0 });
+      fields.push({ name: 'zm_' + z.id, type: 'checkpair', label: z.label, value: zmanShow.indexOf(z.id.toLowerCase()) >= 0,
+        name2: 'za_' + z.id, label2: 'התראה', value2: zAlerts.indexOf(z.id.toLowerCase()) >= 0 });
     });
     fields.push({ name: 'rcontent', type: 'select', label: 'תוכן שומר המסך', value: st.restContent || 'full',
       options: [{ value: 'full', label: 'הכל: פסוק, שעה, תאריך וזמני היום' }, { value: 'zmanim', label: 'זמני היום (בלי פסוק)' },
