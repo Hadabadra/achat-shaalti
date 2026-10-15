@@ -291,6 +291,7 @@ public static partial class Kiosk
         restShowDedication = Config.Has("kiosk.restShowDedication") ? Config.Get("kiosk.restShowDedication", true) : (bool?)null,
         restDedicationText = Config.Get("kiosk.restDedicationText", ""),
         lockScreenImage = Config.Get("kiosk.lockScreenImage", false),
+        restNoteText = Config.Get("kiosk.restNoteText", ""),
         showDafYomi = Config.Get("kiosk.showDafYomi", false),
         yahrzeitMonth = Config.Get("kiosk.yahrzeitMonth", ""),
         yahrzeitDay = Config.Get("kiosk.yahrzeitDay", 0),
@@ -824,6 +825,7 @@ public static partial class Kiosk
             "lockScreenImage", "restShowVerse", "restShowClock", "restShowZmanim", "restShowLogo", "restShowDedication" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restDedicationText")) { string dt = (b.Str("restDedicationText") ?? "").Replace("\r", ""); Config.Set("kiosk.restDedicationText", dt.Length > 400 ? dt[..400] : dt); }
+        if (b.Has("restNoteText")) { string nt = (b.Str("restNoteText") ?? "").Replace("\r", ""); Config.Set("kiosk.restNoteText", nt.Length > 600 ? nt[..600] : nt); }
         if (b.Has("lockScreenImage")) Tray.Invoke(LockScreenImage.Update);
         if (b.Has("saverWhenUnlocked")) Config.Set("kiosk.saverWhenUnlocked", b.Bool("saverWhenUnlocked", true)); // D2
         if (b.Has("bootCover")) Config.Set("kiosk.bootCover", b.Bool("bootCover", true)); // D3

@@ -547,6 +547,27 @@ internal sealed class RestScreen : Form
         float dedX = zmItems.Count > 0 && !zmLeft ? 24 * s : (zmItems.Count > 0 ? r.Width - 24 * s - dedW : 24 * s);
         var ded = new RectangleF(dedX, r.Height - 170 * s, dedW, 130 * s);
         var dedFmt = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Far };
+        // משוב 15.10: כיתוב אישי (kiosk.restNoteText) בריבוע ממוסגר, בצד שמול הזמנים, מעל ההקדשה
+        string note = Config.Get("kiosk.restNoteText", "").Trim();
+        if (note.Length > 0)
+        {
+            using var noteF = new Font("David", 18f, GraphicsUnit.Point);
+            float pad = 16 * s, top = r.Height * 0.08f, maxBottom = ded.Y - 16 * s;
+            var fmtN = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisWord };
+            float inner = ded.Width - 2 * pad;
+            float th = Math.Min(g.MeasureString(note, noteF, (int)inner, fmtN).Height, maxBottom - top - 2 * pad);
+            if (th > 10 * s)
+            {
+                var box = new Rectangle((int)ded.X, (int)top, (int)ded.Width, (int)(th + 2 * pad));
+                using var path = Overlay.Round(box, (int)(14 * s));
+                using var bgN = new SolidBrush(Color.FromArgb(70, 10, 12, 22));
+                using var pen = new Pen(Color.FromArgb(150, gold), 1.4f * s);
+                g.FillPath(bgN, path); g.DrawPath(pen, path);
+                g.SetClip(path);
+                g.DrawString(note, noteF, Brushes.White, new RectangleF(box.X + pad, box.Y + pad, inner, th), fmtN);
+                g.ResetClip();
+            }
+        }
         if (shDed)
         {
             // נוסח מותאם (kiosk.restDedicationText): שורה 1 קטנה, שורה 2 מודגשת, השאר קטן. ריק = הקבוע
@@ -625,12 +646,13 @@ internal sealed class RestScreen : Form
         }
         using (f)
         using (var bg = new SolidBrush(Color.FromArgb(70, 10, 12, 22)))
-        using (var border = new Pen(Color.FromArgb(70, gold), 1f * s))
+        using (var border = new Pen(Color.FromArgb(150, gold), 1.4f * s)) // משוב 15.10: מסגרת דקה ברורה
         using (var path = Overlay.Round(new Rectangle((int)x, (int)y, (int)w, (int)maxH), (int)(14 * s)))
         using (var goldB = new SolidBrush(gold))
         {
             g.FillPath(bg, path);
             g.DrawPath(border, path);
+            g.SetClip(path); // שום טקסט לא זולג מחוץ למסגרת
             var fmt = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Near, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.DirectionRightToLeft | StringFormatFlags.NoWrap };
             int per = (int)Math.Ceiling(items.Count / (double)cols);
             float colW = (w - 2 * pad - gap * (cols - 1)) / cols;
@@ -646,6 +668,7 @@ internal sealed class RestScreen : Form
                     yy += lineH;
                 }
             }
+            g.ResetClip();
         }
     }
 
