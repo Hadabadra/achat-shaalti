@@ -455,7 +455,10 @@ internal sealed class EmergencyForm : Form
 
     public static void Open()
     {
-        if (!Kiosk.IsActive) return;
+        // לא רק Kiosk.IsActive (דגל מקומי ב-config.json): כשרכיב ההקשחה מותקן הוא מקור האמת למצב
+        // הנעילה, ועלול לאכוף נעילה גם כש-config.json המקומי לא מסונכרן (למשל אחרי קריסה/הפעלה
+        // מחדש) - חלון ביטול החירום חייב להיות זמין בכל מצב שבו המשתמש בפועל נעול, לא רק לפי הדגל המקומי
+        if (!Kiosk.IsActive && !HardLock.ServiceActive) return;
         if (_open is { IsDisposed: false }) { _open.Activate(); return; }
         _open = new EmergencyForm();
         _open.Show();
