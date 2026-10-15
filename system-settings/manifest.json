@@ -26,7 +26,8 @@
     "navigation.write",
     "app.shortcuts",
     "app.startup_contributions",
-    "app.run_on_startup"
+    "app.run_on_startup",
+    "library.books.provide"
   ],
   "network": {
     "enabled": true,
@@ -61,6 +62,14 @@
       "activationEvents": [
         "app.startup",
         "calendar.city_changed"
+      ],
+      "libraryBooks": [
+        {
+          "id": "settings-screens",
+          "provider": "systemsettings",
+          "title": "הגדרות מערכת",
+          "icon": "settings_24_regular"
+        }
       ]
     },
     "background": {

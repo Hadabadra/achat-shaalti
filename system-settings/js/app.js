@@ -136,6 +136,14 @@
   }
   SS.sectionVisible = function (id) { var s = sectionById(id); return !!s && visible(s); };
 
+  /* 4ד: כל מסך הגדרות הוא "ספר" בספריית אוצריא — חיפוש "שמע"/"נעילה" בספרייה פותח את המסך */
+  function publishSettingsBooks() {
+    if (!window.SdkX || !SdkX.setLibraryBooks) return;
+    SdkX.setLibraryBooks(SS.sections.map(function (x) {
+      return { id: x.id, title: x.title + ' — הגדרות מערכת', categoryPath: '/הגדרות מערכת' };
+    }));
+  }
+
   function buildNav() {
     SS.sections.sort(function (a, b) {
       var x = ORDER.indexOf(a.id), y = ORDER.indexOf(b.id);
@@ -382,6 +390,7 @@
     });
     if (payload && payload.plugin && payload.plugin.version) SS.VERSION = payload.plugin.version;
     buildNav();
+    publishSettingsBooks();
     document.getElementById('top-refresh').addEventListener('click', function () {
       if (!state.connected) { connect(); return; }
       var s = sectionById(state.current);
@@ -415,6 +424,7 @@
       if (window.SdkX) {
         SdkX.onCommand('openSystemSettings', function () { SdkX.openSelf(); });
         SdkX.onCommand('openLockSettings', function () { SdkX.openSelf({ section: 'kiosk' }); });
+        SdkX.onLibraryBookOpen(function (ev) { var id = ev && (ev.id || (ev.data && ev.data.id)); if (id) { if (state.connected) show(id); else SdkX.openSelf({ section: id }); } });
       }
       window.Otzaria.on('plugin.suspended', function () { state.suspended = true; clearTimeout(state.probeTimer); clearTimeout(zmanimTimer); });
       window.Otzaria.on('plugin.resumed', function () {

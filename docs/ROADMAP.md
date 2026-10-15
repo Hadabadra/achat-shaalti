@@ -378,3 +378,9 @@
 - [x] ממצא 1 (#32): אכיפת Windows Hello בצינור השירות — סוד משותף גשר↔שירות + HMAC-SHA256 קצר-טווח (±60ש'), bridge/PipeMac.cs; ר' docs/HARDLOCK.md. בדיקה חיה: WINDOWS-CHECKLIST.
 - [ ] ממצא 8: הרצה מוגבהת מתיקייה ניתנת לכתיבה + חתימת Authenticode — תלוי ב-#19.
 - סיבה: בדיקות Windows (3 הראשונים) אחר כך; אייקון — דילוג כעת; חתימה (#19) — לא מחכים; Windows Hello בצינור השירות — במימוש בסבב הבא.
+
+## שילוב עם הספרייה — 15.10.2026 (לפני 3.9.0)
+- ✅ 4ד: מסכי "הגדרות מערכת" כספרים בספרייה (ספק `systemsettings`, contributes.startup.libraryBooks + setProviderBooks; לחיצה → openSelf({section}); מטופל גם ברקע).
+- ⛔ 4א: ב-SDK (Otzaria dev) אין נתיב מקומי לספר — openBookFile מחזיר token/url בלבד, getBookMetadata בלי path. אי אפשר "להציג בסייר". לא הוצהרה הרשאה reader.context_menu.
+- ⏳ 4ב: אפשרי (library.getTree + reader.openBook — ההרשאות כבר בסייר), טרם מומש: תיקייה וירטואלית "ספריית אוצריא" בסייר.
+- ⏳ 4ג: בסייר אין כיום קריאה ל-setProviderBooks (רק עטיפה ב-sdk-extras) — אין מה להעביר להצהרה. אם ימומש: provider באותיות קטנות; openAction תומך רק בפקודות הצהרתיות (reader.openBook, localService.post…), לא בפתיחת קובץ — לכן בלי openAction והלחיצה מגיעה כ-library.providerBook.openRequested.

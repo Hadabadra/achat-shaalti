@@ -31,3 +31,13 @@
   O.on('plugin.boot', function () { run('startup'); });
   O.on('calendar.city_changed', function () { run('city'); });
 })();
+
+/* 4ד: לחיצה על "ספר" של הגדרות מערכת בספרייה כשהדף סגור — פותחים את התוסף במסך המתאים */
+(function () {
+  var O = window.Otzaria;
+  if (!O || !O.on) return;
+  O.on('library.providerBook.openRequested', function (ev) {
+    var id = ev && (ev.id || (ev.data && ev.data.id));
+    if (id) { try { O.call('plugin.openSelf', { param: { section: id } }); } catch (e) { /* כלום */ } }
+  });
+})();

@@ -74,7 +74,7 @@
   X.openSelf = function (param) { return call('plugin.openSelf', param == null ? {} : { param: param }); };
 
   /* ספרים מתוסף בחיפוש הספרייה (library.books.provide): קובצי PDF/Word מתיקיות שנבחרו */
-  X.setLibraryBooks = function (books) { return call('library.setProviderBooks', { books: books }); };
+  X.setLibraryBooks = function (books, provider) { return call('library.setProviderBooks', { provider: provider || 'systemsettings', books: books }); };
   X.onLibraryBookOpen = function (fn) { on('library.providerBook.openRequested', fn); };
 
   X.self = SELF;
