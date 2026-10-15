@@ -1090,6 +1090,12 @@
         { value: 'bar-top', label: 'שורת משימות למעלה' }
       ]
     });
+    /* משוב 3.9: שדות הפתיחה הזמנית נשמטו ב-c0c7cd7 (הקבוצה נשארה ריקה והשמירה נכשלה על "משך בדקות") — שוחזרו מ-3.8.0 */
+    fields.push({ name: 'tu', type: 'checkbox', label: 'פתיחה זמנית בסיסמה נפרדת', value: !!tu.enabled,
+      disabled: !tfaNow && !tu.enabled, hint: '<span data-tu-hint>' + (tfaNow ? TU_HINT_ON : TU_HINT_OFF) + '</span>' });
+    fields.push({ name: 'tuMin', label: 'פתיחה זמנית: משך בדקות (1–60)', value: String(tu.minutes || 30), dir: 'ltr', placeholder: '30' });
+    fields.push({ name: 'tuPw', label: tu.configured ? 'סיסמת פתיחה זמנית חדשה (ריק = ללא שינוי)' : 'סיסמת פתיחה זמנית', type: 'password', dir: 'ltr' });
+    fields.push({ name: 'tuPw2', label: 'אימות סיסמת הפתיחה הזמנית', type: 'password', dir: 'ltr' });
     /* משוב 3.9: השורה המקורית (c0c7cd7) הפנתה ל-secIdx/secFields שלא הוגדרו → ReferenceError, ו"הגדרות נעילה" נתקע ב"טוען".
        כאן נבנות תיבות "מה פתוח בזמן נעילה" (הקבוצה למטה מסדרת אותן לפי השם sec_<id>) */
     var openSet = st.openSections || [];
