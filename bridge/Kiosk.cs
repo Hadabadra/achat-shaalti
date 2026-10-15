@@ -193,6 +193,13 @@ public static partial class Kiosk
         throw new BridgeException("wrong_password", message, 401);
     }
 
+    /// <summary>#69: האם קוד גיבוי חד-פעמי תקף — תחת אותה השהיה אחרי 5 ניסיונות שגויים (לא עוקף את מגבלת הניסיונות)</summary>
+    private static bool IsBackupCode(string s)
+    {
+        lock (Gate) { ThrowIfLockedOut(); }
+        return BackupCodes.Matches(s);
+    }
+
     /// <summary>אימות סיסמה לשימוש מודולים אחרים (בלי קוד שחזור)</summary>
     internal static void RequirePassword(string password) => Verify(password, allowRecovery: false);
 
@@ -716,8 +723,11 @@ public static partial class Kiosk
         if (HasPassword)
         {
             // שינוי סיסמה קיימת: אימות הישנה, וסנכרון לרכיב ההקשחה אם מותקן. קוד השחזור הקיים נשמר
-            Verify(b.Str("oldPassword"), allowRecovery: true);
+            // #69: גם קוד גיבוי חד-פעמי מתקבל (שכחתי סיסמה) — רכיב ההקשחה בודק ושורף אותו בעצמו
+            bool viaBackup = IsBackupCode(b.Str("oldPassword") ?? "");
+            if (!viaBackup) Verify(b.Str("oldPassword"), allowRecovery: true);
             if (HardLock.Available) HardLock.SetPassword(b.Str("oldPassword"), newPassword);
+            if (viaBackup) BackupCodes.Consume(b.Str("oldPassword"));
             // #56: שחזור סיסמה שנשכחה בקוד השחזור — הנעילה נשארת פעילה, והקוד שנוצל מוחלף בחדש (חד-פעמי)
             if (IsRecoveryCode(b.Str("oldPassword") ?? "") || !PackG.RecoverySaved)   // סבב G: קוד שלא נשמר — מקבלים קוד חדש
             {
@@ -744,7 +754,7 @@ public static partial class Kiosk
     {
         if (!HasPassword) throw BridgeException.BadRequest("יש להגדיר סיסמה לפני הפעלת הנעילה");
         // סבב G (9): קוד השחזור חייב להישמר לקובץ או להדפסה לפני ההפעלה הראשונה
-        if (!PackG.RecoverySaved) throw BridgeException.BadRequest("יש לשמור את קוד השחזור לקובץ או להדפיס אותו לפני הפעלת הנעילה (הגדרות ← נעילה ← שמירת קוד השחזור)");
+        if (!PackG.RecoverySaved) throw BridgeException.BadRequest(Lang.T("יש לשמור את קוד השחזור לקובץ או להדפיס אותו לפני הפעלת הנעילה (הגדרות ← נעילה ← שמירת קוד השחזור)", "Save the recovery code to a file or print it before turning on the lock (Settings → Lock → save recovery code)"));
         Verify(b.Str("password"), allowRecovery: false);
         AdminLog.Add("הפעלת נעילה");
 
@@ -781,12 +791,15 @@ public static partial class Kiosk
     private static object Disable(JsonElement b)
     {
         string pw = b.Str("password");
-        bool viaRecovery = IsRecoveryCode(pw);
-        Verify(pw, allowRecovery: true);
+        // #69: קוד גיבוי חד-פעמי — כמו קוד השחזור (ביטול חירום, פטור מ-2FA), ונשרף אחרי השימוש
+        bool viaBackup = IsBackupCode(pw);
+        bool viaRecovery = viaBackup || IsRecoveryCode(pw);
+        if (!viaBackup) Verify(pw, allowRecovery: true);
         AdminLog.Add("ביטול נעילה");
         // קוד שחזור פטור מ-2FA (ביטול חירום); סיסמה רגילה דורשת גם Windows Hello אם מופעל
         if (!viaRecovery) TwoFactor.Require("ביטול נעילת המחשב");
         if (HardLock.Available) HardLock.Disable(pw);
+        if (viaBackup) BackupCodes.Consume(pw);
         // ביטול ידני בתוך חלון מתוזמן: בלי זה התזמון ינעל מחדש תוך שניות וה"ביטול" לא יתפוס עד סוף החלון (שעות).
         // מדלגים על יתרת החלון הנוכחי — החלון הבא (מחר) יחול כרגיל.
         if (ScheduleEnabled && Config.Get<string>("kiosk.activatedBy", "manual") == "schedule" && SchedMulti.InAnyWindow(DateTime.Now))
@@ -1176,7 +1189,7 @@ public static partial class Kiosk
     /// <summary>קוד שחזור משורת הפקודה: OtzariaBridge.exe --unlock CODE</summary>
     public static bool EmergencyUnlock(string code)
     {
-        if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
+        if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt") && !BackupCodes.Consume(code)) return false;
         int self = Environment.ProcessId;
         foreach (var p in Process.GetProcessesByName("OtzariaBridge"))
         {
@@ -1210,8 +1223,14 @@ public static partial class Kiosk
 
     public static bool EmergencyRelease(string code)
     {
-        if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt")) return false;
+        bool viaBackup = false;
+        if (!Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt"))
+        {
+            if (!IsBackupCode(code)) return false;
+            viaBackup = true; // #69: קוד גיבוי חד-פעמי
+        }
         try { HardLock.EmergencyDisable(code); } catch (Exception ex) { Config.Log("emergency: " + ex.Message); }
+        if (viaBackup) BackupCodes.Consume(code);
         EndTempUnlockLocal("ביטול חירום בקוד שחזור", relock: false);
         Release();
         Config.Log("kiosk: הנעילה בוטלה בקיצור חירום עם קוד שחזור");
@@ -1222,7 +1241,8 @@ public static partial class Kiosk
     public static string ReleaseForUninstall(string password)
     {
         if (HasPassword && !(Matches(password, "kiosk.passwordHash", "kiosk.salt") ||
-                             Matches(Secret.NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt")))
+                             Matches(Secret.NormalizeRecovery(password), "kiosk.recoveryHash", "kiosk.recoverySalt") ||
+                             BackupCodes.Consume(password)))
             return "נדרשת סיסמת הנעילה: --password <סיסמה>";
         Config.Set("kiosk.active", false);
         Config.Set("kiosk.strict", false);

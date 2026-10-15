@@ -494,7 +494,7 @@ internal sealed class EmergencyForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10.5f);
         ClientSize = new Size(420, 190);
-        var info = new Label { Text = Lang.T("הזינו את קוד השחזור (12 תווים) כדי לבטל את הנעילה כולה.", "Enter the 12-character recovery code to turn off lock mode completely."), Dock = DockStyle.Top, Height = 56, Padding = new Padding(12, 12, 12, 0) };
+        var info = new Label { Text = Lang.T("הזינו את קוד השחזור (12 תווים) או קוד גיבוי חד-פעמי כדי לבטל את הנעילה כולה.", "Enter the 12-character recovery code or a one-time backup code to turn off lock mode completely."), Dock = DockStyle.Top, Height = 56, Padding = new Padding(12, 12, 12, 0) };
         var code = new TextBox { Dock = DockStyle.Top, Font = new Font("Consolas", 14f), TextAlign = HorizontalAlignment.Center, CharacterCasing = CharacterCasing.Upper, RightToLeft = RightToLeft.No };
         var msg = new Label { Dock = DockStyle.Top, Height = 28, ForeColor = Color.Firebrick, TextAlign = ContentAlignment.MiddleCenter };
         var ok = new Button { Text = Lang.T("בטל נעילה", "Unlock"), Dock = DockStyle.Bottom, Height = 40 };

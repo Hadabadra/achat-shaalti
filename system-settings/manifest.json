@@ -22,7 +22,10 @@
     "app.info.read",
     "notifications.system",
     "notifications.send",
-    "events.subscribe:calendar.city_changed"
+    "events.subscribe:calendar.city_changed",
+    "navigation.write",
+    "app.shortcuts",
+    "app.startup_contributions"
   ],
   "network": {
     "enabled": true,
@@ -38,6 +41,22 @@
       "allowOrderBeforeBuiltIns": true,
       "defaultPinned": false,
       "iconName": "settings_24_regular"
+    },
+    "startup": {
+      "shortcuts": [
+        {
+          "id": "open-system-settings",
+          "label": "פתיחת הגדרות מערכת",
+          "key": "ctrl+shift+alt+s",
+          "command": "openSystemSettings"
+        },
+        {
+          "id": "open-lock-settings",
+          "label": "הגדרות נעילה (אחת שאלתי)",
+          "key": "ctrl+shift+alt+l",
+          "command": "openLockSettings"
+        }
+      ]
     }
   }
 }

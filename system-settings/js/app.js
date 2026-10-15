@@ -94,6 +94,12 @@
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':00' +
       sg + p(Math.floor(a / 60)) + ':' + p(a % 60);
   }
+  function isoLocal(d) { return isoWithOffset(d).slice(0, 19); }
+  function hhmm(d) { return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes(); }
+  function lockTitle(w) {
+    var en = window.I18N && I18N.isEn && I18N.isEn();
+    return (en ? 'Achat Shaalti lock ' : 'נעילת אחת שאלתי ') + hhmm(w.start) + '–' + hhmm(w.end);
+  }
   function lockWindows(sc) {
     var wins = [{ start: sc.start, end: sc.end }].concat(sc.extra || []);
     var days = (sc.days && sc.days.length) ? sc.days : [0, 1, 2, 3, 4, 5, 6];
@@ -123,7 +129,11 @@
       try {
         await window.Otzaria.call('publishedData.upsert', {
           type: 'calendar.event', scope: 'global', key: want[i].key,
-          payload: { title: 'נעילת אחת שאלתי', startsAt: isoWithOffset(want[i].start), endsAt: isoWithOffset(want[i].end), source: 'אחת שאלתי', importance: 'normal' }
+          /* #69 (בדיקת לוח השנה מול קוד אוצריא, plugin_calendar_adapter.dart): אוצריא מציגה רק את התאריך ואת הכותרת —
+             השעה ו-endsAt אינם מוצגים, ולכן השעות נכנסות לכותרת. התאריך נקבע מ-DateTime.tryParse, שממיר זמן עם
+             היסט ל-UTC (00:30+03:00 היה נופל ביום הקודם) — לכן שולחים זמן מקומי בלי היסט. importance שאינו
+             high/medium/low היה מתווסף לתיאור ("(normal)") — לכן לא נשלח. */
+          payload: { title: lockTitle(want[i]), startsAt: isoLocal(want[i].start), endsAt: isoLocal(want[i].end), source: (window.I18N && I18N.isEn && I18N.isEn()) ? 'Achat Shaalti' : 'אחת שאלתי' }
         });
       } catch (e) { /* פרסום אירוע בודד אינו קריטי */ }
     }
@@ -480,6 +490,11 @@
         if (pr && pr.section) { try { location.hash = pr.section; } catch (e) { /* כלום */ } if (state.connected) show(pr.section); }
       });
       window.Otzaria.on('calendar.city_changed', function () { pushZmanimCache(); });
+      /* #69: קיצורים מהמניפסט — פתיחת הגדרות מערכת / ישר להגדרות הנעילה */
+      if (window.SdkX) {
+        SdkX.onCommand('openSystemSettings', function () { SdkX.openSelf(); });
+        SdkX.onCommand('openLockSettings', function () { SdkX.openSelf({ section: 'kiosk' }); });
+      }
       window.Otzaria.on('plugin.suspended', function () { state.suspended = true; clearTimeout(state.probeTimer); clearTimeout(zmanimTimer); });
       window.Otzaria.on('plugin.resumed', function () {
         state.suspended = false;

@@ -837,7 +837,7 @@
     // להקליד לתוכה. כאן פותחים ישר ביישום חיצוני (Notepad וכו') כדי שאפשר יהיה לכתוב משהו בפועל
     if (!isDir) {
       if (S.prov.caps.open) S.prov.open(newPath).catch(function (err) { opError(err, 'הפתיחה נכשלה'); });
-      else ui.toast('הקובץ נוצר ריק. לעריכה יש לפתוח אותו ביישום חיצוני (דורש קיוסק אוצריא)', 'info');
+      else ui.toast('הקובץ נוצר ריק. לעריכה יש לפתוח אותו ביישום חיצוני (דורש אחת שאלתי)', 'info');
     }
   }
   async function reloadSelect(paths) {
@@ -1796,10 +1796,8 @@
   /* הרשאות SDK (sdk-extras.js): קיצור Ctrl+Shift+E, הדבקת נתיב מהלוח, ספרים בחיפוש הספרייה */
   function sdkExtras() {
     var X = window.SdkX; if (!X) return;
-    X.call('storage.get', { key: 'shortcut.explorer' }).then(function (r) {
-      var keys = (r && (r.value || r.data)) || 'Ctrl+Shift+E';
-      X.registerShortcut('open-explorer', keys, function () { X.call('plugin.openOther', { pluginId: X.self, param: null }); });
-    });
+    /* #69: הקיצור מוצהר במניפסט (ctrl+shift+alt+e — ctrl+shift+e תפוס בלוח השנה של אוצריא; ניתן לשינוי בהגדרות אוצריא → קיצורי מקשים) */
+    X.onCommand('openExplorer', function () { X.openSelf(); });
     /* Ctrl+Shift+V: נתיב שהועתק מחוץ לאוצריא -> מעבר אליו */
     document.addEventListener('keydown', function (e) {
       if (!(e.ctrlKey && e.shiftKey && (e.key === 'V' || e.key === 'v'))) return;

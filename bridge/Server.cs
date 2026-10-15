@@ -63,6 +63,7 @@ public static class Server
         BiosHardening.Register();
         Kiosk.Register();
         PackG.Register();
+        BackupCodes.Register(); // #69: קודי גיבוי חד-פעמיים
         Pairing.Register();
         HardLock.Register();
         Zmanim.Register();

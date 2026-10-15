@@ -114,3 +114,19 @@
 ב-3.7.0 ה-CI חישב גרסת תוספים 0.x מספירת commits (0.58.0) — נמוכה מ-3.6.0 המותקן, ואוצריא סירבה להתקין (שדרוג לאחור).
 מ-3.7.1 שלב "גרסת התוספים" ב-build.yml לוקח את `<Version>` מ-bridge/OtzariaBridge.csproj. אסור לחזור למספור עצמאי/נמוך.
 לפני כל שחרור: לוודא ש-manifest.json של שני התוספים בקובץ ה-.otzplugin גבוה מהגרסה הקודמת.
+
+## לוח השנה של אוצריא — איך אירוע calendar.event מוצג (נבדק בקוד אוצריא, 15.10.2026, #69)
+מקור: `lib/plugins/adapters/plugin_calendar_adapter.dart` (ענף dev).
+- נקראים רק `title`, `startsAt`, `source`, `importance`. **השעה ו-`endsAt` אינם מוצגים** — האירוע נקבע ליום (`baseGregorianDate`) בלבד. לכן השעות צריכות להיות בתוך הכותרת.
+- `DateTime.tryParse` ממיר מחרוזת עם היסט (`+03:00`) ל-UTC — 00:30 מקומי נופל ביום הקודם. לכן שולחים זמן מקומי בלי היסט (`2026-10-15T00:30:00`).
+- התיאור = `source (importance)`. ערך שאינו `high/medium/low` נראה מוזר — לא שולחים importance.
+- `publishedData.upsert/remove` מרעננים את לוח השנה מיד. הפרסום רץ רק כשדף "הגדרות מערכת" פתוח (אין מנוע רקע); רשומות נשמרות עד שמסירים אותן.
+
+## קיצורי מקלדת של התוספים (#69)
+- מוצהרים במניפסט: `contributes.startup.shortcuts` (`id`, `label`, `key`, `command`) — דורש `app.startup_contributions` + `app.shortcuts`. אוצריא מעירה את התוסף ושולחת `app.command` עם `{ command, shortcutId }`; המשתמש משנה בהגדרות ← קיצורי מקשים. `plugin.openSelf` (`navigation.write`) פותח את דף התוסף, `param` מגיע ב-`plugin.page_opened`.
+- מקשים תפוסים באוצריא: ר' `lib/shortcuts/shortcut_validator.dart` (למשל ctrl+shift+e = לוח שנה). לכן ctrl+shift+alt+…
+- שם קריאת התראת מערכת: `notifications.sendSystem` (לא `notifications.system`, שזה שם ההרשאה).
+
+## i18n
+- `node tools/i18n-missing.js <plugin>` מדפיס מחרוזות עבריות בלי תרגום. מה שנשאר מכוון: נתוני הדמה ב-js/bridge.js, אותיות גימטריה (מטופלות בקוד), מילות חיפוש, ונוסח הקדשה.
+- i18n.js מתרגם מחרוזת מורכבת לפי חלקים (מילים שלמות, מהארוך לקצר) רק אם לא נשאר עברית.

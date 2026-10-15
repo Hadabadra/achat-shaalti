@@ -314,6 +314,14 @@
       M.recovery = code;
       return { ok: true, recoveryCode: code };
     },
+    '/kiosk/recovery/backup/status': function () { return { left: M.backup ? M.backup.length : 0 }; },
+    '/kiosk/recovery/backup': function (b) {
+      checkPw(b.password, true);
+      var A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      M.backup = [];
+      for (var i = 0; i < 10; i++) { var c = ''; for (var j = 0; j < 12; j++) c += A.charAt(Math.floor(Math.random() * A.length)); M.backup.push(c.replace(/(.{4})(?=.)/g, '$1-')); }
+      return { ok: true, codes: M.backup.slice(), path: 'Documents\\אחת שאלתי - קודי גיבוי לשחזור.txt', left: 10 };
+    },
     '/kiosk/recovery/keep': function () { return { ok: true, path: 'Documents\\אחת שאלתי - קוד שחזור.txt' }; },
     '/kiosk/enable': function (b) {
       if (!M.kiosk.hasPassword) throw mockErr('bad_request', 'יש להגדיר סיסמה תחילה');

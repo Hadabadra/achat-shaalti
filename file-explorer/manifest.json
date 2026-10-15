@@ -55,6 +55,14 @@
           "icon": "add_24_regular",
           "openPlugin": true
         }
+      ],
+      "shortcuts": [
+        {
+          "id": "open-explorer",
+          "label": "פתיחת סייר הקבצים",
+          "key": "ctrl+shift+alt+e",
+          "command": "openExplorer"
+        }
       ]
     }
   },

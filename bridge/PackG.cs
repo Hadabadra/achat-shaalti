@@ -27,16 +27,17 @@ internal static class PackG
     private static object Keep(JsonElement b)
     {
         string code = (b.Str("code") ?? "").Trim();
-        if (!Kiosk.IsRecoveryCode(code)) throw BridgeException.BadRequest("קוד השחזור אינו תואם");
+        if (!Kiosk.IsRecoveryCode(code)) throw BridgeException.BadRequest(Lang.T("קוד השחזור אינו תואם", "The recovery code doesn't match"));
         string pretty = string.Join("-", Enumerable.Range(0, (code.Replace("-", "").Length + 3) / 4)
             .Select(i => code.Replace("-", "").Substring(i * 4, Math.Min(4, code.Replace("-", "").Length - i * 4))));
         string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        string path = Path.Combine(docs, Program.AppName + " - קוד שחזור.txt");
+        string path = Path.Combine(docs, Program.AppName + " - " + Lang.T("קוד שחזור", "recovery code") + ".txt");
         File.WriteAllText(path,
-            Program.AppName + " — קוד שחזור חד-פעמי\r\n\r\n" + pretty + "\r\n\r\n" +
-            "שמרו את הדף במקום בטוח, לא ליד המחשב.\r\n" +
-            "ביטול נעילה: בחלון \"ביטול נעילה\", או מחלון פקודה:\r\nOtzariaBridge.exe --unlock " + pretty + "\r\n" +
-            "\r\nנוצר: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + "\r\n", System.Text.Encoding.UTF8);
+            Program.AppName + " — " + Lang.T("קוד שחזור", "recovery code") + "\r\n\r\n" + pretty + "\r\n\r\n" +
+            Lang.T("שמרו את הדף במקום בטוח, לא ליד המחשב.", "Keep this page in a safe place, not next to the computer.") + "\r\n" +
+            Lang.T("ביטול נעילה: בחלון \"ביטול נעילה\", או מחלון פקודה:", "To turn off the lock: in the \"Turn off lock\" window, or from a command prompt:") +
+            "\r\nOtzariaBridge.exe --unlock " + pretty + "\r\n" +
+            "\r\n" + Lang.T("נוצר: ", "Created: ") + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + "\r\n", System.Text.Encoding.UTF8);
         string mode = b.Str("mode") ?? "file";
         try
         {

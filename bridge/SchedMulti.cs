@@ -49,7 +49,7 @@ internal static class SchedMulti
         foreach (var w in ex.EnumerateArray().Take(10))
         {
             string s = w.Str("start"), e = w.Str("end");
-            if (!Sched.IsValid(s) || !Sched.IsValid(e)) throw BridgeException.BadRequest("זמן נוסף אינו תקין (HH:MM)");
+            if (!Sched.IsValid(s) || !Sched.IsValid(e)) throw BridgeException.BadRequest(Lang.T("זמן נוסף אינו תקין (HH:MM)", "An additional time is invalid (HH:MM)"));
             arr.Add(s + "-" + e);
         }
         Config.Set(Key, arr);

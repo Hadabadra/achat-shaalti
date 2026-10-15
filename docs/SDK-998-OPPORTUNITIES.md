@@ -1,3 +1,5 @@
+> **#69 (15.10.2026):** נבדקו כל 58 ההרשאות מול spec.json העדכני. נוסף: קיצורים מוצהרים במניפסט בשני התוספים, `plugin.openSelf`, תיקון `notifications.sendSystem`, תיקון תצוגת לוח השנה. נשקלו ולא נוספו (אין תועלת אמיתית כרגע): `app.run_on_startup`/`background_keep_alive` (כבויים כברירת מחדל ודורשים אישור מיוחד; הגשר כבר מתריע), `notifications.scheduleSystem` (כפילות להתראת הגשר לפני נעילה), `fs.folder_access` (הסייר משתמש ב-`fs.pickUserFolder`), `settings.read` (מצב מנותק מגיע מ-`app.getConnectivity`), `feedback.send_email` (דיווחים הולכים ל-GitHub), `ui.create_shortcut` (נדחה בעבר).
+
 # מה אפשר להוסיף מ-SDK של אוצריא 0.9.97–0.9.98 (סריקה 11.10.2026)
 
 מקור: `Otzaria/otzaria` ענף `dev`, ‏`docs/plugin-sdk/spec.json` + `API_REFERENCE.md` (6000 שורות).

@@ -29,9 +29,10 @@
          התוצאה נשמרת למשך הסשן; אם עוד לא מוכנה אחרי 1.5 שנ' מציגים בלעדיה ומשלימים כשהיא מגיעה */
       detectFast(body),
       SS.bridge.call('/pair/list', {}).catch(function () { return null; }),
-      SS.bridge.call('/bios/status', {}).catch(function () { return null; })
+      SS.bridge.call('/bios/status', {}).catch(function () { return null; }),
+      SS.bridge.call('/kiosk/recovery/backup/status', {}).catch(function () { return null; }) /* #69 */
     ]);
-    var pr = results[0], det = results[1], pairsRes = results[2], bios = results[3];
+    var pr = results[0], det = results[1], pairsRes = results[2], bios = results[3], backup = results[4];
 
     var progs = (pr && pr.programs) || [];
     st.autoTorah = !!(pr && pr.autoTorah);
@@ -147,6 +148,10 @@
       html += '<div class="card"><div class="card-title">סיסמה והגדרות</div>' +
         '<div class="setting-row"><div class="setting-text"><b>שינוי סיסמה</b><span class="muted">החלפת סיסמת הנעילה (נדרשת הסיסמה הנוכחית)</span></div>' +
         '<button class="btn btn-tonal" data-act="chpw">' + ui.icon('edit') + 'שינוי</button></div>' +
+        (backup ? '<div class="setting-row"><div class="setting-text"><b>קודי גיבוי לשחזור</b><span class="muted">' +
+          (backup.left ? (window.I18N && I18N.isEn && I18N.isEn() ? backup.left + ' one-time codes left' : 'נשארו ' + backup.left + ' קודים חד-פעמיים') : 'עוד לא נוצרו') +
+          ' · למקרה ששכחתם גם את הסיסמה וגם את קוד השחזור. כל קוד עובד פעם אחת</span></div>' +
+          '<button class="btn btn-tonal" data-act="backup">' + ui.icon('key') + (backup.left ? 'יצירה מחדש' : 'יצירה') + '</button></div>' : '') +
         '<div class="setting-row"><div class="setting-text"><b>פרופיל נעילה מוכן</b><span class="muted">תלמיד / בית מדרש / מנהל — מחיל סט הגדרות בלחיצה (אפשר לשנות אחר כך)</span></div>' +
         '<button class="btn btn-tonal" data-act="profile">' + ui.icon('lock') + 'בחירה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>יומן פעולות מנהל</b><span class="muted">הפעלה וביטול נעילה, שינויי סיסמה והגדרות, יבוא וייצוא</span></div>' +
@@ -225,6 +230,7 @@
     on('chpw', function () { changePw(body); });
     on('profile', function () { applyProfile(body); });
     on('adminlog', function () { showAdminLog(); });
+    on('backup', function () { makeBackupCodes(body); });
     on('export', function () { exportSettings(); });
     on('import', function () { importSettings(body); });
     editSettings(body, st); /* הגדרות הנעילה מוצגות ישירות בעמוד, לא מאחורי כפתור */
@@ -385,7 +391,7 @@
     var ok = await ui.dialog({
       title: 'שינוי סיסמת נעילה', icon: 'key',
       fields: [
-        { name: 'old', label: 'סיסמה נוכחית', type: 'password', dir: 'ltr', hint: 'שכחתם? הקלידו כאן את קוד השחזור (12 תווים). הנעילה נשארת פעילה, וקוד שחזור חדש יוצג' },
+        { name: 'old', label: 'סיסמה נוכחית', type: 'password', dir: 'ltr', hint: 'שכחתם? הקלידו כאן את קוד השחזור (12 תווים) או אחד מקודי הגיבוי החד-פעמיים. הנעילה נשארת פעילה, וקוד שחזור חדש יוצג' },
         { name: 'n1', label: 'סיסמה חדשה', type: 'password', dir: 'ltr' },
         { name: 'n2', label: 'אימות סיסמה חדשה', type: 'password', dir: 'ltr' }
       ],
@@ -453,6 +459,33 @@
     });
     if (ok) { ui.toast('הוחל פרופיל: ' + ok, 'success'); load(body); }
   }
+  /* #69: קודי גיבוי חד-פעמיים לשחזור (כמו בגוגל). מוצגים פעם אחת; הגשר שומר רק גיבובים */
+  async function makeBackupCodes(body) {
+    var r = await ui.dialog({
+      title: 'קודי גיבוי לשחזור', icon: 'key',
+      body: '<p>ייווצרו 10 קודים חד-פעמיים. כל קוד מבטל את הנעילה או מאפשר לבחור סיסמה חדשה — פעם אחת, ואז נמחק.</p>' +
+        '<p class="muted">יצירה מחדש מבטלת את הקודים הקודמים. קוד השחזור הראשי ממשיך לעבוד כרגיל.</p>',
+      fields: [
+        { name: 'pw', label: 'סיסמת נעילה או קוד שחזור', type: 'password', dir: 'ltr' },
+        { name: 'mode', type: 'select', label: 'מה לעשות עם הקודים', value: 'file',
+          options: [{ value: 'file', label: 'שמירה לקובץ במסמכים' }, { value: 'print', label: 'הדפסה (וגם שמירה לקובץ)' }] }
+      ],
+      actions: [{ label: 'ביטול', value: false }, { label: 'יצירה', value: true, kind: 'primary' }],
+      validate: function (x) { return x.pw ? '' : 'יש להקליד סיסמה'; },
+      onSubmit: async function (x) { return await SS.bridge.call('/kiosk/recovery/backup', { password: x.pw, mode: x.mode }); }
+    });
+    if (!r || !r.codes) return;
+    var list = r.codes.map(function (c, i) { return '<li><code dir="ltr">' + ui.esc(c) + '</code></li>'; }).join('');
+    await ui.dialog({
+      title: 'קודי הגיבוי שלכם', icon: 'key', tone: 'recovery', dismissible: false,
+      body: '<p>הקודים מוצגים <b>רק עכשיו</b>. ' + (r.path ? 'נשמרו גם בקובץ: <bdi dir="ltr">' + ui.esc(r.path) + '</bdi>' : '') + '</p>' +
+        '<ol class="backup-codes" dir="ltr">' + list + '</ol>' +
+        '<p>שמרו את הדף במקום בטוח, <b>לא ליד המחשב</b>. כל קוד עובד פעם אחת: בחלון „ביטול נעילה”, ב-Ctrl+Alt+Shift+F12, או בשדה „סיסמה נוכחית” בשינוי סיסמה.</p>',
+      actions: [{ label: 'סיום', value: true, kind: 'primary' }]
+    });
+    load(body);
+  }
+
   async function showAdminLog() {
     var r = await ui.dialog({
       title: 'יומן פעולות מנהל', icon: 'info',
@@ -896,6 +929,7 @@
       options: [{ value: '0', label: '(כבוי)' }].concat(YAHRZEIT_DAYS.map(function (d, i) {
         /* גרש (׳) אחרי אות בודדת, גרשיים (״) לפני האות האחרונה כשיש יותר מאחת */
         var label = d.length === 1 ? d + '׳' : d.slice(0, -1) + '״' + d.slice(-1);
+        if (window.I18N && I18N.isEn && I18N.isEn()) label = String(i + 1); /* #69: באנגלית — מספר */
         return { value: String(i + 1), label: label };
       })) });
     fields.push({ more: true, name: 'yzLabel', label: 'יום השנה: טקסט (למשל "לעילוי נשמת ...")', value: st.yahrzeitLabel || '', placeholder: '' });
@@ -939,7 +973,7 @@
     var TU_HINT_ON = 'סיסמה נפרדת, שאפשר למסור למי שצריך את המחשב לזמן קצר, בלי לגלות את סיסמת הנעילה. כל הנעילה (גם סייר הקבצים) נפתחת לזמן שנקבע כאן, ואז חוזרת מעצמה. לא מתקבלת כסיסמת נעילה.';
     var TU_HINT_OFF = 'זמין רק כשהאימות הדו-שלבי (Windows Hello) מופעל — סמנו קודם את האימות הדו-שלבי. אם הוא יכובה, הפתיחה הזמנית תיעצר עד שיופעל שוב (ההגדרות נשמרות).';
     var sc = st.schedule || {};
-    fields.push({ name: 'sched', type: 'checkbox', label: 'תזמון נעילה לפי שעות', value: !!sc.enabled, hint: 'נעילה אוטומטית בכל יום בין שעה לשעה (למשל 20:00 עד 02:00, כולל אחרי חצות). מחוץ לטווח המחשב פועל רגיל. ביטול ידני בתוך הטווח יחזור לנעילה' });
+    fields.push({ name: 'sched', type: 'checkbox', label: 'תזמון נעילה לפי שעות', value: !!sc.enabled, hint: 'נעילה אוטומטית בכל יום בין שעה לשעה (למשל 20:00 עד 02:00, כולל אחרי חצות). מחוץ לטווח המחשב פועל רגיל. ביטול ידני בתוך הטווח מדלג על יתרת הטווח (החלון הבא יחול כרגיל)' });
     /* #56/#57: זמנים מוכנים (סדרים) — בחירה ממלאת שעת התחלה וסיום. סדרים שנשמרו כאן נזכרים (ss.sedarim) */
     function parseExtraSched(t) {
       var out = [], ok = true;
@@ -965,8 +999,12 @@
       hint: 'כל זמן בתבנית התחלה-סיום, מופרדים בפסיק. חלים בנוסף לזמן הראשי (בנעילה הרכה; רכיב ההקשחה אוכף רק את הראשי)' });
     /* סבב G (6): ימי שבוע לזמני הנעילה (ריק = כל הימים) */
     var DAYN = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
-    fields.push({ name: 'schedDays', label: 'ימים בשבוע לנעילה המתוזמנת', placeholder: 'א ב ג ד ה ו ש',
-      value: (sc.days && sc.days.length ? sc.days : [0, 1, 2, 3, 4, 5, 6]).map(function (d) { return DAYN[d]; }).join(' '),
+    /* #69: באנגלית מציגים ומקבלים קיצורים אנגליים; העברית תמיד מתקבלת */
+    var DAYN_EN = ['su', 'mo', 'tu', 'we', 'th', 'fr', 'sa'];
+    var dayEn = !!(window.I18N && I18N.isEn && I18N.isEn());
+    var dayLbl = function (d) { return dayEn ? DAYN_EN[d].charAt(0).toUpperCase() + DAYN_EN[d].charAt(1) : DAYN[d]; };
+    fields.push({ name: 'schedDays', label: 'ימים בשבוע לנעילה המתוזמנת', placeholder: dayEn ? 'Su Mo Tu We Th Fr Sa' : 'א ב ג ד ה ו ש',
+      value: (sc.days && sc.days.length ? sc.days : [0, 1, 2, 3, 4, 5, 6]).map(dayLbl).join(' '),
       hint: 'אותיות הימים מופרדות ברווח, למשל „א ב ג ד ה” — בלי שבת ויום שישי. חל על כל זמני הנעילה. חלון שנמשך אחרי חצות שייך ליום שבו התחיל' });
     /* #60: קורא סדרים מתוכן קובץ ייצוא (JSON גמיש או שורות טקסט) ומוסיף ל-ss.sedarim. מחזיר כמה נוספו */
     function importSedarim(text) {
@@ -1000,7 +1038,8 @@
     function parseDays(t) {
       var out = []; var ok = true;
       String(t || '').replace(/[׳'",]/g, ' ').split(/\s+/).filter(Boolean).forEach(function (w) {
-        var i = DAYN.indexOf(w); if (i < 0) ok = false; else if (out.indexOf(i) < 0) out.push(i);
+        var i = DAYN.indexOf(w); if (i < 0) i = DAYN_EN.indexOf(w.slice(0, 2).toLowerCase());
+        if (i < 0) ok = false; else if (out.indexOf(i) < 0) out.push(i);
       });
       return ok && out.length ? out.sort() : null;
     }

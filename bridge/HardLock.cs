@@ -366,6 +366,11 @@ public static class HardLock
     public static void Skip(string password, string untilIso) =>
         Must(CallSensitive(new JsonObject { ["op"] = "skip", ["password"] = password ?? "", ["until"] = untilIso ?? "" }, password));
 
+    /// <summary>#69: גיבובי קודי הגיבוי החד-פעמיים ("salt|hash") — השירות שומר ושורף אותם בעצמו</summary>
+    public static void SetBackupCodes(string password, string[] packed) =>
+        Must(CallSensitive(new JsonObject { ["op"] = "set-backup", ["password"] = password ?? "",
+            ["codes"] = new JsonArray(packed.Select(s => (JsonNode)JsonValue.Create(s)).ToArray()) }, password));
+
     /// <summary>קוד שחזור משורת הפקודה: מבטל גם בשירות (פטור מ-2FA — ביטול חירום)</summary>
     public static bool EmergencyDisable(string code)
     {
@@ -862,6 +867,26 @@ public class HardLockService : ServiceBase
         return Err("wrong_password", "סיסמה שגויה");
     }
 
+    /// <summary>#69: קוד גיבוי חד-פעמי — אם תואם, נשרף מיד (נשמר לדיסק) ומחזיר true. תחת אותה השהיה של ניסיונות שגויים</summary>
+    private bool UseBackup(string code)
+    {
+        if (DateTime.UtcNow < _lockoutUntil || _state["backupCodes"] is not JsonArray arr) return false;
+        string n = Secret.NormalizeRecovery(code);
+        if (n.Length != 12) return false;
+        for (int i = 0; i < arr.Count; i++)
+        {
+            var parts = (arr[i]?.ToString() ?? "").Split('|');
+            if (parts.Length == 2 && Secret.Matches(n, parts[1], parts[0]))
+            {
+                arr.RemoveAt(i);
+                Save();
+                HardLock.SvcLog("service: נוצל קוד גיבוי חד-פעמי, נשארו " + arr.Count);
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static JsonObject Err(string code, string message) => new() { ["ok"] = false, ["code"] = code, ["message"] = message };
     private static JsonObject Ok() => new() { ["ok"] = true };
 
@@ -1006,6 +1031,7 @@ public class HardLockService : ServiceBase
 
     /// <summary>null = מותר להמשיך. כש-2FA פעיל (או force) נדרש אישור Hello חד-פעמי; קוד שחזור פטור (ביטול חירום)</summary>
     private byte[] MacKey { get { try { var s = _state["macKey"]?.ToString(); return string.IsNullOrEmpty(s) ? null : Convert.FromBase64String(s); } catch { return null; } } }
+    private static bool ValidB64(string b64) { try { return !string.IsNullOrEmpty(b64) && Convert.FromBase64String(b64).Length >= 16; } catch { return false; } }
     private static bool ValidKey(string b64) { try { return !string.IsNullOrEmpty(b64) && Convert.FromBase64String(b64).Length >= 32; } catch { return false; } }
 
     private JsonObject Need2fa(JsonObject q, string supplied, bool force = false, bool consume = true, bool requireMac = true)
@@ -1115,6 +1141,7 @@ public class HardLockService : ServiceBase
                         ["otzariaPath"] = _state["otzariaPath"]?.ToString() ?? "", ["sessions"] = _sessions,
                         ["policy"] = PolicyNode(),
                         ["tempUnlock"] = TempNode(),
+                        ["backupLeft"] = (_state["backupCodes"] as JsonArray)?.Count ?? 0,
                     };
 
                 case "self-update": // E2/#30 ממצא 8 — ר' SvcUpdate.cs
@@ -1152,8 +1179,11 @@ public class HardLockService : ServiceBase
                     return Ok();
 
                 case "disable":
-                    if ((e = Check(pw, true)) != null) return e;
-                    if ((e = Need2fa(q, pw)) != null) return e;
+                    if (!UseBackup(pw)) // #69: קוד גיבוי חד-פעמי = כמו קוד השחזור (פטור מ-2FA), ונשרף
+                    {
+                        if ((e = Check(pw, true)) != null) return e;
+                        if ((e = Need2fa(q, pw)) != null) return e;
+                    }
                     _state["active"] = false;
                     _state["tempUnlockUntil"] = ""; // ביטול מלא: אין מה להחזיר בתום פתיחה זמנית
                     Save();
@@ -1162,9 +1192,15 @@ public class HardLockService : ServiceBase
                     return Ok();
 
                 case "set-password":
-                    if ((e = Check(q["old"]?.ToString(), true)) != null) return e;
-                    if ((e = Need2fa(q, q["old"]?.ToString())) != null) return e;
+                {
                     string np = q["new"]?.ToString() ?? "";
+                    // #69: קוד גיבוי חד-פעמי (שכחתי סיסמה) — נשרף רק אחרי שהסיסמה החדשה עברה את הבדיקות
+                    bool bk = np.Length >= 6 && !Matches(np, "tempUnlockHash", "tempUnlockSalt") && UseBackup(q["old"]?.ToString());
+                    if (!bk)
+                    {
+                        if ((e = Check(q["old"]?.ToString(), true)) != null) return e;
+                        if ((e = Need2fa(q, q["old"]?.ToString())) != null) return e;
+                    }
                     if (np.Length < 6) return Err("bad_request", "הסיסמה חייבת להכיל לפחות 6 תווים");
                     if (Matches(np, "tempUnlockHash", "tempUnlockSalt")) return Err("bad_request", "סיסמת הנעילה חייבת להיות שונה מסיסמת הפתיחה הזמנית");
                     byte[] salt = RandomNumberGenerator.GetBytes(16);
@@ -1172,6 +1208,25 @@ public class HardLockService : ServiceBase
                     _state["passwordHash"] = Secret.Hash(np, salt);
                     Save();
                     return Ok();
+                }
+
+                case "set-backup": // #69: קודי גיבוי חד-פעמיים — מחליף את הרשימה כולה. סיסמה או קוד שחזור ראשי + 2FA
+                {
+                    if ((e = Check(pw, true)) != null) return e;
+                    if ((e = Need2fa(q, pw)) != null) return e;
+                    if (q["codes"] is not JsonArray src || src.Count > 20) return Err("bad_request", "רשימת קודים לא תקינה");
+                    var dst = new JsonArray();
+                    foreach (var n in src)
+                    {
+                        var parts = (n?.ToString() ?? "").Split('|');
+                        if (parts.Length != 2 || !ValidB64(parts[0]) || !ValidB64(parts[1])) return Err("bad_request", "רשימת קודים לא תקינה");
+                        dst.Add(n.ToString());
+                    }
+                    _state["backupCodes"] = dst;
+                    Save();
+                    HardLock.SvcLog("service: הוגדרו " + dst.Count + " קודי גיבוי");
+                    return Ok();
+                }
 
                 case "settings":
                 {
