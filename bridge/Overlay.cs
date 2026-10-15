@@ -469,7 +469,13 @@ internal sealed class RestScreen : Form
         // העמודה לא זזה עם dx (רק dy), והתוכן במרכז מוגבל לרוחב שנשאר בין שתי השוליים.
         // #57: בחירת תוכן — full (הכל), zmanim (בלי פסוק), clock (שעה ותאריך בלבד), verse (פסוק בלי זמנים)
         string rc = Config.Get("kiosk.restContent", "full");
-        var zmItems = rc is "clock" or "verse" ? new List<string>() : ZmanimItems(Zmanim.Sections(DateTime.Now));
+        // משוב 15.10: מתג נפרד לכל פריט; בלי הגדרה חדשה — לפי restContent הישן
+        bool shVerse = Config.Get("kiosk.restShowVerse", rc is "full" or "verse");
+        bool shClock = Config.Get("kiosk.restShowClock", true);
+        bool shZm = Config.Get("kiosk.restShowZmanim", rc is "full" or "zmanim");
+        bool shLogo = Config.Get("kiosk.restShowLogo", true);
+        bool shDed = Config.Get("kiosk.restShowDedication", true);
+        var zmItems = !shZm ? new List<string>() : ZmanimItems(Zmanim.Sections(DateTime.Now));
         bool zmLeft = Config.Get("kiosk.restZmanimSide", "right") == "left";
         float colW = zmItems.Count > 0 ? Math.Min(340 * s, r.Width * 0.24f) : 0;
         float colMargin = 28 * s;
@@ -487,23 +493,29 @@ internal sealed class RestScreen : Form
             g.FillEllipse(goldB, cx - 4 * s, y - 4 * s, 8 * s, 8 * s);
         }
         y += 14 * s;
-        if (rc is "full" or "verse") g.DrawString("וְהָגִיתָ בּוֹ יוֹמָם וָלַיְלָה", verseF, goldB, Line(y, 60 * s), rtl);
+        if (shVerse) g.DrawString("וְהָגִיתָ בּוֹ יוֹמָם וָלַיְלָה", verseF, goldB, Line(y, 60 * s), rtl);
         y += 72 * s;
 
         // B2 (סבב B, 3.7.1): סמל "אחת שאלתי" גדול במרכז, מרחף ומסתובב לאט (חסכוני — ציור מטמון אחד, בלי אנימציה כבדה)
         float icoSize = Math.Min(r.Height * 0.26f, 260 * s);
         float bob = (float)Math.Sin(t * 0.5) * 8 * s;
         float tilt = (float)Math.Sin(t * 0.25) * 6f;
-        var gs = g.Save();
-        g.TranslateTransform(cx, y + icoSize / 2f + bob);
-        g.RotateTransform(tilt);
-        g.DrawImage(BrandArt.Big, -icoSize / 2f, -icoSize / 2f, icoSize, icoSize);
-        g.Restore(gs);
-        y += icoSize + 20 * s;
+        if (shLogo)
+        {
+            var gs = g.Save();
+            g.TranslateTransform(cx, y + icoSize / 2f + bob);
+            g.RotateTransform(tilt);
+            g.DrawImage(BrandArt.Big, -icoSize / 2f, -icoSize / 2f, icoSize, icoSize);
+            g.Restore(gs);
+            y += icoSize + 20 * s;
+        }
 
         var now = DateTime.Now;
-        g.DrawString(now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture), timeF, Brushes.White, Line(y, 110 * s), center);
-        y += 108 * s;
+        if (shClock)
+        {
+            g.DrawString(now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture), timeF, Brushes.White, Line(y, 110 * s), center);
+            y += 108 * s;
+        }
         // שם מחשב/בית כנסת (קיוסק.venueName) - אופציונלי, ישירות מתחת לשעון. ריק = לא תופס מקום בכלל
         string venue = Config.Get("kiosk.venueName", "");
         if (!string.IsNullOrWhiteSpace(venue))
@@ -512,7 +524,7 @@ internal sealed class RestScreen : Form
             y += 36 * s;
         }
         // #2: התאריך הלועזי באותה שורה עם העברי (לא בשורה נפרדת שנופלת מתחת להקדשה)
-        g.DrawString(Overlay.HebrewDate(now) + "   ·   " + now.ToString("d/M/yyyy"), dateF, Brushes.White, Line(y, 40 * s), rtl);
+        if (shClock) g.DrawString(Overlay.HebrewDate(now) + "   ·   " + now.ToString("d/M/yyyy"), dateF, Brushes.White, Line(y, 40 * s), rtl);
         if (Target == IntPtr.Zero && Idle)
         {
             y += 34 * s;
@@ -525,9 +537,22 @@ internal sealed class RestScreen : Form
         // B2: ההקדשה בפינה השמאלית-התחתונה (לא במרכז)
         var ded = new RectangleF(24 * s, r.Height - 150 * s, Math.Min(520 * s, r.Width * 0.4f), 100 * s);
         var dedFmt = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Far };
-        g.DrawString("לעילוי נשמת הנערה הצדקנית", dedF, dim, new RectangleF(ded.X, ded.Y, ded.Width, 30 * s), dedFmt);
-        g.DrawString("אסתר גיטה דינר ע\"ה", dedNameF, goldB, new RectangleF(ded.X, ded.Y + 30 * s, ded.Width, 38 * s), dedFmt);
-        g.DrawString("בת רבי מיכאל שלום הלוי שיבדלט\"א · תנצב\"ה", dedF, dim, new RectangleF(ded.X, ded.Y + 68 * s, ded.Width, 30 * s), dedFmt);
+        if (shDed)
+        {
+            // נוסח מותאם (kiosk.restDedicationText): שורה 1 קטנה, שורה 2 מודגשת, השאר קטן. ריק = הקבוע
+            string custom = Config.Get("kiosk.restDedicationText", "").Trim();
+            string[] dl = custom.Length > 0
+                ? custom.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(4).ToArray()
+                : new[] { "לעילוי נשמת הנערה הצדקנית", "אסתר גיטה דינר ע\"ה", "בת רבי מיכאל שלום הלוי שיבדלט\"א · תנצב\"ה" };
+            float dyy = ded.Y;
+            for (int i = 0; i < dl.Length; i++)
+            {
+                bool bold = dl.Length > 1 ? i == 1 : true;
+                float h = bold ? 38 * s : 30 * s;
+                g.DrawString(dl[i], bold ? dedNameF : dedF, bold ? goldB : dim, new RectangleF(ded.X, dyy, ded.Width, h), dedFmt);
+                dyy += h;
+            }
+        }
 
         // רמז קטן בתחתית; אין צורך בכפתור — כל לחיצה חוזרת
         _btn = Rectangle.Empty;

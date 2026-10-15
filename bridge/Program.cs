@@ -156,6 +156,11 @@ public static class Config
         }
     }
 
+    public static bool Has(string key)
+    {
+        lock (Gate) { return Data[key] != null; }
+    }
+
     public static bool HasList(string key)
     {
         lock (Gate) { return Data[key] is JsonArray; }

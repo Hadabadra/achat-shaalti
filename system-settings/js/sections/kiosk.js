@@ -799,13 +799,21 @@
       fields.push({ name: 'zm_' + z.id, type: 'checkpair', label: z.label, value: zmanShow.indexOf(z.id.toLowerCase()) >= 0,
         name2: 'za_' + z.id, label2: 'התראה', value2: zAlerts.indexOf(z.id.toLowerCase()) >= 0 });
     });
-    fields.push({ name: 'rcontent', type: 'select', label: 'תוכן שומר המסך', value: st.restContent || 'full',
-      options: [{ value: 'full', label: 'הכל: פסוק, שעה, תאריך וזמני היום' }, { value: 'zmanim', label: 'זמני היום (בלי פסוק)' },
-        { value: 'verse', label: 'פסוק, שעה ותאריך (בלי זמנים)' }, { value: 'clock', label: 'שעה ותאריך בלבד' }] });
-    fields.push({ name: 'parsha', type: 'checkbox', label: 'פרשת השבוע בשומר המסך', value: !!st.showParsha,
-      hint: 'שם הפרשה הקרובה (השבת הנוכחית/הבאה)' });
-    fields.push({ name: 'dafyomi', type: 'checkbox', label: 'דף יומי בשומר המסך', value: !!st.showDafYomi,
-      hint: 'מסכת ודף נוכחיים לפי לוח דף היומי' });
+    /* משוב 15.10: כל פריט בשומר המסך — מתג נפרד (במקום תפריט "תוכן"), כולל ההקדשה */
+    var rcOld = st.restContent || 'full';
+    function rcDef(k, d) { return st[k] != null ? !!st[k] : d; }
+    fields.push({ name: 'restParts', type: 'pills', label: 'מה להציג בשומר המסך', items: [
+      { name: 'rsVerse', label: 'פסוק', value: rcDef('restShowVerse', rcOld === 'full' || rcOld === 'verse') },
+      { name: 'rsClock', label: 'שעה ותאריך', value: rcDef('restShowClock', true) },
+      { name: 'rsZmanim', label: 'זמני היום', value: rcDef('restShowZmanim', rcOld === 'full' || rcOld === 'zmanim') },
+      { name: 'rsLogo', label: 'סמל', value: rcDef('restShowLogo', true) },
+      { name: 'rsDed', label: 'הקדשה', value: rcDef('restShowDedication', true) },
+      { name: 'parsha', label: 'פרשת השבוע', value: !!st.showParsha },
+      { name: 'dafyomi', label: 'דף יומי', value: !!st.showDafYomi }
+    ] });
+    fields.push({ name: 'dedText', type: 'textarea', rows: 3, label: 'נוסח ההקדשה בשומר המסך', value: st.restDedicationText || '',
+      placeholder: 'ריק = ההקדשה הקבועה. שורה ראשונה קטנה, שורה שנייה מודגשת (שם), השאר קטן',
+      hint: 'אפשר לכתוב הקדשה אחרת או לעילוי נשמת יקיריכם. עד 4 שורות' });
     fields.push({ name: 'zmSide', type: 'select', label: 'עמודת זמני היום בשומר המסך', value: st.restZmanimSide || 'right', hint: 'הזמנים מוצגים בעמודה בצד, וההקדשה בתחתית בלי חפיפה', options: [{ value: 'right', label: 'ימין' }, { value: 'left', label: 'שמאל' }] });
     fields.push({ more: true, name: 'yzMonth', type: 'select', label: 'יום השנה (הנצחה): חודש עברי', value: st.yahrzeitMonth || '',
       options: [{ value: '', label: '(כבוי)' }].concat(YAHRZEIT_MONTHS.map(function (m) { return { value: m, label: m }; })),
@@ -821,7 +829,7 @@
   };
   SS.screensaverPayload = function (x) {
     return {
-      restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, restContent: x.rcontent || 'full', showParsha: !!x.parsha, showDafYomi: !!x.dafyomi,
+      restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi, restShowVerse: !!x.rsVerse, restShowClock: !!x.rsClock, restShowZmanim: !!x.rsZmanim, restShowLogo: !!x.rsLogo, restShowDedication: !!x.rsDed, restDedicationText: String(x.dedText || '').slice(0, 400),
       zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
       zmanimElevation: +String(x.zelev).trim() || 0, zmanimAlert: ZMAN_FIELDS.filter(function (z) { return x['za_' + z.id]; }).map(function (z) { return z.id; }).join(','), zmanimAlertMinutes: +String(x.zalertmin).trim() || 10, zmanimFallbackEngine: x.zengine,
       zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,

@@ -183,7 +183,20 @@
         if (f.type === 'note') {
           return '<div class="field-note muted small">' + f.label + '</div>';
         }
-        if (f.type === 'checkpair') {
+        if (f.type === 'pills') {
+          /* משוב 15.10: כמה מתגים קטנים בשורה אחת (כל פריט בחירה נפרדת, בלי תפריט) */
+          return '<div class="field"><span class="field-label">' + ui.esc(f.label) + '</span><div class="pill-row">' +
+            f.items.map(function (it) {
+              return '<label class="mini-switch pill"><input type="checkbox" name="' + it.name + '"' + (it.value ? ' checked' : '') + '>' +
+                '<span class="mini-track"></span><span class="mini-text">' + ui.esc(it.label) + '</span></label>';
+            }).join('') + '</div>' + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</div>';
+        }
+        if (f.type === 'textarea') {
+          return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span><textarea class="input" rows="' + (f.rows || 3) + '" name="' + f.name + '"' +
+            (f.placeholder ? ' placeholder="' + ui.esc(f.placeholder) + '"' : '') + '>' + ui.esc(f.value || '') + '</textarea>' + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
+        }
+        if (f.type === 'pills') { f.items.forEach(function (it) { var e = form.querySelector('[name="' + it.name + '"]'); if (e) v[it.name] = e.checked; }); return; }
+      if (f.type === 'checkpair') {
           /* שורה אחת: תיבת סימון + מתג קטן בצד (משוב 15.10: "להציג" + "התראה" לכל זמן) */
           return '<div class="check-pair"><label class="check-row"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + '>' +
             '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label + '</span></label>' +
@@ -204,7 +217,8 @@
           return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
             '<select class="input' + (lb ? ' listbox' : '') + '" name="' + f.name + '"' + (lb ? ' size="' + Math.min(f.options.length, 6) + '"' : '') + (f.dir ? ' dir="' + f.dir + '"' : '') + '>' + opts + '</select>' + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</label>';
         }
-        return '<label class="field"><span class="field-label">' + ui.esc(f.label) + '</span>' +
+        var half = f.half || (f.half !== false && f.dir === 'ltr' && !f.type && String(f.value || '').length <= 6 && String(f.label).length <= 50);
+        return '<label class="field' + (half ? ' half' : '') + '"><span class="field-label">' + ui.esc(f.label) + '</span>' +
           '<input class="input" name="' + f.name + '" type="' + (f.type || 'text') + '"' +
           (f.placeholder ? ' placeholder="' + ui.esc(f.placeholder) + '"' : '') +
           (f.value ? ' value="' + ui.esc(f.value) + '"' : '') +
