@@ -1038,6 +1038,39 @@ public static partial class Kiosk
         catch (Exception ex) { Config.Log("boot guard: " + ex.Message); StartExplorer(); }
     }
 
+    /// <summary>
+    /// #8: רשת ביטחון למעטפת. במקום להפנות ישירות לגשר, המעטפת היא סקריפט קטן (wscript, בלי חלון)
+    /// שמפעיל explorer אם קובץ הגשר חסר, אם ההפעלה נכשלה, או אם הגשר יצא עם שגיאה (קריסה).
+    /// כך גם גשר שנמחק/נשבר לא משאיר מסך שחור. אם wscript לא קיים — חזרה להפניה ישירה (המצב הקודם).
+    /// </summary>
+    private static string ShellCommand()
+    {
+        string exe = Installer.InstalledExe;
+        string direct = "\"" + exe + "\" --background";
+        try
+        {
+            string ws = Path.Combine(Environment.SystemDirectory, "wscript.exe");
+            if (!File.Exists(ws)) return direct;
+            Directory.CreateDirectory(Config.Dir);
+            string vbs = Path.Combine(Config.Dir, "shell-guard.vbs");
+            File.WriteAllText(vbs,
+                "On Error Resume Next\r\n" +
+                "Set sh = CreateObject(\"WScript.Shell\")\r\n" +
+                "Set fs = CreateObject(\"Scripting.FileSystemObject\")\r\n" +
+                "exe = \"" + exe.Replace("\"", "") + "\"\r\n" +
+                "rc = 1\r\n" +
+                "If fs.FileExists(exe) Then\r\n" +
+                "  Err.Clear\r\n" +
+                "  rc = sh.Run(Chr(34) & exe & Chr(34) & \" --background\", 1, True)\r\n" +
+                "  If Err.Number <> 0 Then rc = 1\r\n" +
+                "End If\r\n" +
+                "If rc <> 0 Then sh.Run \"explorer.exe\", 1, False\r\n",
+                new System.Text.UTF8Encoding(false));
+            return "\"" + ws + "\" //B //NoLogo \"" + vbs + "\"";
+        }
+        catch (Exception ex) { Config.Log("kiosk: shell-guard לא נוצר: " + ex.Message); return direct; }
+    }
+
     private static bool ShellPointsToBridge()
     {
         try
@@ -1122,7 +1155,7 @@ public static partial class Kiosk
                 using var k = Registry.CurrentUser.CreateSubKey(WinlogonKey);
                 // נעילה קפדנית: המעטפת היא הגשר, שמפעיל את אוצריא. ללא strict המעטפת לא משתנה
                 if (Config.Get("kiosk.strict", false))
-                    k.SetValue("Shell", "\"" + Installer.InstalledExe + "\" --background", RegistryValueKind.String);
+                    k.SetValue("Shell", ShellCommand(), RegistryValueKind.String);
                 else k.DeleteValue("Shell", false);
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)

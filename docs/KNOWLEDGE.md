@@ -134,3 +134,5 @@
 ## מופע רקע של הגדרות מערכת (#69)
 - `contributes.background.entrypoint = background.html` (בלי ממשק) + `startup.activationEvents: ["app.startup", "calendar.city_changed"]` + הרשאת `app.run_on_startup` (כבויה עד שהמשתמש מאשר בבאנר).
 - background.js: רק אם יש `bridgeToken` ב-storage (בלי חלון צימוד מהרקע — `SS.bridge.noPair`), ורק אם הגשר עונה. מריץ `SS.sync.zmanim()` ו-`SS.sync.lockCalendar()` (js/sync.js, משותף לדף) ואז `plugin.backgroundDone`.
+
+- **#8 רשת ביטחון למעטפת (15.10.2026):** בנעילה קפדנית ה-Shell ב-HKCU מפנה ל-`%LOCALAPPDATA%\OtzariaBridge\shell-guard.vbs` (wscript //B), שמריץ את הגשר וממתין לו; אם הקובץ חסר, ההפעלה נכשלה או יציאה עם קוד ≠0 (קריסה) — מופעל explorer. בלי wscript: הפניה ישירה כמו קודם. BootGuard (מצב בטוח/נעילה לא מאושרת) נשאר. טרם נבדק ב-Windows.
