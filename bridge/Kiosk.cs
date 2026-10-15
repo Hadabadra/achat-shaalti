@@ -1382,7 +1382,7 @@ public static partial class Kiosk
         if (_hook != IntPtr.Zero) return;
         _hookProc = HookCallback;
         _hook = SetWindowsHookEx(13 /* WH_KEYBOARD_LL */, _hookProc, GetModuleHandle(null), 0);
-        if (_hook == IntPtr.Zero) Config.Log("keyboard hook failed: " + Marshal.GetLastWin32Error());
+        Config.Log(_hook == IntPtr.Zero ? "keyboard hook failed: " + Marshal.GetLastWin32Error() : "keyboard hook installed");
     }
 
     private static void RemoveHook()
@@ -1489,7 +1489,7 @@ public static partial class Kiosk
             {
                 // לא מריצים כאן ישירות: ה-hook רץ בחוט ה-UI, ו-Tray.Invoke מריץ סינכרונית כשכבר בו -
                 // פתיחת טופס + BringToFront + קריאת pipe לשירות בתוך callback חורגים מ-300ms ו-Windows מתעלמת מה-hook
-                Task.Run(() => { try { Tray.Invoke(EmergencyForm.Open); } catch (Exception ex) { Config.Log("emergency open: " + ex.Message); } });
+                Task.Run(() => { try { Config.Log("emergency: זוהה Ctrl+Alt+Shift+F12 ב-hook"); Tray.Invoke(EmergencyForm.Open); } catch (Exception ex) { Config.Log("emergency open: " + ex.Message); } });
                 return (IntPtr)1;
             }
             if (block) return (IntPtr)1;
