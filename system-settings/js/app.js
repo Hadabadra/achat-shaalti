@@ -213,25 +213,48 @@
       b.classList.toggle('active', b.dataset.id === s.id);
       b.setAttribute('aria-current', b.dataset.id === s.id ? 'page' : 'false');
     });
+    /* משוב 15.10: כל טאב נבנה ונטען פעם אחת ונשמר — מעבר בין טאבים רק מציג אותו, בלי רענון והמתנה.
+       רענון רק בכפתור "רענון", אחרי שמירה (הטאבים עצמם קוראים ל-load), או כשהטאב ישן מ-5 דקות */
     var main = document.getElementById('content');
-    main.innerHTML = '';
+    var v = buildView(s);
+    Array.prototype.forEach.call(main.children, function (c) { c.hidden = c !== v.wrap; });
+    if (v.wrap.parentNode !== main) main.appendChild(v.wrap);
+    v.wrap.hidden = false;
+    main.scrollTop = 0;
+    if (Date.now() - v.at > 5 * 60 * 1000) { v.at = Date.now(); s.load(v.body); }
+    try { localStorage.setItem('ss.section', s.id); } catch (e) { /* ignore */ }
+  }
+  SS.show = show;
+
+  var views = {};
+  function buildView(s) {
+    if (views[s.id]) return views[s.id];
     var wrap = ui.el('<section class="section fade-in" data-section="' + s.id + '">' +
       '<div class="section-head"><div class="section-title">' + ui.icon(s.icon) + '<h2>' + ui.esc(s.title) + '</h2></div>' +
       '<button class="btn btn-tonal btn-icon-text" data-act="refresh" title="רענון">' + ui.icon('refresh') + '<span>רענון</span></button></div>' +
       '<div class="section-body"></div></section>');
-    main.appendChild(wrap);
-    main.scrollTop = 0;
     var body = wrap.querySelector('.section-body');
+    var v = views[s.id] = { wrap: wrap, body: body, at: Date.now(), loading: null };
     wrap.querySelector('[data-act=refresh]').addEventListener('click', function () {
       var btn = this;
-      btn.classList.add('spinning');
+      btn.classList.add('spinning'); v.at = Date.now();
       Promise.resolve(s.load(body)).finally(function () { btn.classList.remove('spinning'); });
     });
+    wrap.hidden = true;
+    document.getElementById('content').appendChild(wrap);
     s.mount(body);
-    s.load(body);
-    try { localStorage.setItem('ss.section', s.id); } catch (e) { /* ignore */ }
+    v.loading = Promise.resolve(s.load(body)).catch(function () {});
+    return v;
   }
-  SS.show = show;
+  /* טעינה מראש ברקע של כל הטאבים בזה אחר זה (לא במקביל — לא להעמיס על הגשר) */
+  async function prewarm() {
+    for (var i = 0; i < SS.sections.length; i++) {
+      var s = SS.sections[i];
+      if (views[s.id] || !visible(s)) continue;
+      try { await buildView(s).loading; } catch (e) { /* ממשיכים */ }
+    }
+  }
+  SS.prewarm = prewarm;
 
   function setStatus(connected) {
     if (connected && SS.prefetchDetect) SS.prefetchDetect(); /* זיהוי תוכנות מראש — ריבוע הנעילה לא ימתין לו */
@@ -312,6 +335,7 @@
       try { start = localStorage.getItem('ss.section'); } catch (e) { start = null; }
       var hash = (location.hash || '').replace('#', '');
       show(hash || start || (h.kioskActive ? 'kiosk' : 'audio'));
+      setTimeout(prewarm, 300);
     }
     SS.pushZmanimNow();
     pushTheme();
