@@ -55,6 +55,13 @@
           "title": "מסמך חדש",
           "icon": "add_24_regular",
           "openPlugin": true
+        },
+        {
+          "id": "chadbedera-fx-open",
+          "type": "button",
+          "title": "סייר קבצים",
+          "icon": "folder_24_regular",
+          "openPlugin": true
         }
       ],
       "shortcuts": [

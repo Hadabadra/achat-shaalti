@@ -224,6 +224,8 @@
       });
     }
     on('enable', function () { enable(body, st); });
+    /* כפתור "נעילה מיידית" בסרגל הקורא: פותח מיד את חלונית ההפעלה */
+    if (SS.quickLockPending) { SS.quickLockPending = false; if (!st.active) enable(body, st); }
     on('disable', function () { disable(body); });
     on('temp-unlock', function () { tempUnlock(body, st); });
     on('temp-end', function () { tempEnd(body); });

@@ -419,6 +419,12 @@
         var pr = ev && (ev.param || (ev.data && ev.data.param));
         if (pr && pr.section) { try { location.hash = pr.section; } catch (e) { /* כלום */ } if (state.connected) show(pr.section); }
       });
+      window.Otzaria.on('reader.toolbar_item_clicked', function (ev) {
+        var id = ev && (ev.id || ev.itemId || (ev.item && ev.item.id));
+        if (id !== 'chadbedera-ss-lock') return;
+        SS.quickLockPending = true;
+        if (state.connected) show('kiosk'); else { try { location.hash = 'kiosk'; } catch (e) { /* כלום */ } }
+      });
       window.Otzaria.on('calendar.city_changed', function () { pushZmanimCache(); });
       /* #69: קיצורים מהמניפסט — פתיחת הגדרות מערכת / ישר להגדרות הנעילה */
       if (window.SdkX) {

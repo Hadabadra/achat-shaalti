@@ -27,7 +27,8 @@
     "app.shortcuts",
     "app.startup_contributions",
     "app.run_on_startup",
-    "library.books.provide"
+    "library.books.provide",
+    "reader.toolbar"
   ],
   "network": {
     "enabled": true,
@@ -69,6 +70,15 @@
           "provider": "systemsettings",
           "title": "הגדרות מערכת",
           "icon": "settings_24_regular"
+        }
+      ],
+      "toolbarItems": [
+        {
+          "id": "chadbedera-ss-lock",
+          "type": "button",
+          "title": "נעילה מיידית",
+          "icon": "lock_closed_24_regular",
+          "openPlugin": true
         }
       ]
     },
