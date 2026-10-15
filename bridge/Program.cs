@@ -7,7 +7,8 @@ namespace OtzariaBridge;
 
 public static class Program
 {
-    public const string Version = "3.8.0";
+    // הגרסה נגזרת מ-<Version> שב-csproj (מקור אחד) — קבוע ידני נשכח ב-3.8.5 והגשר דיווח 3.8.0
+    public static readonly string Version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
     public static int Port { get; set; }
 
     // שם המוצר (13.10.2026): "אחת שאלתי". קודם: "תוכנת חסימת אוצריא". הוחלף מ"תורת אסתר" לשם שמתאר בעברית פשוטה את מה שהתוכנה עושה, כי "קיוסק" ואפילו
@@ -84,6 +85,7 @@ public static class Program
 
             using var mutex = new Mutex(true, @"Local\OtzariaBridge", out bool first);
             if (!first) return 0;
+            Installer.CleanupOldExe();
 
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.EnableVisualStyles();
