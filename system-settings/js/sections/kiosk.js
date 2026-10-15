@@ -811,6 +811,8 @@
       { name: 'parsha', label: 'פרשת השבוע', value: !!st.showParsha },
       { name: 'dafyomi', label: 'דף יומי', value: !!st.showDafYomi }
     ] });
+    fields.push({ name: 'lockImg', type: 'checkbox', label: 'להציג גם במסך הנעילה של Windows', value: !!st.lockScreenImage,
+      hint: 'תמונת מסך הנעילה של המחשב תהיה כמו שומר המסך (פסוק, סמל, זמני היום, הקדשה), ומתעדכנת כל חצי שעה. דורש ש"זרקור Windows" כבוי בהגדרות מסך הנעילה' });
     fields.push({ name: 'dedText', type: 'textarea', rows: 3, label: 'נוסח ההקדשה בשומר המסך', value: st.restDedicationText || '',
       placeholder: 'ריק = ההקדשה הקבועה. שורה ראשונה קטנה, שורה שנייה מודגשת (שם), השאר קטן',
       hint: 'אפשר לכתוב הקדשה אחרת או לעילוי נשמת יקיריכם. עד 4 שורות' });
@@ -829,7 +831,7 @@
   };
   SS.screensaverPayload = function (x) {
     return {
-      restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi, restShowVerse: !!x.rsVerse, restShowClock: !!x.rsClock, restShowZmanim: !!x.rsZmanim, restShowLogo: !!x.rsLogo, restShowDedication: !!x.rsDed, restDedicationText: String(x.dedText || '').slice(0, 400),
+      restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi, restShowVerse: !!x.rsVerse, restShowClock: !!x.rsClock, restShowZmanim: !!x.rsZmanim, restShowLogo: !!x.rsLogo, restShowDedication: !!x.rsDed, restDedicationText: String(x.dedText || '').slice(0, 400), lockScreenImage: !!x.lockImg,
       zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
       zmanimElevation: +String(x.zelev).trim() || 0, zmanimAlert: ZMAN_FIELDS.filter(function (z) { return x['za_' + z.id]; }).map(function (z) { return z.id; }).join(','), zmanimAlertMinutes: +String(x.zalertmin).trim() || 10, zmanimFallbackEngine: x.zengine,
       zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,

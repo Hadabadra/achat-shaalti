@@ -98,6 +98,7 @@ public static class Program
             HardLock.StartSync();
             Kiosk.StartScheduler();
             Zmanim.StartAlerts(); // #33
+            LockScreenImage.Start(); // משוב 15.10
             Saver.Start(); // D2+D3
             SelfTest.Init(); // D6
             // אכיפת FxPolicy/Kiosk.AllowedExtensions על דיאלוגי פתיחה/שמירה מקוריים של Windows בכל תהליך

@@ -420,12 +420,13 @@ internal sealed class RestScreen : Form
         Overlay.BringOtzaria(Target);
     }
 
-    protected override void OnPaint(PaintEventArgs e)
+    protected override void OnPaint(PaintEventArgs e) =>
+        Render(e.Graphics, ClientRectangle, (float)_clock.Elapsed.TotalSeconds, DeviceDpi / 96f);
+
+    /// <summary>ציור מסך המנוחה — גם לתמונת מסך הנעילה של Windows (LockScreenImage)</summary>
+    internal bool StillImage; // תמונת מסך נעילה: בלי שורת "לחיצה חוזרת"
+    internal void Render(Graphics g, Rectangle r, float t, float s)
     {
-        var g = e.Graphics;
-        var r = ClientRectangle;
-        float t = (float)_clock.Elapsed.TotalSeconds;
-        float s = DeviceDpi / 96f;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
@@ -440,7 +441,7 @@ internal sealed class RestScreen : Form
         for (int i = 0; i < _parts.Length; i++)
         {
             ref var p = ref _parts[i];
-            p.Y -= p.Speed * 0.012f;
+            // משוב 15.10: בלי תזוזה — רק נצנוץ במקום
             if (p.Y < -0.05f) { p = NewParticle(false); p.Ch = '\0'; }
             float px = p.X * r.Width, py = p.Y * r.Height;
             int a = (int)(25 + 55 * (Math.Sin(t * 0.6f + p.Phase) * 0.5 + 0.5));
@@ -450,8 +451,8 @@ internal sealed class RestScreen : Form
         }
 
         // כל התוכן נע לאט מאוד (מניעת צריבה)
-        float dx = (float)Math.Sin(t * 0.04) * r.Width * 0.04f;
-        float dy = (float)Math.Sin(t * 0.07) * r.Height * 0.025f;
+        // משוב 15.10: התוכן לא זז כלל (רק החותמת מרחפת) — dx/dy נשארים 0
+        float dx = 0f, dy = 0f;
         float cx = r.Width / 2f + dx;
         var rtl = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Center };
         var center = new StringFormat { Alignment = StringAlignment.Center };
@@ -493,7 +494,13 @@ internal sealed class RestScreen : Form
             g.FillEllipse(goldB, cx - 4 * s, y - 4 * s, 8 * s, 8 * s);
         }
         y += 14 * s;
-        if (shVerse) g.DrawString("וְהָגִיתָ בּוֹ יוֹמָם וָלַיְלָה", verseF, goldB, Line(y, 60 * s), rtl);
+        // סבב B: הפסוק של "אחת שאלתי" (תהלים כז, ד)
+        if (shVerse)
+        {
+            g.DrawString("אַחַת שָׁאַלְתִּי מֵאֵת ה' אוֹתָהּ אֲבַקֵּשׁ", verseF, goldB, Line(y, 56 * s), rtl);
+            g.DrawString("שִׁבְתִּי בְּבֵית ה' כָּל יְמֵי חַיַּי", verseF, goldB, Line(y + 54 * s, 56 * s), rtl);
+            y += 54 * s;
+        }
         y += 72 * s;
 
         // B2 (סבב B, 3.7.1): סמל "אחת שאלתי" גדול במרכז, מרחף ומסתובב לאט (חסכוני — ציור מטמון אחד, בלי אנימציה כבדה)
@@ -532,10 +539,13 @@ internal sealed class RestScreen : Form
         }
         if (zmItems.Count > 0)
             DrawZmanimColumn(g, zmItems, zmLeft ? colMargin : r.Width - colMargin - colW,
-                r.Height * 0.08f + dy, colW, r.Height - 70 * s - (r.Height * 0.08f + dy), s, gold);
+                r.Height * 0.08f, colW, r.Height - 70 * s - r.Height * 0.08f, s, gold);
 
         // B2: ההקדשה בפינה השמאלית-התחתונה (לא במרכז)
-        var ded = new RectangleF(24 * s, r.Height - 150 * s, Math.Min(520 * s, r.Width * 0.4f), 100 * s);
+        // משוב 15.10: ההקדשה בצד שמול עמודת הזמנים, בגבולות קבועים (רוחב העמודה הצדדית בלבד) — אין חפיפה
+        float dedW = zmItems.Count > 0 ? Math.Max(colW + colMargin, Math.Min(420 * s, (r.Width - W) / 2f - 12 * s)) : Math.Min(520 * s, r.Width * 0.4f);
+        float dedX = zmItems.Count > 0 && !zmLeft ? 24 * s : (zmItems.Count > 0 ? r.Width - 24 * s - dedW : 24 * s);
+        var ded = new RectangleF(dedX, r.Height - 170 * s, dedW, 130 * s);
         var dedFmt = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Far };
         if (shDed)
         {
@@ -545,6 +555,7 @@ internal sealed class RestScreen : Form
                 ? custom.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(4).ToArray()
                 : new[] { "לעילוי נשמת הנערה הצדקנית", "אסתר גיטה דינר ע\"ה", "בת רבי מיכאל שלום הלוי שיבדלט\"א · תנצב\"ה" };
             float dyy = ded.Y;
+            g.SetClip(ded);
             for (int i = 0; i < dl.Length; i++)
             {
                 bool bold = dl.Length > 1 ? i == 1 : true;
@@ -552,11 +563,12 @@ internal sealed class RestScreen : Form
                 g.DrawString(dl[i], bold ? dedNameF : dedF, bold ? goldB : dim, new RectangleF(ded.X, dyy, ded.Width, h), dedFmt);
                 dyy += h;
             }
+            g.ResetClip();
         }
 
         // רמז קטן בתחתית; אין צורך בכפתור — כל לחיצה חוזרת
         _btn = Rectangle.Empty;
-        g.DrawString(Lang.T("לחיצה או מקש כלשהו — חזרה לאוצריא", "Click or press any key to return to Otzaria"), hintF, dim,
+        if (!StillImage) g.DrawString(Lang.T("לחיצה או מקש כלשהו — חזרה לאוצריא", "Click or press any key to return to Otzaria"), hintF, dim,
             Line(r.Height - 40 * s, 30 * s), rtl);
     }
 

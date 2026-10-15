@@ -290,6 +290,7 @@ public static partial class Kiosk
         restShowLogo = Config.Has("kiosk.restShowLogo") ? Config.Get("kiosk.restShowLogo", true) : (bool?)null,
         restShowDedication = Config.Has("kiosk.restShowDedication") ? Config.Get("kiosk.restShowDedication", true) : (bool?)null,
         restDedicationText = Config.Get("kiosk.restDedicationText", ""),
+        lockScreenImage = Config.Get("kiosk.lockScreenImage", false),
         showDafYomi = Config.Get("kiosk.showDafYomi", false),
         yahrzeitMonth = Config.Get("kiosk.yahrzeitMonth", ""),
         yahrzeitDay = Config.Get("kiosk.yahrzeitDay", 0),
@@ -820,9 +821,10 @@ public static partial class Kiosk
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
         { string rcv = b.Str("restContent"); if (rcv is "full" or "zmanim" or "clock" or "verse") Config.Set("kiosk.restContent", rcv); }
         foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "barPrograms", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi",
-            "restShowVerse", "restShowClock", "restShowZmanim", "restShowLogo", "restShowDedication" })
+            "lockScreenImage", "restShowVerse", "restShowClock", "restShowZmanim", "restShowLogo", "restShowDedication" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restDedicationText")) { string dt = (b.Str("restDedicationText") ?? "").Replace("\r", ""); Config.Set("kiosk.restDedicationText", dt.Length > 400 ? dt[..400] : dt); }
+        if (b.Has("lockScreenImage")) Tray.Invoke(LockScreenImage.Update);
         if (b.Has("saverWhenUnlocked")) Config.Set("kiosk.saverWhenUnlocked", b.Bool("saverWhenUnlocked", true)); // D2
         if (b.Has("bootCover")) Config.Set("kiosk.bootCover", b.Bool("bootCover", true)); // D3
         if (b.Has("restIdleMinutes")) Config.Set("kiosk.restIdleMinutes", (int)Math.Clamp(b.Long("restIdleMinutes", 0), 0, 240));
