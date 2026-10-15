@@ -25,7 +25,9 @@
        הכולל הוא רק הזמן של האיטית מביניהן, לא הסכום */
     var results = await Promise.all([
       SS.bridge.call('/kiosk/programs').catch(function () { return null; }),
-      SS.bridge.call('/kiosk/programs/detect').catch(function () { return null; }),
+      /* משוב 15.10: זיהוי תוכנות (סריקת כוננים) איטי והשהה את כל הטאב — כולל ריבוע הגדרות הנעילה.
+         התוצאה נשמרת למשך הסשן; אם עוד לא מוכנה אחרי 1.5 שנ' מציגים בלעדיה ומשלימים כשהיא מגיעה */
+      detectFast(body),
       SS.bridge.call('/pair/list', {}).catch(function () { return null; }),
       SS.bridge.call('/bios/status', {}).catch(function () { return null; })
     ]);
@@ -40,6 +42,26 @@
     var pairs = (pairsRes && pairsRes.clients) || [];
 
     render(body, st, progs, found, pairs, bios);
+  }
+
+  var detPromise = null, detResult = null;
+  SS.prefetchDetect = function () {
+    if (!detPromise) detPromise = SS.bridge.call('/kiosk/programs/detect')
+      .then(function (r) { detResult = r; return r; })
+      .catch(function () { detPromise = null; return null; });
+    return detPromise;
+  };
+  function detectFast(body) {
+    if (detResult) return Promise.resolve(detResult);
+    var p = SS.prefetchDetect(), late = false;
+    return Promise.race([p, new Promise(function (res) { setTimeout(function () { late = true; res(null); }, 1500); })])
+      .then(function (r) {
+        if (!r && late) p.then(function (d) {
+          /* מרעננים רק אם יש מה להוסיף ואין עריכה פעילה בטופס */
+          if (d && d.found && d.found.length && body.isConnected && !body.contains(document.activeElement)) load(body);
+        });
+        return r;
+      });
   }
 
   /* ספירה לאחור חיה של הפתיחה הזמנית בכרטיס המצב (מתאפסת בכל רינדור) */
@@ -793,12 +815,12 @@
     var zmanShow = (st.zmanimShow || DEFAULT_ZMAN_SHOW).map(function (x) { return String(x).toLowerCase(); }); // A4: הגשר שומר באותיות קטנות
     /* רשימת ערים מלוח השנה של אוצריא עצמה (calendar.getCities) — אם זמינה. קואורדינטות
        נשארות תמיד כאפשרות מתקדמת ("מותאם אישית") גם כשיש רשימת ערים */
-    var cities = [];
-    if (window.Otzaria) {
+    var cities = SS._citiesCache || [];
+    if (!SS._citiesCache && window.Otzaria) {
       try {
         var r = await window.Otzaria.call('calendar.getCities', {});
         var list = (r && r.data !== undefined ? r.data : r) || [];
-        if (Array.isArray(list)) cities = list;
+        if (Array.isArray(list)) { cities = list; SS._citiesCache = list; }
       } catch (e) { cities = []; }
     }
     var cityOptions = [{ value: '', label: 'מותאם אישית (קואורדינטות)' }].concat(

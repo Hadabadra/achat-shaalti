@@ -234,6 +234,7 @@
   SS.show = show;
 
   function setStatus(connected) {
+    if (connected && SS.prefetchDetect) SS.prefetchDetect(); /* זיהוי תוכנות מראש — ריבוע הנעילה לא ימתין לו */
     var chip = document.getElementById('bridge-chip');
     var h = SS.bridge.health;
     chip.className = 'topbar-chip ' + (connected ? (h && h.kioskActive ? 'warn' : 'ok') : 'bad');

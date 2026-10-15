@@ -214,14 +214,15 @@
         if (f.type === 'pills') { f.items.forEach(function (it) { var e = form.querySelector('[name="' + it.name + '"]'); if (e) v[it.name] = e.checked; }); return; }
       if (f.type === 'checkpair') {
           /* שורה אחת: תיבת סימון + מתג קטן בצד (משוב 15.10: "להציג" + "התראה" לכל זמן) */
-          return '<div class="check-pair"><label class="check-row"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + '>' +
-            '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label + '</span></label>' +
+          return '<div class="check-pair"><label class="check-row switch-row"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + '>' +
+            '<span class="mini-track big"></span><span class="check-text">' + f.label + '</span></label>' +
             '<label class="mini-switch" title="' + ui.esc(f.label2) + '"><input type="checkbox" name="' + f.name2 + '"' + (f.value2 ? ' checked' : '') + '>' +
             '<span class="mini-track"></span><span class="mini-text">' + ui.esc(f.label2) + '</span></label></div>';
         }
         if (f.type === 'checkbox') {
-          return '<label class="check-row' + (f.disabled ? ' is-disabled' : '') + '"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + (f.disabled ? ' disabled data-locked' : '') + '>' +
-            '<span class="check-box">' + ui.icon('check') + '</span><span class="check-text">' + f.label +
+          /* משוב 15.10: מתג בסגנון אוצריא (ולא תיבת סימון) לכל הגדרת הפעלה/כיבוי */
+          return '<label class="check-row switch-row' + (f.disabled ? ' is-disabled' : '') + '"><input type="checkbox" name="' + f.name + '"' + (f.value ? ' checked' : '') + (f.disabled ? ' disabled data-locked' : '') + '>' +
+            '<span class="mini-track big"></span><span class="check-text">' + f.label +
             (f.hint ? '<small>' + f.hint + '</small>' : '') + '</span></label>';
         }
         if (f.type === 'select') {

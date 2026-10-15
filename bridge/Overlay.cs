@@ -424,6 +424,14 @@ internal sealed class RestScreen : Form
         Render(e.Graphics, ClientRectangle, (float)_clock.Elapsed.TotalSeconds, DeviceDpi / 96f);
 
     /// <summary>ציור מסך המנוחה — גם לתמונת מסך הנעילה של Windows (LockScreenImage)</summary>
+    // משוב 15.10: חלק שנכשל (חריגה בציור/בחישוב) לא מוחק את כל שאר המסך — נרשם ביומן פעם אחת לכל חלק
+    private static readonly HashSet<string> _partErrLogged = new();
+    private static void SafePart(string name, Action a)
+    {
+        try { a(); }
+        catch (Exception ex) { lock (_partErrLogged) if (_partErrLogged.Add(name)) Config.Log("rest screen [" + name + "]: " + ex); }
+    }
+
     internal bool StillImage; // תמונת מסך נעילה: בלי שורת "לחיצה חוזרת"
     internal void Render(Graphics g, Rectangle r, float t, float s)
     {
@@ -476,7 +484,8 @@ internal sealed class RestScreen : Form
         bool shZm = Config.Get("kiosk.restShowZmanim", rc is "full" or "zmanim");
         bool shLogo = Config.Get("kiosk.restShowLogo", true);
         bool shDed = Config.Get("kiosk.restShowDedication", true);
-        var zmItems = !shZm ? new List<string>() : ZmanimItems(Zmanim.Sections(DateTime.Now));
+        List<string> zmItems = new();
+        if (shZm) SafePart("zmanim-calc", () => zmItems = ZmanimItems(Zmanim.Sections(DateTime.Now)));
         bool zmLeft = Config.Get("kiosk.restZmanimSide", "right") == "left";
         // d992415 (יאיר) + משוב 15.10 — "גם וגם": סגנון ההקדשה הוא בחירת המשתמש (kiosk.restDedicationStyle):
         // "fixed" (ברירת מחדל) — ההקדשה בגבולות קבועים בתחתית הצד שמול הזמנים; "column" — עמודת הקדשה של יאיר עם נר.
@@ -505,6 +514,8 @@ internal sealed class RestScreen : Form
             g.FillEllipse(goldB, cx - 4 * s, y - 4 * s, 8 * s, 8 * s);
         }
         y += 14 * s;
+        SafePart("verse", () =>
+        {
         // סבב B: הפסוק של "אחת שאלתי" (תהלים כז, ד)
         if (shVerse)
         {
@@ -514,6 +525,9 @@ internal sealed class RestScreen : Form
         }
         y += 72 * s;
 
+        });
+        SafePart("logo", () =>
+        {
         // B2 (סבב B, 3.7.1): סמל "אחת שאלתי" גדול במרכז, מרחף ומסתובב לאט (חסכוני — ציור מטמון אחד, בלי אנימציה כבדה)
         float icoSize = Math.Min(r.Height * 0.26f, 260 * s);
         float bob = (float)Math.Sin(t * 0.5) * 8 * s;
@@ -528,6 +542,9 @@ internal sealed class RestScreen : Form
             y += icoSize + 20 * s;
         }
 
+        });
+        SafePart("clock", () =>
+        {
         var now = DateTime.Now;
         if (shClock)
         {
@@ -548,10 +565,16 @@ internal sealed class RestScreen : Form
             y += 34 * s;
             g.DrawString(Lang.T("אוצריא לא נמצאה במחשב. לביטול הנעילה: Ctrl+Alt+Shift+F12", "Otzaria was not found. To unlock: Ctrl+Alt+Shift+F12"), hintF, dim, Line(y, 30 * s), rtl);
         }
+        });
+        SafePart("zmanim", () =>
+        {
         if (zmItems.Count > 0)
             DrawZmanimColumn(g, zmItems, zmLeft ? colMargin : r.Width - colMargin - colW,
                 r.Height * 0.08f, colW, r.Height - 70 * s - r.Height * 0.08f, s, gold);
 
+        });
+        SafePart("dedication", () =>
+        {
         // B2: ההקדשה בפינה השמאלית-התחתונה (לא במרכז)
         // משוב 15.10: ההקדשה בצד שמול עמודת הזמנים, בגבולות קבועים (רוחב העמודה הצדדית בלבד) — אין חפיפה
         float dedW = zmItems.Count > 0 ? Math.Max(colW + colMargin, Math.Min(420 * s, (r.Width - W) / 2f - 12 * s)) : Math.Min(520 * s, r.Width * 0.4f);
@@ -612,6 +635,7 @@ internal sealed class RestScreen : Form
             g.ResetClip();
         }
 
+        });
         // רמז קטן בתחתית; אין צורך בכפתור — כל לחיצה חוזרת
         _btn = Rectangle.Empty;
         if (!StillImage) g.DrawString(Lang.T("לחיצה או מקש כלשהו — חזרה לאוצריא", "Click or press any key to return to Otzaria"), hintF, dim,
