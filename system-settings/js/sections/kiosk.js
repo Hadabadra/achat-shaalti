@@ -32,7 +32,12 @@
 
   async function loadInner(body, lim, setStep) {
     var st;
-    try { st = await lim(SS.bridge.call('/kiosk/status'), 8000, 'מצב נעילה'); if (!st) throw new Error('הגשר לא ענה בזמן על מצב הנעילה'); }
+    /* מצב הנעילה חיוני - ממתינים לו בלי תקרה (המונה ממשיך), ובכשל אמיתי מנסים שוב אוטומטית פעמיים */
+    for (var i = 0; ; i++) {
+      try { st = await SS.bridge.call('/kiosk/status', {}, { timeoutMs: 120000 }); break; }
+      catch (e) { if (i >= 2) throw e; setStep('מצב נעילה (ניסיון ' + (i + 2) + ')'); await new Promise(function (r) { setTimeout(r, 1000); }); }
+    }
+    try { }
     catch (e) { body.innerHTML = ui.errorBox(e, function () { load(body); }); return; }
     if (SS.bridge.health) { SS.bridge.health.kioskActive = !!st.active; SS.setStatus(true); if (SS.syncLock) SS.syncLock(SS.bridge.health); }
 

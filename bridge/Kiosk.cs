@@ -980,7 +980,15 @@ public static partial class Kiosk
 
     // ---------- איתור אוצריא ----------
 
+    private static string _opCache; private static DateTime _opAt;
+    /// <summary>משוב 3.9: נשמר לדקה - סריקת תהליכים חזרה על עצמה בכל /kiosk/status והאטה אותו</summary>
     public static string OtzariaPath()
+    {
+        if (_opCache != null && (DateTime.UtcNow - _opAt).TotalSeconds < 60 && File.Exists(_opCache)) return _opCache;
+        _opCache = OtzariaPathUncached(); _opAt = DateTime.UtcNow; return _opCache;
+    }
+
+    private static string OtzariaPathUncached()
     {
         // כשרכיב ההקשחה מותקן ויש לו נתיב — הוא מקור האמת, ו-config.json (כתיב למשתמש המחובר) לא נקרא.
         // נתיב ריק אצלו = זיהוי אוטומטי; נתיב שלא קיים בחשבון הזה = זיהוי אוטומטי (ולא ערך מ-config.json)
