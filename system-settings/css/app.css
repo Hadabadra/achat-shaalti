@@ -179,3 +179,26 @@ html[dir="ltr"] .ss-form .row-actions { justify-content: flex-start; }
 
 /* תפריט נפתח לזמני כיבוי/שינה */
 .time-select { min-width: 11em; width: auto; flex-shrink: 0; }
+
+/* תפריטים נפתחים בהגדרות מקלדת */
+.kb-select { width: 100%; max-width: 28em; }
+/* כפתורי פעולה בשורות הגדרה: אותו רוחב מינימלי, כדי שלא יהיו בגדלים שונים זה מזה */
+.setting-row > .btn, .setting-row > .btn-group > .btn { min-width: 9.5em; justify-content: center; }
+
+/* כפתורי פעולה בתחתית כרטיס (איפוס, שמירה וכו') — בצד שמאל בעברית, ובצד ימין באנגלית */
+html[dir="rtl"] .row-actions:not(.center):not(.full) { justify-content: flex-end; }
+html[dir="ltr"] .row-actions:not(.center):not(.full) { justify-content: flex-start; }
+
+/* שורות כפתורי בחירה (רגישות, תוכנית צריכה...): כפתורים ברוחב שווה, ממורכזים על פני כל השורה */
+.preset-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5em; }
+.preset-row > .btn { flex: 1 1 7em; justify-content: center; }
+
+/* חיווי דולק/כבוי: תגית עם נקודה צבעונית — ירוק לפעיל, אפור לכבוי */
+.state-chip { display: inline-flex; align-items: center; gap: 0.4em; font-weight: 700; flex-shrink: 0; }
+.state-chip .dot { width: 0.6em; height: 0.6em; border-radius: 50%; background: currentColor; display: inline-block; }
+.chip.off { background: color-mix(in srgb, var(--color-on-surface) 10%, transparent); color: var(--color-on-surface-variant, #666); }
+.setting-row > .state-chip { margin-inline-end: 0.75em; }
+.list-item > .state-chip { margin-inline-start: auto; }
+
+/* כפתורי שורת תוכנה: X צמוד ל"פתיחה", הקבוצה בקצה השמאלי; כפתור ה-X צר */
+.prog-actions .btn-x { min-width: 0 !important; padding-inline: 0.9em; }

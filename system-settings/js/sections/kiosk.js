@@ -1236,9 +1236,12 @@
     var rows = progs.map(function (p) {
       return '<div class="setting-row"><div class="setting-text"><b>' + ui.esc(p.name) + '</b>' + (p.auto ? ' <span class="muted small">(זוהתה אוטומטית)</span>' : '') + (p.running ? ' <span class="muted small">· פתוחה עכשיו</span>' : '') +
         '<span class="muted path"><bdi dir="ltr">' + ui.esc(p.path) + '</bdi>' + (p.exists ? '' : ' · הקובץ לא נמצא') + '</span></div>' +
-        '<button class="btn btn-tonal" data-act="prog-open-' + ui.esc(p.id) + '"' + (p.exists ? '' : ' disabled') + '>' + ui.icon('computer') + (p.running ? 'העבר לחזית' : 'פתיחה') + '</button>' +
+        /* סדר הכפתורים (RTL): הסרה (X) מימין, ואחריה סגירה, ופתיחה צמודה לשמאל */
+        '<div class="btn-group prog-actions">' +
+        (p.auto ? '' : '<button class="btn btn-tonal btn-x" data-act="prog-del-' + ui.esc(p.id) + '" aria-label="הסרה" title="הסרה">' + ui.icon('close') + '</button>') +
         (p.running ? '<button class="btn btn-tonal" data-act="prog-close-' + ui.esc(p.id) + '">' + ui.icon('close') + 'סגירה</button>' : '') +
-        (p.auto ? '' : '<button class="btn btn-tonal" data-act="prog-del-' + ui.esc(p.id) + '" aria-label="הסרה">' + ui.icon('close') + '</button>') + '</div>';
+        '<button class="btn btn-tonal" data-act="prog-open-' + ui.esc(p.id) + '"' + (p.exists ? '' : ' disabled') + '>' + ui.icon('computer') + (p.running ? 'העבר לחזית' : 'פתיחה') + '</button>' +
+        '</div></div>';
     }).join('');
     /* רשימה ארוכה של תוכנות שזוהו — קומפקטית: נפתחת בלחיצה, עם חיפוש וגלילה, במקום עשרות כפתורים */
     /* תפריט נפתח אחד: בראשו הוספה ידנית מהמחשב, מתחתיו חיפוש ורשימת תוכנות שנמצאו בתפריט התחל (הצעות בלבד) */
