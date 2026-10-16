@@ -1062,6 +1062,7 @@ public static partial class Kiosk
             Overlay.ShowClock(); // שורת המשימות מוסתרת — שעה ותאריך בשעון צף
             Overlay.ShowSideBar(); // סרגל תוכנות בצד המסך: מעבר מהיר בין אוצריא לתוכנות התורניות
             _watchdog ??= new System.Threading.Timer(_ => Watch(), null, 0, 2000);
+            StartFastGuard();
             Tray.SetKioskState(true);
         }
     }
@@ -1078,6 +1079,7 @@ public static partial class Kiosk
             try { Config.Save(); } catch (Exception ex) { Config.Log("release save: " + ex.Message); }
             _watchdog?.Dispose();
             _watchdog = null;
+            StopFastGuard();
             // ממתינים שסבב שומר שכבר רץ יסתיים, כדי שלא יסגור את explorer מיד אחרי שהופעל מחדש
             for (int i = 0; i < 30 && Volatile.Read(ref _watchBusy) == 1; i++) Thread.Sleep(100);
             Tray.Invoke(RemoveHook);
@@ -1505,11 +1507,6 @@ public static partial class Kiosk
             }
             // Alt+F4 עובד בתוכנה מותרת שנמצאת בחזית, כדי שאפשר לסגור אותה ולחזור לאוצריא
             if (block && alt && vk == 0x73 && ForegroundIsAllowedProgram()) block = false;
-            // מקש Win היה חסום תמיד, בלי יוצא מהכלל - וזה בלע גם את הצירוף Win+Shift+S (כלי החיתוך),
-            // כי מקש ה-Win עצמו (הראשון בצירוף) לא הגיע בכלל למנגנון הצירופים הגלובלי של Windows.
-            // כשתוכנה מותרת בחזית (למשל כלי החיתוך עצמו) מתירים גם את מקש ה-Win, באותו היגיון כמו Alt+F4 -
-            // השומר (Watch, כל 2 שניות) עדיין יחזיר את אוצריא לחזית אם משהו לא מותר ייפתח בפועל (תפריט התחל וכו')
-            if (block && vk is 0x5B or 0x5C && ForegroundIsAllowedProgram()) block = false;
             // Ctrl+Alt+O: חזרה לאוצריא מתוכנה מותרת (רק כשתוכנה מותרת בחזית; באוצריא עצמה המקשים עוברים הלאה)
             if (ctrl && (alt || (GetAsyncKeyState(0x12) & 0x8000) != 0) && vk == 0x4F && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104) && ForegroundIsAllowedProgram())
             {
