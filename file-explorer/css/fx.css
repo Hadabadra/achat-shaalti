@@ -572,3 +572,7 @@ mark.fx-hit.cur { background: var(--color-tertiary-container); color: var(--colo
 .pol-state.ok { color: var(--color-ok); background: color-mix(in srgb, var(--color-ok) 16%, transparent); }
 .pol-state.bad { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 14%, transparent); }
 .pol-state.mid { color: #B26A00; background: rgba(178, 106, 0, 0.14); }
+
+/* אודות: הטקסט התיאורי גדול ומודגש יותר */
+.fx-set-hero p:not(.muted) { font-size: 1.2em; font-weight: 600; line-height: 1.7; text-align: center; }
+.fx-set-hero p.muted { font-size: 1.05em; }
