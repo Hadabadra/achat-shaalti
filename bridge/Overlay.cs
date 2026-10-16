@@ -173,7 +173,17 @@ internal sealed class ClockBar : Form
         Cursor = Cursors.Hand;
         RightToLeft = RightToLeft.Yes;
         _tick.Tick += (_, _) => Refresh_();
-        Click += (_, _) => Overlay.BringOtzaria(IntPtr.Zero);
+        // 7 לחיצות מהירות (עד 3 שניות בין לחיצה ללחיצה) פותחות את חלון קוד השחזור - דרך מילוט שלא תלויה
+        // במקלדת/ב-hook (בחלק מהמחשבים F12 לא מגיע כמות שהוא). לחיצה בודדת ממשיכה להחזיר לאוצריא
+        int clicks = 0; var lastClick = DateTime.MinValue;
+        Click += (_, _) =>
+        {
+            var now = DateTime.UtcNow;
+            clicks = (now - lastClick).TotalSeconds <= 3 ? clicks + 1 : 1;
+            lastClick = now;
+            if (clicks >= 7) { clicks = 0; EmergencyForm.Open(); return; }
+            Overlay.BringOtzaria(IntPtr.Zero);
+        };
         Refresh_();
         _tick.Start();
     }

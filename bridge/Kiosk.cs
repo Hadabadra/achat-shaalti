@@ -1471,6 +1471,12 @@ public static partial class Kiosk
                 vk is 0x5B or 0x5C ||                     // Win
                 (alt && vk is 0x09 or 0x1B or 0x73) ||   // Alt+Tab, Alt+Esc, Alt+F4
                 (ctrl && vk == 0x1B);                     // Ctrl+Esc
+            // אבחון: האם F12 בכלל מגיע ל-hook, ובאיזה מצב מקשי שינוי (הלוג נכתב מחוץ ל-hook)
+            if (vk == 0x7B && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104))
+            {
+                bool shiftNow = (GetAsyncKeyState(0x10) & 0x8000) != 0;
+                Task.Run(() => Config.Log($"hook: F12 ctrl={ctrl} alt={alt} shift={shiftNow}"));
+            }
             // Alt+F4 עובד בתוכנה מותרת שנמצאת בחזית, כדי שאפשר לסגור אותה ולחזור לאוצריא
             if (block && alt && vk == 0x73 && ForegroundIsAllowedProgram()) block = false;
             // מקש Win היה חסום תמיד, בלי יוצא מהכלל - וזה בלע גם את הצירוף Win+Shift+S (כלי החיתוך),
