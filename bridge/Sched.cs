@@ -34,4 +34,13 @@ public static class Sched
         var t = now.TimeOfDay;
         return s < e ? (t >= s && t < e) : (t >= s || t < e);
     }
+
+    /// <summary>הרגע שבו נגמר החלון הנוכחי (אם 'now' בתוכו), אחרת null</summary>
+    public static DateTime? CurrentWindowEnd(string start, string end, DateTime now)
+    {
+        if (!InWindow(start, end, now)) return null;
+        var e = ParseTime(end)!.Value;
+        var endToday = now.Date + e;
+        return endToday > now ? endToday : endToday.AddDays(1);
+    }
 }
