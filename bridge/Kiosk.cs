@@ -1485,13 +1485,16 @@ public static partial class Kiosk
             // השומר (Watch, כל 2 שניות) עדיין יחזיר את אוצריא לחזית אם משהו לא מותר ייפתח בפועל (תפריט התחל וכו')
             if (block && vk is 0x5B or 0x5C && ForegroundIsAllowedProgram()) block = false;
             // Ctrl+Alt+O: חזרה לאוצריא מתוכנה מותרת (רק כשתוכנה מותרת בחזית; באוצריא עצמה המקשים עוברים הלאה)
-            if (ctrl && alt && vk == 0x4F && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104) && ForegroundIsAllowedProgram())
+            if (ctrl && (alt || (GetAsyncKeyState(0x12) & 0x8000) != 0) && vk == 0x4F && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104) && ForegroundIsAllowedProgram())
             {
                 Task.Run(ReturnToOtzaria);
                 return (IntPtr)1;
             }
             // Ctrl+Alt+Shift+F12: חלון קוד שחזור לביטול חירום של הנעילה
-            if (ctrl && alt && vk == 0x7B && (GetAsyncKeyState(0x10) & 0x8000) != 0 && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104))
+            // דגל ה-Alt של ה-hook (LLKHF_ALTDOWN) לא מסומן בכל מקלדת/פריסה (נצפה בלוג: F12 הגיע עם ctrl+shift אבל
+            // alt=False למרות ש-Alt היה לחוץ) - לכן בודקים גם את מצב המקש עצמו, ומקבלים אם אחד מהם אומר "לחוץ"
+            bool altHeld = alt || (GetAsyncKeyState(0x12) & 0x8000) != 0;
+            if (ctrl && altHeld && vk == 0x7B && (GetAsyncKeyState(0x10) & 0x8000) != 0 && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104))
             {
                 // לא מריצים כאן ישירות: ה-hook רץ בחוט ה-UI, ו-Tray.Invoke מריץ סינכרונית כשכבר בו -
                 // פתיחת טופס + BringToFront + קריאת pipe לשירות בתוך callback חורגים מ-300ms ו-Windows מתעלמת מה-hook
