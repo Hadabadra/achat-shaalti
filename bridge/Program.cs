@@ -29,6 +29,8 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // בקשות הגשר חוסמות חוטים (powercfg/WMI/PowerShell) — בלי הגדלת המינימום ה-ThreadPool מתנפח לאט ובקשת /health נתקעת מאחוריהן, והתוסף חושב שהגשר נפל
+        System.Threading.ThreadPool.SetMinThreads(64, 64);
         string Arg(string name)
         {
             int i = Array.IndexOf(args, name);

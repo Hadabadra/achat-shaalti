@@ -371,7 +371,7 @@
       var v = views[id];
       var has = v && v.body && v.body.querySelector('.state-box.error');
       if (!has) healTries[id] = 0;
-      return has && (healTries[id] || 0) < 4;
+      return has && (healTries[id] || 0) < 3;
     });
     if (!bad.length) return;
     healBusy = true;
@@ -386,7 +386,7 @@
         if (sec && v) { v.at = Date.now(); try { sec.load(v.body); } catch (e) { /* כלום */ } }
       });
     } finally { healBusy = false; }
-  }, 4000);
+  }, 8000);
 
   SS.sendPendingReports = sendPendingReports;
 
@@ -395,7 +395,16 @@
   };
   SS.bridge.onLost = function () {
     if (!state.connected) return;
-    SS.bridge.probe().then(function (h) { if (!h) showOffline(); else setStatus(true); });
+    /* גשר עמוס (בקשות כבדות במקביל) עלול לפספס בדיקה בודדת — מכריזים "לא מחובר" רק אחרי שלוש בדיקות כושלות ברצף */
+    (async function () {
+      for (var i = 0; i < 3; i++) {
+        var h = null;
+        try { h = await SS.bridge.probe(); } catch (e) { h = null; }
+        if (h) { setStatus(true); return; }
+        await new Promise(function (r) { setTimeout(r, 2000); });
+      }
+      showOffline();
+    })();
   };
 
   async function boot(payload) {

@@ -77,7 +77,7 @@
         var p = PORTS[i];
         try {
           await loadToken();
-          var r = await rawRequest("http://127.0.0.1:" + p + "/health", "GET", null, 1500);
+          var r = await rawRequest("http://127.0.0.1:" + p + "/health", "GET", null, 5000);
           if (r.json && r.json.ok && r.json.data && r.json.data.name === 'otzaria-bridge') {
             real.port = p;
             return r.json.data;
