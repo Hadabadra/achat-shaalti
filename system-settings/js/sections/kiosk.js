@@ -960,7 +960,7 @@
       { name: 'dafyomi', label: 'דף יומי', value: !!st.showDafYomi }
     ] });
     fields.push({ name: 'verseText', label: 'פסוק מותאם אישית בשומר המסך', value: st.restVerseText || '', placeholder: "שִׁבְתִּי בְּבֵית ה' כָּל יְמֵי חַיַּי",
-      hint: 'הפסוק שיוצג כשהאפשרות "פסוק" מסומנת. ריק = פסוק ברירת המחדל' });
+      hint: "הפסוק שיוצג כשהאפשרות \"פסוק\" מסומנת. ריק = ברירת המחדל: שִׁבְתִּי בְּבֵית ה' כָּל יְמֵי חַיַּי" });
     fields.push({ name: 'noteText', type: 'textarea', rows: 3, label: 'כיתוב אישי בשומר המסך', value: st.restNoteText || '',
       placeholder: 'למשל: סדר הלימוד היום, הודעה למשפחה, חיזוק…', hint: 'מוצג בריבוע ממוסגר בצד שמול זמני היום. ריק = לא מוצג' });
     fields.push({ name: 'lockImg', type: 'checkbox', label: 'להציג גם במסך הנעילה של Windows', value: !!st.lockScreenImage,

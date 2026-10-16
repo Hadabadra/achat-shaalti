@@ -32,10 +32,10 @@
     fields.push({ name: 'extra', label: 'תיקייה נוספת (נתיב מלא, לא חובה)', dir: 'ltr', placeholder: 'D:\\לימוד' });
     fields.push({ name: 'min', label: 'דקות פתיחה בסיסמה', value: String(st.unlockMinutes || 15), dir: 'ltr' });
     /* C5: הועבר מהגדרות הנעילה הכלליות */
-    fields.push({ name: 'xls', type: 'checkbox', label: 'אפשור צפייה בקובצי Excel (xlsx) בסייר הקבצים', value: !!ks.allowExcelDocs, hint: 'ברירת מחדל: בסייר הקבצים אפשר לצפות ולפתוח רק מסמכי Word. מצגות PowerPoint חסומות תמיד ואין אפשרות להתיר אותן; סימון כאן מתיר גם גיליונות Excel' });
+    fields.push({ name: 'xls', type: 'checkbox', label: 'אפשור צפייה בקובצי ‪Excel (xlsx)‬ בסייר הקבצים', value: !!ks.allowExcelDocs, hint: 'ברירת מחדל: בסייר הקבצים אפשר לצפות ולפתוח רק מסמכי Word. מצגות PowerPoint חסומות תמיד ואין אפשרות להתיר אותן; סימון כאן מתיר גם גיליונות Excel' });
     fields.push({ name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' });
     body.innerHTML = '<div class="card"><div class="card-title">נעילת סייר הקבצים</div>' +
-      '<p class="muted">אותן הגדרות שבסייר הקבצים: מה מותר לגלוש בסייר. מצב נוכחי: <b>' + ui.esc(st.effective || st.mode || '') + '</b></p>' +
+      '<p class="muted">אותן הגדרות שבסייר הקבצים: מה מותר לגלוש בסייר. מצב נוכחי: ' + (function (m) { return m === 'locked' ? '<span class="pol-state bad"><i></i>נעול</span>' : m === 'restricted' ? '<span class="pol-state mid"><i></i>מוגבל לתיקיות שנבחרו</span>' : '<span class="pol-state ok"><i></i>פתוח</span>'; })(st.effective || st.mode) + '</p>' +
       '<p><button class="btn" type="button" data-act="open-fx">' + ui.icon('lock') + 'פתיחת הגדרות הנעילה בסייר הקבצים</button></p><div data-slot="f"></div></div>';
     var ofx = body.querySelector('[data-act=open-fx]');
     if (ofx) ofx.addEventListener('click', function () {

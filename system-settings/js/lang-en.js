@@ -534,7 +534,7 @@
     'תיקיות מותרות במצב מוגבל:': 'Allowed folders in limited mode:',
     'תיקייה נוספת (נתיב מלא, לא חובה)': 'Additional folder (full path, optional)',
     'דקות פתיחה בסיסמה': 'Minutes unlocked by password',
-    'אפשור צפייה בקובצי Excel (xlsx) בסייר הקבצים': 'Allow viewing Excel files (xlsx) in the file explorer',
+    'אפשור צפייה בקובצי ‪Excel (xlsx)‬ בסייר הקבצים': 'Allow viewing Excel files (xlsx) in the file explorer',
     'ברירת מחדל: בסייר הקבצים אפשר לצפות ולפתוח רק מסמכי Word. מצגות PowerPoint חסומות תמיד ואין אפשרות להתיר אותן; סימון כאן מתיר גם גיליונות Excel': 'Default: the file explorer can view and open only Word documents. PowerPoint presentations are always blocked and cannot be allowed; checking this also allows Excel sheets',
     'אותן הגדרות שבסייר הקבצים: מה מותר לגלוש בסייר. מצב נוכחי:': 'The same settings as in the file explorer: what may be browsed in the explorer. Current mode:',
     'פתיחת הגדרות הנעילה בסייר הקבצים': 'Open the lock settings in the file explorer',

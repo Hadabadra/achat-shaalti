@@ -565,3 +565,10 @@ mark.fx-hit.cur { background: var(--color-tertiary-container); color: var(--colo
 /* חיפוש הגדרה בראש עמוד ההגדרות */
 .fx-set-search { width: 100%; box-sizing: border-box; padding: 0.6em 0.9em; margin-bottom: 0.5em; border: 1px solid var(--color-outline-variant); border-radius: var(--radius-md); background: var(--color-surface); color: inherit; font: inherit; }
 .fx-set-search:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+/* מצב נוכחי: ירוק = פתוח/דולק, אדום = נעול/כבוי, כתום = מוגבל */
+.pol-state { display: inline-flex; align-items: center; gap: 0.4em; font-weight: 700; padding: 0.1em 0.75em; border-radius: 99px; }
+.pol-state i { width: 0.6em; height: 0.6em; border-radius: 50%; background: currentColor; display: inline-block; }
+.pol-state.ok { color: var(--color-ok); background: color-mix(in srgb, var(--color-ok) 16%, transparent); }
+.pol-state.bad { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 14%, transparent); }
+.pol-state.mid { color: #B26A00; background: rgba(178, 106, 0, 0.14); }

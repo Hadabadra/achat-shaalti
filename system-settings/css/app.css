@@ -202,3 +202,10 @@ html[dir="ltr"] .row-actions:not(.center):not(.full) { justify-content: flex-sta
 
 /* כפתורי שורת תוכנה: X צמוד ל"פתיחה", הקבוצה בקצה השמאלי; כפתור ה-X צר */
 .prog-actions .btn-x { min-width: 0 !important; padding-inline: 0.9em; }
+
+/* מצב נוכחי: ירוק = פתוח/דולק, אדום = נעול/כבוי, כתום = מוגבל */
+.pol-state { display: inline-flex; align-items: center; gap: 0.4em; font-weight: 700; padding: 0.1em 0.75em; border-radius: 99px; }
+.pol-state i { width: 0.6em; height: 0.6em; border-radius: 50%; background: currentColor; display: inline-block; }
+.pol-state.ok { color: var(--color-ok); background: color-mix(in srgb, var(--color-ok) 16%, transparent); }
+.pol-state.bad { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 14%, transparent); }
+.pol-state.mid { color: #B26A00; background: rgba(178, 106, 0, 0.14); }
