@@ -806,9 +806,7 @@ public static partial class Kiosk
         {
             var end = SchedMulti.CurrentWindowEnd(DateTime.Now);
             Config.Set("kiosk.schedule.skipUntil", end.ToString("o"));
-            Config.Save();
-            if (HardLock.Available)
-                try { HardLock.Skip(pw, end.ToString("o")); } catch (Exception ex) { Config.Log("hardlock skip (disable): " + ex.Message); }
+            Config.Save(); // השירות מדלג בעצמו על שארית החלון ב-disable (HardLockService) - בלי קריאת Skip נוספת שדורשת Hello שוב
             Config.Log("schedule: ביטול ידני בתוך חלון מתוזמן — דילוג עד " + end);
         }
         EndTempUnlockLocal("הנעילה בוטלה ידנית", relock: false); // ביטול מלא: הנעילה לא תחזור בתום הפתיחה הזמנית
@@ -1274,12 +1272,21 @@ public static partial class Kiosk
         bool svcOk = false, viaBackup = false;
         try { if (HardLock.Available || HardLock.ServiceActive) svcOk = HardLock.EmergencyDisable(code); }
         catch (Exception ex) { Config.Log("emergency: " + ex.Message); }
+        // כשהשירות זמין התשובה שלו מכרעת: ה-hash המקומי נמצא ב-config.json שהמשתמש יכול לערוך, ולכן תלמיד יכול היה
+        // להחליף אותו בקוד ידוע ולפתוח את החלון. הבדיקה המקומית נשארת רק כשאין שירות (או שאינו עונה)
+        if (!svcOk && HardLock.Available) return false;
         if (!svcOk && !Matches(Secret.NormalizeRecovery(code), "kiosk.recoveryHash", "kiosk.recoverySalt"))
         {
             if (!IsBackupCode(code)) return false;
             viaBackup = true; // #69: קוד גיבוי חד-פעמי
         }
         if (viaBackup) BackupCodes.Consume(code);
+        // כמו ב-Disable: ביטול בתוך חלון תזמון נעילה היה ננעל מחדש תוך שניות (ScheduleTick) ויוצר לולאת "בטל-ננעל"
+        if (ScheduleEnabled && SchedMulti.InAnyWindow(DateTime.Now))
+        {
+            Config.Set("kiosk.schedule.skipUntil", SchedMulti.CurrentWindowEnd(DateTime.Now).ToString("o"));
+            Config.Save();
+        }
         EndTempUnlockLocal("ביטול חירום בקוד שחזור", relock: false);
         Release();
         Config.Log("kiosk: הנעילה בוטלה בקיצור חירום עם קוד שחזור");
@@ -1431,7 +1438,7 @@ public static partial class Kiosk
 
     private static DateTime _snipSeen = DateTime.MinValue;
 
-    /// <summary>כלי החיתוך (שברשימת התוכנות המותרות) רץ בחשבון הזה - עד 120 שניות רצופות, ואז חוזרים לאכוף</summary>
+    /// <summary>כלי החיתוך (שברשימת התוכנות המותרות) רץ בחשבון הזה - עד 60 שניות רצופות, ואז חוזרים לאכוף</summary>
     private static bool SnipCaptureInProgress(int session)
     {
         bool found = false;
@@ -1443,8 +1450,8 @@ public static partial class Kiosk
                     catch { }
                 }
         if (!found) { _snipSeen = DateTime.MinValue; return false; }
-        if (_snipSeen == DateTime.MinValue) { _snipSeen = DateTime.UtcNow; LogThrottled("snip", "watchdog: כלי החיתוך פתוח - explorer לא נהרג עד 120 שניות", 30); }
-        return (DateTime.UtcNow - _snipSeen).TotalSeconds < 120;
+        if (_snipSeen == DateTime.MinValue) { _snipSeen = DateTime.UtcNow; LogThrottled("snip", "watchdog: כלי החיתוך פתוח - explorer לא נהרג עד 60 שניות", 30); }
+        return (DateTime.UtcNow - _snipSeen).TotalSeconds < 60;
     }
 
     private static void Watch()
@@ -1456,7 +1463,7 @@ public static partial class Kiosk
             // ממצא ביקורת אבטחה: מתעדכן כאן (חוט הטיימר, כל 2 שניות) ולא בתוך ה-hook עצמו — ר' הערה ב-ForegroundIsAllowedProgram
             UpdateForegroundAllowedCache();
             RefreshHook();
-            // בזמן שכלי החיתוך המאושר פתוח לא הורגים את explorer (עד 2 דקות): שכבת הצילום של "חדש" בווינדוס 11
+            // בזמן שכלי החיתוך המאושר פתוח לא הורגים את explorer (עד דקה): שכבת הצילום של "חדש" בווינדוס 11
             // מתארחת בתוך explorer, ו-Kill כל 2 שניות הרג אותה מיד - נראה כרענון של כלי החיתוך בלי צילום (נצפה
             // ברישום: explorer/userinit/SearchHost נולדים מחדש בכל מחזור). המחיר: שורת המשימות עשויה להופיע לשניות
             if (!SnipCaptureInProgress(session))
@@ -1577,7 +1584,7 @@ public static partial class Kiosk
     private static void RefreshHook()
     {
         if (++_hookTick % 15 != 0) return;
-        Tray.Invoke(() => { RemoveHook(); InstallHook(); });
+        Tray.Invoke(() => { if (!IsActive) return; RemoveHook(); InstallHook(); }); // אחרי שחרור לא מתקינים מחדש
     }
 
     private static void RemoveHook()

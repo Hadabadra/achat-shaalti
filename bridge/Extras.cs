@@ -528,8 +528,12 @@ internal sealed class EmergencyForm : Form
         AcceptButton = ok;
         ok.Click += (_, _) =>
         {
-            if (Kiosk.EmergencyRelease(code.Text)) { Close(); return; }
-            msg.Text = Lang.T("הקוד שגוי", "Wrong code");
+            try
+            {
+                if (Kiosk.EmergencyRelease(code.Text)) { Close(); return; }
+                msg.Text = Lang.T("הקוד שגוי", "Wrong code");
+            }
+            catch (Exception ex) { msg.Text = ex.Message; } // למשל נעילה זמנית אחרי כמה ניסיונות כושלים - בלי זה אין שום הודעה
             code.SelectAll();
         };
         Shown += (_, _) => code.Focus();

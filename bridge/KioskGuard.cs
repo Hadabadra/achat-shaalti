@@ -17,6 +17,7 @@ public static partial class Kiosk
 
     private static System.Threading.Timer _fastGuard;
     private static int _fastBusy;
+    private static readonly int MySession = Process.GetCurrentProcess().SessionId;
 
     private static void StartFastGuard() => _fastGuard ??= new System.Threading.Timer(_ => FastGuard(), null, 0, 300);
 
@@ -42,10 +43,15 @@ public static partial class Kiosk
 
     private static void FastGuard()
     {
-        if (!IsActive || Interlocked.Exchange(ref _fastBusy, 1) == 1) return;
+        if (!IsActive)
+        {
+            if (_taskbarHidden) SetTaskbars(true); // Release כבר רץ - לא משאירים את שורת המשימות מוסתרת
+            return;
+        }
+        if (Interlocked.Exchange(ref _fastBusy, 1) == 1) return;
         try
         {
-            if (_snipSeen != DateTime.MinValue) SetTaskbars(false); // explorer חי בזמן הצילום - שורת המשימות לא תוצג
+            if (_snipSeen != DateTime.MinValue && IsActive) SetTaskbars(false); // explorer חי בזמן הצילום - שורת המשימות לא תוצג
             else if (_taskbarHidden) SetTaskbars(true);             // הצילום הסתיים: מחזירים (explorer יעלה מחדש/יימחק כרגיל)
 
             IntPtr fg = GetForegroundWindow();
@@ -53,7 +59,7 @@ public static partial class Kiosk
             GetWindowThreadProcessId(fg, out uint pid);
             if (pid == 0 || pid == (uint)Environment.ProcessId) return;
             using var p = Process.GetProcessById((int)pid);
-            if (p.SessionId != Process.GetCurrentProcess().SessionId) return;
+            if (p.SessionId != MySession) return;
 
             string name = p.ProcessName;
             var sb = new StringBuilder(128);
