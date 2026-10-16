@@ -362,6 +362,32 @@
   }
   setInterval(function () { if (state.connected) sendPendingReports(); }, 30 * 60 * 1000);
   setInterval(function () { if (state.connected) syncOffline(); }, 60 * 1000);
+  /* ריפוי אוטומטי: טאב שנטען בזמן שהגשר היה לא זמין נשאר עם "הגשר אינו מחובר". כל כמה שניות בודקים אם הגשר חזר,
+     ואם כן — טוענים מחדש (בלי לחכות ללחיצה על "רענון") כל טאב שמציג שגיאה. עד 4 ניסיונות לטאב, כדי לא להציף כששגיאה אמיתית. */
+  var healBusy = false, healTries = {};
+  setInterval(async function () {
+    if (healBusy || state.suspended || document.hidden) return;
+    var bad = Object.keys(views).filter(function (id) {
+      var v = views[id];
+      var has = v && v.body && v.body.querySelector('.state-box.error');
+      if (!has) healTries[id] = 0;
+      return has && (healTries[id] || 0) < 4;
+    });
+    if (!bad.length) return;
+    healBusy = true;
+    try {
+      var h = null;
+      try { h = await SS.bridge.probe(); } catch (e) { h = null; }
+      if (!h) return;
+      if (!state.connected) { await connect(); return; }
+      bad.forEach(function (id) {
+        healTries[id] = (healTries[id] || 0) + 1;
+        var sec = sectionById(id), v = views[id];
+        if (sec && v) { v.at = Date.now(); try { sec.load(v.body); } catch (e) { /* כלום */ } }
+      });
+    } finally { healBusy = false; }
+  }, 4000);
+
   SS.sendPendingReports = sendPendingReports;
 
   SS.bridge.onPairing = function (on) {
