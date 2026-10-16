@@ -514,10 +514,10 @@ internal sealed class RestScreen : Form
         // טקסט אחד לשני הסגנונות: הנוסח המותאם (kiosk.restDedicationText); אם ריק — ההקדשה האישית של יאיר (kiosk.dedicationText); אחרת הקבועה
         string dedication = Config.Get("kiosk.restDedicationText", "").Trim();
         if (dedication.Length == 0) dedication = Config.Get("kiosk.dedicationText", "").Trim();
-        if (dedication.Length == 0) dedication = "לעילוי נשמת הנערה הצדקנית\nאסתר גיטה דינר ע\"ה\nבת רבי מיכאל שלום הלוי שיבדלט\"א · תנצב\"ה";
+        if (dedication.Length == 0) dedication = "לעילוי נשמת הנערה הצדקנית\nאסתר גיטה דינר ע\"ה\nבת רבי מיכאל שלום הלוי שיבדלט\"א\nתנצב\"ה";
         bool hasDedication = dedColumn && shDed;
         bool hasSideColumn = zmItems.Count > 0 || hasDedication;
-        float colW = hasSideColumn ? Math.Min(340 * s, r.Width * 0.24f) : 0;
+        float colW = hasSideColumn ? Math.Min(380 * s, r.Width * 0.26f) : 0;
         float colMargin = 28 * s;
         float W = hasSideColumn ? Math.Max(r.Width * 0.4f, r.Width - 2 * (colW + colMargin * 2) - 2 * Math.Abs(dx)) : r.Width;
         RectangleF Line(float y, float h) => new(cx - W / 2f, y, W, h);
@@ -603,8 +603,8 @@ internal sealed class RestScreen : Form
         // משוב 15.10: ההקדשה בצד שמול עמודת הזמנים, בגבולות קבועים (רוחב העמודה הצדדית בלבד) — אין חפיפה
         float dedW = zmItems.Count > 0 ? Math.Max(colW + colMargin, Math.Min(420 * s, (r.Width - W) / 2f - 12 * s)) : Math.Min(520 * s, r.Width * 0.4f);
         float dedX = zmItems.Count > 0 && !zmLeft ? 24 * s : (zmItems.Count > 0 ? r.Width - 24 * s - dedW : 24 * s);
-        var ded = new RectangleF(dedX, r.Height - 170 * s, dedW, 130 * s);
-        var dedFmt = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Far };
+        var ded = new RectangleF(dedX, r.Height - 215 * s, dedW, 175 * s);
+        var dedFmt = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         // משוב 15.10: כיתוב אישי (kiosk.restNoteText) בריבוע ממוסגר, בצד שמול הזמנים, מעל ההקדשה
         string note = Config.Get("kiosk.restNoteText", "").Trim();
         float noteBottom = r.Height * 0.08f;
@@ -646,14 +646,30 @@ internal sealed class RestScreen : Form
             string custom = Config.Get("kiosk.restDedicationText", "").Trim();
             string[] dl = custom.Length > 0
                 ? custom.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(4).ToArray()
-                : new[] { "לעילוי נשמת הנערה הצדקנית", "אסתר גיטה דינר ע\"ה", "בת רבי מיכאל שלום הלוי שיבדלט\"א · תנצב\"ה" };
-            float dyy = ded.Y;
-            g.SetClip(ded);
+                : new[] { "לעילוי נשמת הנערה הצדקנית", "אסתר גיטה דינר ע\"ה", "בת רבי מיכאל שלום הלוי שיבדלט\"א", "תנצב\"ה" };
+            // שורת "· תנצב"ה" / "· ת.נ.צ.ב.ה" שבסוף שורה — יורדת לשורה משלה; כל שורה ממורכזת ומוקטנת אם רחבה מהמסגרת (לא נחתכת)
+            var split = new List<string>();
+            foreach (var line in dl)
+            {
+                int dot = line.LastIndexOf(" · ", StringComparison.Ordinal);
+                string tail = dot > 0 ? line[(dot + 3)..].Trim() : "";
+                if (dot > 0 && (tail.Replace(".", "").Replace("\"", "").Replace("'", "") is "תנצבה" or "תנצבה" || tail.StartsWith("ת.נ.צ.ב", StringComparison.Ordinal) || tail.StartsWith("תנצב", StringComparison.Ordinal)))
+                { split.Add(line[..dot].Trim()); split.Add(tail); }
+                else split.Add(line);
+            }
+            dl = split.Take(5).ToArray();
+            float totalH = 0; foreach (var _ in dl) totalH += 34 * s;
+            float dyy = ded.Bottom - Math.Max(totalH, 0) + 4 * s;
+            g.SetClip(new RectangleF(ded.X - 4 * s, dyy - 6 * s, ded.Width + 8 * s, totalH + 8 * s));
             for (int i = 0; i < dl.Length; i++)
             {
                 bool bold = dl.Length > 1 ? i == 1 : true;
-                float h = bold ? 38 * s : 30 * s;
-                g.DrawString(dl[i], bold ? dedNameF : dedF, bold ? goldB : dim, new RectangleF(ded.X, dyy, ded.Width, h), dedFmt);
+                float h = 34 * s;
+                var baseFont = bold ? dedNameF : dedF;
+                float wText = g.MeasureString(dl[i], baseFont).Width;
+                float k = wText > ded.Width ? ded.Width / wText : 1f;
+                using var fit = k < 1f ? new Font(baseFont.FontFamily, Math.Max(9f, baseFont.Size * k * 0.97f), baseFont.Style, GraphicsUnit.Point) : null;
+                g.DrawString(dl[i], fit ?? baseFont, bold ? goldB : dim, new RectangleF(ded.X, dyy, ded.Width, h), dedFmt);
                 dyy += h;
             }
             g.ResetClip();
@@ -729,22 +745,24 @@ internal sealed class RestScreen : Form
             }
             return 24 * s + best;
         }
-        for (float size = 18f; ; size -= 1f) // #1: גופן ברור ככל האפשר
+        // כל זמן בשורה משלו: קודם עמודה אחת בגופן הגדול ביותר שנכנס (עד 22pt, לא פחות מ-13pt); רק אם לא נכנס — שתי תת-עמודות
+        bool chosen = false;
+        for (int pass = 1; pass <= 2 && !chosen; pass++)
         {
-            f?.Dispose();
-            f = new Font(UiFamily, size, FontStyle.Bold, GraphicsUnit.Point); // גופן ברירת המחדל של Windows — קיים ומכסה עברית (כולל גרש/גרשיים) אצל כולם
-            lineH = f.GetHeight(g) * 1.2f;
-            float widest = 0;
-            foreach (var it in items) if (it.Length > 0) widest = Math.Max(widest, g.MeasureString(it, f).Width);
-            bool fit = false;
-            for (cols = 1; cols <= 2 && !fit; cols++)
+            cols = pass;
+            for (float size = 22f; size >= (pass == 1 ? 13f : 9f); size -= 1f)
             {
+                f?.Dispose();
+                f = new Font(UiFamily, size, FontStyle.Bold, GraphicsUnit.Point); // גופן ברירת המחדל של Windows — קיים ומכסה עברית (כולל גרש/גרשיים) אצל כולם
+                lineH = f.GetHeight(g) * 1.2f;
+                float widest = 0;
+                foreach (var it in items) if (it.Length > 0) widest = Math.Max(widest, g.MeasureString(it, f).Width);
                 float colInner = (w - 2 * pad - gap * (cols - 1)) / cols;
-                fit = widest <= colInner && Need(cols, lineH) <= maxH;
-                if (fit) break;
+                if (widest <= colInner && Need(cols, lineH) <= maxH) { chosen = true; break; }
             }
-            if (fit || size <= 9f) { if (!fit) cols = 2; maxH = Math.Min(maxH, Need(cols, lineH)); break; }
         }
+        if (!chosen) cols = 2;
+        maxH = Math.Min(maxH, Need(cols, lineH));
         using (f)
         using (var bg = new SolidBrush(Color.FromArgb(70, 10, 12, 22)))
         using (var border = new Pen(Color.FromArgb(150, gold), 1.4f * s)) // משוב 15.10: מסגרת דקה ברורה
