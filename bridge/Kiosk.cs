@@ -1292,6 +1292,9 @@ public static partial class Kiosk
         catch { /* נסגר כבר או ללא הרשאה */ }
     }
 
+    private static int _otzLaunches;
+    private static DateTime _otzNextLaunch = DateTime.MinValue, _otzRunningSince = DateTime.MinValue;
+
     private static DateTime _snipSeen = DateTime.MinValue;
 
     /// <summary>כלי החיתוך (שברשימת התוכנות המותרות) רץ בחשבון הזה - עד 120 שניות רצופות, ואז חוזרים לאכוף</summary>
@@ -1347,11 +1350,25 @@ public static partial class Kiosk
             var otz = Process.GetProcessesByName(name).FirstOrDefault(p => p.SessionId == session);
             if (otz == null)
             {
+                _otzRunningSince = DateTime.MinValue;
                 if (!string.IsNullOrEmpty(path) && File.Exists(path))
-                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) });
+                {
+                    // backoff: אם אוצריא קורסת בעלייה, הפעלה מחדש בכל 2 שניות יוצרת תהליך חדש בלי הפסקה (ומציפה את
+                    // המחשב). ההמתנה בין ניסיונות גדלה 2,4,8,16,32,60 שניות, ומתאפסת אחרי ש-אוצריא רצה 20 שניות ברצף
+                    if (DateTime.UtcNow >= _otzNextLaunch)
+                    {
+                        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) });
+                        _otzLaunches++;
+                        _otzNextLaunch = DateTime.UtcNow.AddSeconds(Math.Min(60, 1 << Math.Min(_otzLaunches, 6)));
+                        if (_otzLaunches >= 3) LogThrottled("otzCrash", "watchdog: אוצריא לא נשארת פתוחה (ניסיון הפעלה " + _otzLaunches + ") - ממתינים לפני הניסיון הבא", 60);
+                    }
+                    else if (_otzLaunches >= 3 && !Overlay.RestVisible) Overlay.ShowRest(IntPtr.Zero, idle: true); // בזמן ההמתנה לא מציגים שולחן עבודה
+                }
                 else if (!Overlay.RestVisible) Overlay.ShowRest(IntPtr.Zero, idle: true); // אין אוצריא: מסך סגור עם הודעה
                 return;
             }
+            if (_otzRunningSince == DateTime.MinValue) _otzRunningSince = DateTime.UtcNow;
+            else if ((DateTime.UtcNow - _otzRunningSince).TotalSeconds >= 20) { _otzLaunches = 0; _otzNextLaunch = DateTime.MinValue; }
 
             IntPtr hwnd = otz.MainWindowHandle;
             if (hwnd == IntPtr.Zero) return;

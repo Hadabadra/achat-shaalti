@@ -450,6 +450,7 @@ public static class HardLock
 
     private static System.Threading.Timer _sync;
     private static bool _sawActive;
+    private static int _inactiveTicks;
 
     /// <summary>כל 5 שניות: אם השירות אומר "נעול" והגשר לא — נועלים (גם אחרי עריכת config.json או בחשבון אחר)</summary>
     public static void StartSync()
@@ -464,14 +465,28 @@ public static class HardLock
                 if (active)
                 {
                     _sawActive = true;
+                    _inactiveTicks = 0;
                     if (!Kiosk.IsActive) Kiosk.ForceActivate(s["otzariaPath"]?.ToString());
                 }
-                else if (_sawActive)
+                else
                 {
-                    _sawActive = false;
-                    // "לא פעיל" בגלל פתיחה זמנית (lockOn עדיין true): משתחררים עד שהשירות ינעל שוב בתום הזמן
-                    bool temporary = s["lockOn"]?.GetValue<bool>() == true;
-                    if (Kiosk.IsActive) Kiosk.ReleaseFromService(temporary);
+                    // _sawActive לבדו לא הספיק: אם הגשר עלה כשהוא כבר נעול מקומית (kiosk.active בקובץ) והשירות כבר לא
+                    // פעיל (נגמר חלון תזמון, או בוטל כשהגשר היה כבוי), הדגל נשאר false לעולם ואף אחד לא שחרר - נעילה תקועה.
+                    // לכן משחררים גם כשהשירות מוגדר (יש לו סיסמה) ואומר "לא פעיל" ב-3 סבבים רצופים (15 שניות, נגד
+                    // מרוץ מול הפעלה שזה עתה התחילה), בלי תלות ב-_sawActive. שירות שלא הוגדר = נעילה מקומית בלבד, לא נוגעים
+                    bool configured = s["configured"]?.GetValue<bool>() == true;
+                    if (_sawActive || (configured && Kiosk.IsActive))
+                    {
+                        if (++_inactiveTicks >= (_sawActive ? 1 : 3))
+                        {
+                            _sawActive = false;
+                            _inactiveTicks = 0;
+                            // "לא פעיל" בגלל פתיחה זמנית (lockOn עדיין true): משתחררים עד שהשירות ינעל שוב בתום הזמן
+                            bool temporary = s["lockOn"]?.GetValue<bool>() == true;
+                            if (Kiosk.IsActive) Kiosk.ReleaseFromService(temporary);
+                        }
+                    }
+                    else _inactiveTicks = 0;
                 }
             }
             catch (Exception ex) { Config.Log("hardlock sync: " + ex.Message); }
@@ -682,10 +697,21 @@ public class HardLockService : ServiceBase
     {
         _cts?.Cancel();
         _timer?.Dispose();
+        // עצירה יזומה של השירות (sc stop): אף אחד אחר כבר לא יאכוף, ו-HKEY_USERS של המשתמשים נשאר עם
+        // DisableTaskMgr/DisableRegistryTools (וחסימת USB) - מנהל המשימות ועורך הרישום חסומים בלי שום נעילה.
+        // מנקים בעצירה. הנעילה השמורה (active) לא משתנה, ולכן כשהשירות יעלה שוב ה-Tick הראשון יאכוף מחדש
+        try { EnforcePolicies(false); EnforceUsb(false); }
+        catch (Exception ex) { HardLock.SvcLog("stop cleanup: " + ex.Message); }
         HardLock.SvcLog("service: נעצר");
     }
 
-    protected override void OnShutdown() => OnStop();
+    // כיבוי מחשב: לא מנקים - הנעילה חייבת להישאר בתוקף לעלייה הבאה (השירות עולה אוטומטית ואוכף מחדש)
+    protected override void OnShutdown()
+    {
+        _cts?.Cancel();
+        _timer?.Dispose();
+        HardLock.SvcLog("service: כיבוי מחשב");
+    }
 
     // ---------- מצב ----------
 
