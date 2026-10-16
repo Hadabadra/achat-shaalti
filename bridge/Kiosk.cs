@@ -1318,6 +1318,7 @@ public static partial class Kiosk
             int session = Process.GetCurrentProcess().SessionId;
             // ממצא ביקורת אבטחה: מתעדכן כאן (חוט הטיימר, כל 2 שניות) ולא בתוך ה-hook עצמו — ר' הערה ב-ForegroundIsAllowedProgram
             UpdateForegroundAllowedCache();
+            RefreshHook();
             // בזמן שכלי החיתוך המאושר פתוח לא הורגים את explorer (עד 2 דקות): שכבת הצילום של "חדש" בווינדוס 11
             // מתארחת בתוך explorer, ו-Kill כל 2 שניות הרג אותה מיד - נראה כרענון של כלי החיתוך בלי צילום (נצפה
             // ברישום: explorer/userinit/SearchHost נולדים מחדש בכל מחזור). המחיר: שורת המשימות עשויה להופיע לשניות
@@ -1411,7 +1412,21 @@ public static partial class Kiosk
         if (_hook != IntPtr.Zero) return;
         _hookProc = HookCallback;
         _hook = SetWindowsHookEx(13 /* WH_KEYBOARD_LL */, _hookProc, GetModuleHandle(null), 0);
-        Config.Log(_hook == IntPtr.Zero ? "keyboard hook failed: " + Marshal.GetLastWin32Error() : "keyboard hook installed");
+        if (_hook == IntPtr.Zero) Config.Log("keyboard hook failed: " + Marshal.GetLastWin32Error());
+        else if (!_hookLogged) { _hookLogged = true; Config.Log("keyboard hook installed"); }
+    }
+
+    private static bool _hookLogged;
+    private static int _hookTick;
+
+    /// <summary>
+    /// Windows מסירה בשקט hook מקלדת גלובלי שחרג מ-LowLevelHooksTimeout, ו-InstallHook יוצא מוקדם כש-_hook כבר מוגדר
+    /// (אז חסימת Win/Alt+Tab וצירוף החירום פשוט מפסיקים לעבוד בלי שאף אחד יודע). מתקינים מחדש כל כ-30 שניות
+    /// </summary>
+    private static void RefreshHook()
+    {
+        if (++_hookTick % 15 != 0) return;
+        Tray.Invoke(() => { RemoveHook(); InstallHook(); });
     }
 
     private static void RemoveHook()

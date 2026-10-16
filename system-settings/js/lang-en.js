@@ -427,7 +427,6 @@
     [/^(.*) · כרגע (\d+) שניות$/, '$1 · currently $2 seconds'],
     [/^ · נשארו בערך (\d+) שעות ו-(\d+) דקות$/, '· about $1 h $2 min left'],
     [/^· תצוגה מקדימה$/, '· Preview'],
-    [/^· מאת גמח תורת אסתר$/, '· by Torat Esther Gemach'],
     [/^· נעילה קפדנית$/, '· strict lock'],
     [/^· מנהל המשימות חסום$/, '· Task Manager blocked'],
     [/^· בטעינה$/, '· charging'],

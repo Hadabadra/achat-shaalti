@@ -306,6 +306,9 @@ public static class HardLock
         var deadline = DateTime.UtcNow.AddSeconds(75);
         while (DateTime.UtcNow < deadline)
         {
+            // חלון Windows Hello (CredentialUIBroker) אינו "תוכנה מותרת": בלי חסד השומר היה מחזיר את אוצריא לחזית
+            // כל 2 שניות ומסתיר את חלון האימות. החסד קצר (30 שניות) ומתחדש רק כל עוד ממתינים לאימות
+            Programs.GrantForegroundGrace();
             Thread.Sleep(700);
             string s = Call(new JsonObject { ["op"] = "hello-status", ["nonce"] = nonce }, 2500)?["state"]?.ToString();
             if (s == "approved") return nonce;
@@ -1078,6 +1081,11 @@ public class HardLockService : ServiceBase
                     if ((e = Need2fa(q, pw)) != null) return e;
                     _state["active"] = false;
                     _state["tempUnlockUntil"] = ""; // ביטול מלא: אין מה להחזיר בתום פתיחה זמנית
+                    // ביטול בתוך חלון תזמון (גם בקוד שחזור) היה ננעל מחדש תוך שניות כי EvaluateSchedule מפעיל אותו
+                    // שוב - מדלגים עד סוף החלון הנוכחי, כמו "ביטול הנעילה" באזהרת התזמון
+                    if (_state["scheduleEnabled"]?.GetValue<bool>() == true &&
+                        Sched.CurrentWindowEnd(_state["scheduleStart"]?.ToString(), _state["scheduleEnd"]?.ToString(), DateTime.Now) is DateTime winEnd)
+                        _state["skipUntil"] = new DateTimeOffset(winEnd).ToString("o");
                     Save();
                     HardLock.SvcLog("service: נעילה בוטלה");
                     Task.Run(Tick);

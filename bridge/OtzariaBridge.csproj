@@ -13,7 +13,7 @@
     <Version>3.6.1</Version>
     <Product>קיוסק אוצריא</Product>
     <AssemblyTitle>קיוסק אוצריא - תוכנה לחסימת המחשב ללימוד</AssemblyTitle>
-    <Company>גמח תורת אסתר</Company>
+    <Company>קיוסק אוצריא</Company>
     <ApplicationIcon>..\assets\icon.ico</ApplicationIcon>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>

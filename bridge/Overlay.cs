@@ -370,7 +370,7 @@ internal sealed class RestScreen : Form
         // זמני היום בעמודה בצד (kiosk.restZmanimSide: right/left), והקדשה אישית אופציונלית (kiosk.dedicationText)
         // בעמודה בצד הנגדי - כדי ששתיהן לא יתנגשו בשעה במרכז. העמודות לא זזות עם dx (רק dy), והתוכן
         // במרכז מוגבל לרוחב שנשאר בין שתי השוליים.
-        var zmItems = ZmanimItems(Zmanim.Sections(DateTime.Now));
+        var zmItems = CachedZmanim();
         bool zmLeft = Config.Get("kiosk.restZmanimSide", "right") == "left";
         string dedication = Config.Get("kiosk.dedicationText", "");
         bool hasDedication = !string.IsNullOrWhiteSpace(dedication);
@@ -401,7 +401,8 @@ internal sealed class RestScreen : Form
         string venue = Config.Get("kiosk.venueName", "");
         if (!string.IsNullOrWhiteSpace(venue))
         {
-            g.DrawString(venue, dateF, dim, Line(y, 36 * s), center);
+            using (var venueF = new Font(UiFamily, 20f, GraphicsUnit.Point))
+                g.DrawString(venue, venueF, dim, Line(y, 36 * s), center);
             y += 36 * s;
         }
         // #2: התאריך הלועזי באותה שורה עם העברי (לא בשורה נפרדת שנופלת מתחת להקדשה)
@@ -425,6 +426,22 @@ internal sealed class RestScreen : Form
     }
 
     /// <summary>מפרק את שורות הזמנים ("א · ב\nג") לפריטים — פריט אחד לכל שורה בעמודה</summary>
+    // OnPaint רץ כ-25 פעמים בשנייה; חישוב הזמנים (JSON, KosherJava, קריאות config) בכל פריים היה כבד, וחריגה שם
+    // הפילה את כל הציור (מסך לבן עם X אדום). מחשבים פעם ב-30 שניות, וכשל מחזיר רשימה ריקה במקום לקרוס
+    private static List<string> _zmCache = new();
+    private static DateTime _zmAt = DateTime.MinValue;
+
+    private static List<string> CachedZmanim()
+    {
+        if ((DateTime.UtcNow - _zmAt).TotalSeconds >= 30)
+        {
+            try { _zmCache = ZmanimItems(Zmanim.Sections(DateTime.Now)); }
+            catch (Exception ex) { Config.Log("zmanim: " + ex.Message); _zmCache = new List<string>(); }
+            _zmAt = DateTime.UtcNow;
+        }
+        return _zmCache;
+    }
+
     internal static List<string> ZmanimItems(string[] sections)
     {
         var items = new List<string>();
@@ -441,6 +458,18 @@ internal sealed class RestScreen : Form
         return items;
     }
 
+    /// <summary>
+    /// גופן ברירת המחדל של ממשק Windows (Segoe UI בווינדוס 10/11, בכל שפה) - קיים ומכסה עברית אצל כולם, בניגוד
+    /// ל-"David"/"Segoe UI Semibold" שאינם מובטחים בכל התקנה (ובהיעדרם הופיעו ריבועים ליד הטקסט)
+    /// </summary>
+    private static readonly string UiFamily = ResolveUiFamily();
+
+    private static string ResolveUiFamily()
+    {
+        try { using var f = SystemFonts.MessageBoxFont; return f.FontFamily.Name; }
+        catch { return "Segoe UI"; }
+    }
+
     /// <summary>עמודת זמנים עם רקע עדין; הגופן קטן עד שהכול נכנס בגובה הזמין (לעולם לא גולש למטה)</summary>
     private static void DrawZmanimColumn(Graphics g, List<string> items, float x, float y, float w, float maxH, float s, Color gold)
     {
@@ -448,13 +477,8 @@ internal sealed class RestScreen : Form
         Font f;
         while (true)
         {
-            // "Segoe UI Semibold" אינו שם family נפרד שניתן לסמוך עליו בכל Windows - בחלק מהמחשבים
-            // זה נופל לגופן חלופי בלי כיסוי עברי, והאותיות העבריות מוצגות כריבועים ריקים (tofu).
-            // גם "Segoe UI" הרגיל לא מכסה סימני גרש/גרשיים (״ ׳, כמו ב"דף יומי"/גימטריה של תאריך עברי -
-            // "כ״ה" וכו') - בדיוק הריבועים שהופיעו לצד "מספרים" (אותיות-גימטריה) בעמודת הזמנים. "David"
-            // הוא גופן עברי ייעודי עם כיסוי מלא לבלוק היוניקוד העברי כולל סימני פיסוק, ומשומש כבר באותו
-            // מסך (headF/verseF/dateF) בלי בעיה - עקבי ואמין יותר מ"Segoe UI" לטקסט עברי מלא כאן
-            f = new Font("David", size, FontStyle.Bold, GraphicsUnit.Point);
+            // גופן ברירת המחדל של Windows (ר' UiFamily) - לא שמות family שאינם מובטחים בכל התקנה
+            f = new Font(UiFamily, size, FontStyle.Bold, GraphicsUnit.Point);
             lineH = f.GetHeight(g) * 1.25f;
             float need = 24 * s + lineH * (items.Count - blank) + lineH * 0.5f * blank;
             if (need <= maxH || size <= 11f) { maxH = Math.Min(maxH, need); break; }
@@ -496,7 +520,7 @@ internal sealed class RestScreen : Form
         var center = new StringFormat(StringFormatFlags.DirectionRightToLeft) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near };
         using var dim = new SolidBrush(Color.FromArgb(205, 225, 218, 200));
         float textTop = y + 16 * s, textH = maxH * 0.5f;
-        using (var dedF = new Font("David", 16f, GraphicsUnit.Point))
+        using (var dedF = new Font(UiFamily, 16f, GraphicsUnit.Point))
             g.DrawString(text, dedF, dim, new RectangleF(x + 12 * s, textTop, w - 24 * s, textH), center);
 
         // נר מרצד בחצי התחתון של העמודה - נדנוד איטי (כל הלהבה) + ריצוד מהיר (גודל/שקיפות), בנפרד
