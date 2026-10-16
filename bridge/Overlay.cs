@@ -812,15 +812,15 @@ internal sealed class RestScreen : Form
 
         // נר מרצד בחצי התחתון של העמודה - נדנוד איטי (כל הלהבה) + ריצוד מהיר (גודל/שקיפות), בנפרד
         float cx = x + w / 2f;
-        float candleW = Math.Min(24f, w * 0.16f) * s;
-        float candleH = Math.Min(90f * s, maxH * 0.32f);
+        float candleW = Math.Min(48f, w * 0.30f) * s;   // הנר גדול פי 2
+        float candleH = Math.Max(40f * s, Math.Min(180f * s, maxH * 0.5f - 80f * s));
         float baseY = y + maxH - 14 * s;
         float bodyTop = baseY - candleH;
 
         float flick = (float)(Math.Sin(t * 9.1) * 0.5 + Math.Sin(t * 13.7 + 1.3) * 0.3 + Math.Sin(t * 5.3 + 2.1) * 0.2);
-        float sway = (float)Math.Sin(t * 0.8) * 2.5f * s;
-        float flameH = (28f + flick * 6f) * s;
-        float flameW = (13f + flick * 2.5f) * s;
+        float sway = (float)(Math.Sin(t * 0.8) * 2.5 + Math.Sin(t * 6.3) * 1.5) * s;
+        float flameH = (28f + flick * 8f) * 1.5f * s;   // הלהבה גדולה פי 1.5, וריצוד בולט יותר
+        float flameW = (13f + flick * 3.5f) * 1.5f * s;
         float flameX = cx + sway;
         float flameY = bodyTop - flameH + 4 * s;
 
