@@ -1279,7 +1279,7 @@ public class HardLockService : ServiceBase
                     if (q["scheduleStart"]?.ToString() is string ss && Sched.IsValid(ss)) _state["scheduleStart"] = ss;
                     if (q["scheduleEnd"]?.ToString() is string ee && Sched.IsValid(ee)) _state["scheduleEnd"] = ee;
                     if (q["scheduleDays"]?.ToString() is string sd && System.Text.RegularExpressions.Regex.IsMatch(sd, "^[0-6]?(,[0-6])*$")) _state["scheduleDays"] = sd;
-                    if (q["scheduleExtra"]?.ToString() is string sx && System.Text.RegularExpressions.Regex.IsMatch(sx, @"^(d{1,2}:d{2}-d{1,2}:d{2})?(,d{1,2}:d{2}-d{1,2}:d{2}){0,9}$"))
+                    if (q["scheduleExtra"]?.ToString() is string sx && System.Text.RegularExpressions.Regex.IsMatch(sx, @"^(\d{1,2}:\d{2}-\d{1,2}:\d{2})?(,\d{1,2}:\d{2}-\d{1,2}:\d{2}){0,9}$"))
                         _state["scheduleExtra"] = string.Join(",", Sched.ParseWindows(sx).Select(w => w.start + "-" + w.end)); // רק חלונות תקינים
                     foreach (var kv in policy) _state[kv.Key] = kv.Value;
                     Save();
