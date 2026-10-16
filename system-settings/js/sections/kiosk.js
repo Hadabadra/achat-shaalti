@@ -901,7 +901,9 @@
       actions: [{ label: 'ביטול', value: false }, { label: 'הוספה', value: true, kind: 'primary' }],
       validate: function (x) {
         if (!x.name.trim()) return 'יש להקליד שם';
-        if (!/^[A-Za-z]:\\.+\.exe$/i.test(x.path.trim().replace(/^"|"$/g, ''))) return 'יש להקליד נתיב מלא לקובץ exe';
+        var pth = x.path.trim().replace(/^"|"$/g, '');
+        /* אפליקציות חנות (פתקים דביקים/שעון) מזוהות לפי shell:AppsFolder\...; אחרת נדרש נתיב exe מלא */
+        if (!/^shell:AppsFolder\\[\w.\-]+![\w.\-]+$/i.test(pth) && !/^[A-Za-z]:\\.+\.exe$/i.test(pth)) return 'יש להקליד נתיב מלא לקובץ exe';
         return x.pw ? '' : 'יש להקליד את סיסמת הנעילה';
       },
       onSubmit: async function (x) {

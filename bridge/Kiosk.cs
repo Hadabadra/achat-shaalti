@@ -1349,6 +1349,10 @@ public static partial class Kiosk
 
             GetWindowThreadProcessId(GetForegroundWindow(), out uint fgPid);
             if (fgPid == otz.Id || fgPid == Environment.ProcessId) return;
+            // pid=0 ("Idle" בלוג): אין חלון בחזית ברגע הדגימה - מעבר פוקוס בין חלונות. החזרת אוצריא ברגע כזה גוזלת
+            // את הפוקוס מהחלון שעומד לקבל אותו (למשל שכבת הצילום של כלי החיתוך אחרי "חדש") ונראית כרענון של התוכנה.
+            // הדגימה הבאה (עוד 2 שניות) תבדוק שוב; חלון אסור אמיתי יזוהה אז לפי התהליך שלו
+            if (fgPid == 0) return;
             CloseShellWindow(fgPid, session);
             if (Programs.IsAllowedForeground(fgPid)) return; // תוכנה מותרת (רשימה מוגדרת בסיסמה) בחזית
             try

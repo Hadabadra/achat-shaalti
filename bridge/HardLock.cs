@@ -825,8 +825,9 @@ public class HardLockService : ServiceBase
     {
         res = new Dictionary<string, JsonNode>();
         static bool ExePath(string p) =>
-            Path.IsPathFullyQualified(p) && p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-            !Programs.IsBlockedName(Path.GetFileNameWithoutExtension(p));
+            Programs.IsShellApp(p) || // אפליקציית חנות (shell:AppsFolder\...) - בלי exe, מזהה מאומת בנפרד
+            (Path.IsPathFullyQualified(p) && p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+            !Programs.IsBlockedName(Path.GetFileNameWithoutExtension(p)));
 
         if (q["programs"] is JsonNode pn)
         {

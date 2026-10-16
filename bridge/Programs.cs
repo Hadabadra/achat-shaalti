@@ -151,7 +151,7 @@ public static class Programs
             name = e.Name,
             path = e.Path,
             procs = e.Procs,
-            exists = File.Exists(e.Path),
+            exists = IsShellApp(e.Path) || File.Exists(e.Path),
             running = ExistingWindow(e) != IntPtr.Zero,
             auto = e.Auto,
         }).ToArray()
@@ -187,9 +187,32 @@ public static class Programs
     /// </summary>
     internal static void GrantForegroundGrace() => GraceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
 
+    /// <summary>
+    /// אפליקציית חנות (UWP, כמו פתקים דביקים/שעון) שאין לה קובץ exe שאפשר לאתר - מופעלת לפי מזהה האפליקציה
+    /// בתיקיית AppsFolder: shell:AppsFolder\PackageFamilyName!AppId. מזהה תקין בלבד (בלי תווים חריגים)
+    /// </summary>
+    internal static bool IsShellApp(string p) =>
+        p != null && p.StartsWith(@"shell:AppsFolder\", StringComparison.OrdinalIgnoreCase) &&
+        Regex.IsMatch(p.Substring(@"shell:AppsFolder\".Length), @"^[A-Za-z0-9.\-]+_[a-z0-9]+![A-Za-z0-9.\-]+$");
+
+    private static bool ShellAppInstalled(string aumid)
+    {
+        try
+        {
+            var t = Type.GetTypeFromProgID("Shell.Application");
+            if (t == null) return false;
+            dynamic shell = Activator.CreateInstance(t)!;
+            foreach (dynamic it in shell.NameSpace("shell:AppsFolder").Items())
+                if (string.Equals((string)it.Path, aumid, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        catch (Exception ex) { Config.Log("shell apps: " + ex.Message); }
+        return false;
+    }
+
     public static bool Activate(Entry e)
     {
-        if (!File.Exists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);
+        bool shellApp = IsShellApp(e.Path);
+        if (!shellApp && !File.Exists(e.Path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + e.Path);
         GraceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
         IntPtr h = ExistingWindow(e);
         if (h != IntPtr.Zero)
@@ -202,7 +225,7 @@ public static class Programs
         using (var started = Process.Start(new ProcessStartInfo(e.Path)
         {
             UseShellExecute = true,
-            WorkingDirectory = System.IO.Path.GetDirectoryName(e.Path),
+            WorkingDirectory = shellApp ? null : System.IO.Path.GetDirectoryName(e.Path),
         }))
         {
             if (started != null) RememberLaunched(started.Id);
@@ -280,11 +303,17 @@ public static class Programs
         string name = (b.Str("name") ?? "").Trim();
         string path = (b.Str("path") ?? "").Trim().Trim('"');
         if (name.Length == 0 || name.Length > 60) throw BridgeException.BadRequest("יש להזין שם באורך של עד 60 תווים");
-        if (!System.IO.Path.IsPathRooted(path) || !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            throw BridgeException.BadRequest("יש להזין נתיב מלא לקובץ הפעלה (exe)");
-        if (!File.Exists(path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + path);
-        string stem = System.IO.Path.GetFileNameWithoutExtension(path);
-        if (Blocked.Contains(stem)) throw BridgeException.Forbidden("אי אפשר להוסיף את התוכנה הזו לרשימה");
+        bool shellApp = IsShellApp(path);
+        if (!shellApp)
+        {
+            if (!System.IO.Path.IsPathRooted(path) || !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                throw BridgeException.BadRequest("יש להזין נתיב מלא לקובץ הפעלה (exe)");
+            if (!File.Exists(path)) throw BridgeException.NotFound("הקובץ לא נמצא: " + path);
+            string stem = System.IO.Path.GetFileNameWithoutExtension(path);
+            if (Blocked.Contains(stem)) throw BridgeException.Forbidden("אי אפשר להוסיף את התוכנה הזו לרשימה");
+        }
+        else if (string.IsNullOrWhiteSpace(b.Str("procs")))
+            throw BridgeException.BadRequest("לאפליקציית חנות חובה לציין שם תהליך (בשדה „תהליכים נוספים”), כדי שהחלון שלה יזוהה כתוכנה מותרת");
 
         var procs = new List<string>();
         foreach (string p in (b.Str("procs") ?? "").Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries))
@@ -352,12 +381,15 @@ public static class Programs
             // לא תחת SnippingTool.exe עצמו - בלעדי זה השומר (Kiosk.Watch) לא מזהה את שכבת הגרירה כ"מותר"
             // ומחזיר את אוצריא לחזית תוך רגע, עוד לפני שהמשתמש הספיק לגרור/לבחור אזור (נראה כמו "תקוע בטעינה")
             ("כלי חיתוך (צילום מסך)", new[] { "SnippingTool", "ScreenClippingHost", "ScreenSketch" }, new[] { System.IO.Path.Combine(sys32, "SnippingTool.exe"), System.IO.Path.Combine(winApps, "SnippingTool.exe") }),
-            ("פתקים דביקים", new[] { "Microsoft.Notes" }, new[] { System.IO.Path.Combine(winApps, "StickyNotes.exe"), System.IO.Path.Combine(winApps, "Microsoft.MicrosoftStickyNotes.exe") }),
-            ("שעון וטיימר", new[] { "Time", "ApplicationFrameHost" }, new[] { System.IO.Path.Combine(winApps, "Time.exe") }),
+            ("פתקים דביקים", new[] { "Microsoft.Notes", "StickyNotes" }, new[] { @"shell:AppsFolder\Microsoft.MicrosoftStickyNotes_8wekyb3d8bbwe!App" }),
+            ("שעון וטיימר", new[] { "Time", "ApplicationFrameHost" }, new[] { @"shell:AppsFolder\Microsoft.WindowsAlarms_8wekyb3d8bbwe!App" }),
         };
         foreach (var u in list)
         {
-            string hit = u.candidates.FirstOrDefault(File.Exists);
+            // אפליקציות חנות: אין exe לאתר, ולכן בודקים שהן מותקנות לפי AppsFolder (File.Exists לא רלוונטי להן)
+            string hit = u.candidates.FirstOrDefault(c => IsShellApp(c)
+                ? ShellAppInstalled(c.Substring(@"shell:AppsFolder\".Length))
+                : File.Exists(c));
             if (hit != null) yield return (u.name, hit, u.procs);
         }
     }
