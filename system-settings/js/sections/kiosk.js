@@ -38,7 +38,7 @@
     if (!body.__kioskShown) {
       var cached = null;
       try { cached = JSON.parse(localStorage.getItem('ss.kiosk.status') || 'null'); } catch (e) { cached = null; }
-      if (cached) { body.__kioskShown = true; render(body, cached, [], [], [], null); body.__kioskLive = live; live.then(function () { load(body); }).catch(function () {}); return; }
+      if (cached) { body.__kioskShown = true; render(body, cached, [], [], null, null); body.__kioskLive = live; live.then(function () { load(body); }).catch(function () {}); return; }
     }
     body.__kioskShown = false;
     for (var i = 0; ; i++) {
@@ -73,7 +73,7 @@
     });
     var pairsKnown = !!pairsRes, pairs = (pairsRes && pairsRes.clients) || [];
 
-    render(body, st, progs, found, pairs, bios, backup);
+    render(body, st, progs, found, pairsKnown ? pairs : null, bios, backup);
   }
 
   var detPromise = null, detResult = null;
@@ -222,7 +222,7 @@
       html += fxCard();
       html += hardCard(st.hard || {});
       html += biosCard(bios);
-      html += pairCard(pairs, pairsKnown);
+      html += pairCard(pairs || [], !!pairs);
       html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
         '<p class="muted">בחלון „ביטול נעילה” אפשר להקליד גם את <b>קוד השחזור</b> שקיבלתם בהגדרת הסיסמה. במקרה חירום אפשר להריץ משורת הפקודה:</p>' +
         '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock &lt;קוד-שחזור&gt;</code>' +
@@ -232,7 +232,7 @@
     body.innerHTML = html;
     if (!active && tu.active) startTempCountdown(body, tu.secondsLeft);
     wire(body, st, progs, found);
-    wireHard(body, st, pairs);
+    wireHard(body, st, pairs || []);
     wireBios(body, bios);
   }
 
