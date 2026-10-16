@@ -130,3 +130,52 @@ textarea.input{resize:vertical;min-height:4em;font:inherit}
 .muted, .hint, .card .desc { color: var(--color-on-surface-variant); font-size: 0.875em; line-height: 1.5; }
 input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(--color-primary); }
 .ss-load-step { margin-top: 0.75em; text-align: center; }
+
+/* כפתור שמירה בתחתית טופס: צמוד לשמאל במסך עברי (בסוף השורה), ולימין בקצה בכיוון LTR */
+html[dir="rtl"] .ss-form .row-actions { justify-content: flex-end; }
+html[dir="ltr"] .ss-form .row-actions { justify-content: flex-start; }
+/* כפתור "עדכון עכשיו" בהודעת הרכיב הישן — בשורה נפרדת, בצד שמאל, בלי לגלוש על הטקסט */
+.state-box.error > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25em; }
+.state-box.error > div > .btn { align-self: flex-end; margin-inline-start: 0; margin-top: 0.5em; }
+
+/* כפתורים לכל רוחב הכרטיס (למשל הקשחת BIOS) */
+.row-actions.full > .btn { flex: 1 1 0; justify-content: center; min-width: 11em; }
+
+/* כותרת "הגדרות מערכת" וגרסה — במרכז הכרטיס */
+.about-hero > div:last-child { flex: 1; min-width: 0; }
+.about-hero h3, .about-hero p.muted { text-align: center; }
+
+/* תוכנות שזוהו במחשב: רשימה מתקפלת, עם חיפוש וגלילה */
+.prog-suggest { margin-top: 0.75em; border: 1px solid var(--color-outline-variant); border-radius: var(--radius-md); padding: 0.25em 0.75em 0.75em; }
+.prog-suggest > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5em; padding: 0.6em 0; font-weight: 600; color: var(--color-primary); }
+.prog-suggest > summary::-webkit-details-marker { display: none; }
+.prog-suggest > summary::before { content: '◂'; transition: transform .15s; }
+.prog-suggest[open] > summary::before { transform: rotate(-90deg); }
+.prog-search { width: 100%; box-sizing: border-box; padding: 0.55em 0.8em; margin-bottom: 0.5em; border: 1px solid var(--color-outline-variant); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; }
+.prog-list { max-height: 15em; overflow-y: auto; display: flex; flex-direction: column; }
+.prog-item { display: flex; align-items: center; gap: 0.6em; text-align: start; padding: 0.55em 0.5em; border: 0; border-bottom: 1px solid var(--color-outline-variant); background: transparent; color: inherit; font: inherit; cursor: pointer; border-radius: 0; }
+.prog-item:hover { background: var(--color-surface-container); }
+.prog-item[hidden] { display: none; }
+.prog-item .ic { color: var(--color-primary); flex-shrink: 0; }
+
+/* תפריט "הוספת תוכנה": סגור כברירת מחדל, הכפתור הידני בראשו */
+.prog-suggest { padding: 0 0 0.5em; overflow: hidden; }
+.prog-suggest > summary { padding: 0.75em 1em; background: var(--color-secondary-container, var(--color-surface-container)); border-radius: var(--radius-md); }
+.prog-suggest[open] > summary { border-end-start-radius: 0; border-end-end-radius: 0; margin-bottom: 0.25em; }
+.prog-suggest > .prog-search { width: calc(100% - 1.5em); margin: 0.5em 0.75em; }
+.prog-suggest > .prog-item, .prog-suggest .prog-list .prog-item { padding-inline: 1em; }
+.prog-manual { width: 100%; font-weight: 600; color: var(--color-primary); }
+.prog-list { max-height: 14em; }
+
+/* תיקון ציור: הסיכום ממלא את כל המסגרת כשהתפריט סגור (בלי פס ריק מתחתיו) */
+.prog-suggest { padding: 0; }
+.prog-suggest[open] { padding-bottom: 0.5em; }
+.prog-suggest > summary { margin: 0; border-radius: calc(var(--radius-md) - 1px); }
+.prog-suggest[open] > summary { border-end-start-radius: 0; border-end-end-radius: 0; margin-bottom: 0.25em; }
+
+/* קבוצת כפתורים בשורת הגדרה (ייצוא/יבוא, הגדרות/הסרה של רכיב השירות): צמודים, לא מרוחקים */
+.btn-group { display: flex; gap: 0.5em; flex-wrap: wrap; }
+.setting-row > .btn-group { flex-shrink: 0; }
+
+/* תפריט נפתח לזמני כיבוי/שינה */
+.time-select { min-width: 11em; width: auto; flex-shrink: 0; }

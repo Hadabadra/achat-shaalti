@@ -139,6 +139,9 @@
   /* ---------- toasts ---------- */
   ui.toast = function (message, kind) {
     var host = document.getElementById('toasts');
+    /* אותה הודעה כבר מוצגת — לא מכפילים */
+    var dup = Array.prototype.some.call(host.querySelectorAll('.toast span'), function (s) { return s.textContent === message; });
+    if (dup) return;
     var t = ui.el('<div class="toast ' + (kind || '') + '" role="status">' +
       ui.icon(kind === 'error' ? 'warning' : kind === 'success' ? 'check' : 'info') +
       '<span>' + ui.esc(message) + '</span></div>');

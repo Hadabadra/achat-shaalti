@@ -5,12 +5,12 @@ namespace OtzariaBridge;
 /// <summary>
 /// סמל "אחת שאלתי" קבוע ושקוף-למחצה בפינה השמאלית התחתונה (בדומה לסימן של סינון), מעל כל החלונות,
 /// בלי לקבל לחיצות. כבוי כברירת מחדל; הפעלה/כיבוי וגודל מתפריט המגש או /watermark/set.
-/// config: watermark.enabled (false), watermark.size (48/72/112).
+/// config: watermark.enabled (false), watermark.size (48/72/224).
 /// </summary>
 internal static class Watermark
 {
     private static Form _f;
-    public static readonly int[] Sizes = { 48, 72, 112 };
+    public static readonly int[] Sizes = { 112, 152, 192 };
 
     public static void Init()
     {
@@ -20,6 +20,7 @@ internal static class Watermark
             if (b.TryGetProperty("enabled", out var e) && e.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
                 Config.Set("watermark.enabled", e.GetBoolean());
             if (b.TryGetProperty("size", out var s) && s.TryGetInt32(out int n) && Sizes.Contains(n)) Config.Set("watermark.size", n);
+            if (b.TryGetProperty("corner", out var c) && c.ValueKind == System.Text.Json.JsonValueKind.String && Corners.Contains(c.GetString())) Config.Set("watermark.corner", c.GetString());
             Config.Save();
             Apply();
             return State();
@@ -27,16 +28,21 @@ internal static class Watermark
         Apply();
     }
 
-    private static object State() => new { enabled = Config.Get("watermark.enabled", false), size = Config.Get("watermark.size", 72), sizes = Sizes };
+    private static object State() => new { enabled = Config.Get("watermark.enabled", false), size = Config.Get("watermark.size", 112), sizes = Sizes, corner = Config.Get("watermark.corner", "bl") };
 
     public static void Toggle() { Config.Set("watermark.enabled", !Config.Get("watermark.enabled", false)); Config.Save(); Apply(); }
+    public static readonly string[] Corners = { "tl", "tr", "bl", "br" };
+    public static void SetCorner(string c) { if (!Corners.Contains(c)) return; Config.Set("watermark.corner", c); Config.Save(); Apply(); }
     public static void SetSize(int n) { Config.Set("watermark.size", n); Config.Save(); Apply(); }
 
     public static void Apply() => Tray.Invoke(() =>
     {
         _f?.Close(); _f = null;
         if (!Config.Get("watermark.enabled", false)) return;
-        int size = Config.Get("watermark.size", 72);
+        int size = Config.Get("watermark.size", 112);
+        if (size < 112) { size = 112; Config.Set("watermark.size", 112); Config.Save(); }   // המדרגות: 112/152/192
+        if (size == 168 || size == 224) { size = size == 168 ? 152 : 192; Config.Set("watermark.size", size); Config.Save(); }   // הקטנה קלה של בינוני/גדול
+        string corner = Config.Get("watermark.corner", "bl");
         /* משוב 3.9: TransparencyKey (מג'נטה) השאיר הילה ורודה ומטושטשת סביב הסמל המוחלק.
            עכשיו: הקטנה איכותית מהאייקון הגדול + חלון שכבתי עם אלפא לכל פיקסל (UpdateLayeredWindow) */
         Bitmap bmp;
@@ -44,7 +50,8 @@ internal static class Watermark
         catch { return; }
         var wa = Screen.PrimaryScreen!.WorkingArea;
         _f = new ClickThrough { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, TopMost = true,
-            StartPosition = FormStartPosition.Manual, Size = new Size(size, size), Location = new Point(wa.Left + 12, wa.Bottom - size - 12) };
+            StartPosition = FormStartPosition.Manual, Size = new Size(size, size),
+            Location = new Point(corner.EndsWith("r") ? wa.Right - size - 12 : wa.Left + 12, corner.StartsWith("t") ? wa.Top + 12 : wa.Bottom - size - 12) };
         _f.Show();
         SetAlphaBitmap(_f, bmp, 110);
         bmp.Dispose();

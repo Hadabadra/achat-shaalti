@@ -131,6 +131,10 @@ public static class Programs
     /// </summary>
     private static void Save(List<Entry> list, string password)
     {
+        // רשומות ישנות (למשל shell:AppsFolder\... של אפליקציות Store) אינן נתיב exe מלא — רכיב ההקשחה דוחה את כל הרשימה
+        // בגללן ("רשומת תוכנה אינה תקינה"), ואז אי אפשר להסיר אף תוכנה. מנקים אותן בכל שמירה.
+        int dropped = list.RemoveAll(e => !System.IO.Path.IsPathFullyQualified(e.Path ?? "") || !(e.Path ?? "").EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+        if (dropped > 0) Config.Log("programs: הוסרו " + dropped + " רשומות ישנות עם נתיב לא תקין");
         if (HardLock.Available) HardLock.SetPrograms(password, ToJson(list), AutoEnabled, Keywords);
         Config.Set(Key, ToJson(list));
         Config.Save();

@@ -525,6 +525,9 @@ internal sealed class EmergencyForm : Form
         var msg = new Label { Dock = DockStyle.Top, Height = 28, ForeColor = Color.Firebrick, TextAlign = ContentAlignment.MiddleCenter };
         var ok = new Button { Text = Lang.T("בטל נעילה", "Unlock"), Dock = DockStyle.Bottom, Height = 40 };
         Controls.AddRange(new Control[] { ok, msg, code, info });
+        UiStyle.Button(ok, primary: true); ok.AutoSize = false; ok.Height = 44; ok.Margin = Padding.Empty;
+        UiStyle.Theme(this);
+        info.ForeColor = UiStyle.GoldText;
         AcceptButton = ok;
         ok.Click += (_, _) =>
         {

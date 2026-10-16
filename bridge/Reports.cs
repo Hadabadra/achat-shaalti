@@ -138,9 +138,9 @@ internal static class Reports
 internal sealed class ReportsForm : Form
 {
     private static ReportsForm _inst;
-    private readonly ListView _list = new() { Dock = DockStyle.Top, Height = 180, View = View.Details, FullRowSelect = true, MultiSelect = false };
-    private readonly TextBox _view = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
-    private readonly TextBox _note = new() { Anchor = AnchorStyles.Left | AnchorStyles.Right, Multiline = true, Height = 60 };
+    private readonly ListView _list = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false, BorderStyle = BorderStyle.None, HeaderStyle = ColumnHeaderStyle.Nonclickable, BackColor = Color.White, ForeColor = UiStyle.GoldText };
+    private readonly TextBox _view = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None, BackColor = Color.White };
+    private readonly TextBox _note = new() { Dock = DockStyle.Fill, Multiline = true, BorderStyle = BorderStyle.None, BackColor = Color.White };
     private readonly Button _del = new() { AutoSize = true, Enabled = false };
 
     public static void Open()
@@ -155,9 +155,11 @@ internal sealed class ReportsForm : Form
         Width = 640; Height = 620; MinimumSize = new System.Drawing.Size(520, 480); AutoScaleMode = AutoScaleMode.Dpi; StartPosition = FormStartPosition.CenterScreen;
         if (!Lang.En) { RightToLeft = RightToLeft.Yes; RightToLeftLayout = true; }
 
+        BackColor = UiStyle.Page;
+        Font = new Font("Segoe UI", 10f);
         var info = new Label
         {
-            Dock = DockStyle.Top, Height = 44, Padding = new Padding(6),
+            Dock = DockStyle.Fill, ForeColor = UiStyle.GoldText, BackColor = Color.White,
             Text = Lang.T("תקלות ויומן מקוצר (בלי סיסמאות וקודים) נשלחים אוטומטית דרך התוסף \"הגדרות מערכת\" כשהמתג \"שליחת תקלות אוטומטית\" פעיל. ממתינים אפשר למחוק לפני שליחה.",
                           "Errors and a short log (no passwords or codes) are sent automatically via the System Settings plugin when “automatic error reporting” is on. Pending items can be deleted before sending.")
         };
@@ -176,24 +178,35 @@ internal sealed class ReportsForm : Form
             if (_list.SelectedItems.Count > 0 && _list.SelectedItems[0].Tag is Reports.Item it && !it.Sent) Reports.MoveOne(it.Id, null);
             Reload();
         };
-        var add = new Button { AutoSize = true, Text = Lang.T("הוספת תיאור לדיווח", "Add a description") };
+        var add = new Button { Text = Lang.T("הוספת תיאור לדיווח", "Add a description") };
         add.Click += (_, _) => { if (Reports.AddNote(_note.Text)) { _note.Clear(); Reload(); } };
-        var shot = new Button { AutoSize = true, Text = Lang.T("צרף צילום מסך", "Attach a screenshot") };
+        var shot = new Button { Text = Lang.T("צרף צילום מסך", "Attach a screenshot") };
         shot.Click += (_, _) => AttachShot();
-        var zip = new Button { AutoSize = true, Text = Lang.T("איסוף יומנים לקובץ zip…", "Collect logs to zip…") };
+        var zip = new Button { Text = Lang.T("איסוף יומנים לקובץ zip…", "Collect logs to zip…") };
         zip.Click += (_, _) => Diagnostics_.Report();
+        UiStyle.Button(add, primary: true); UiStyle.Button(shot); UiStyle.Button(_del); UiStyle.Button(zip);
 
-        var bottom = new TableLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Padding = new Padding(4, 4, 4, 8) }; // #21: גובה לפי התוכן — הכפתורים לא נחתכים
-        bottom.Controls.Add(new Label { Text = Lang.T("תיאור (מה קרה?) — יישלח עם הדיווח הבא:", "Description (what happened?) — sent with the next report:"), AutoSize = true });
-        bottom.Controls.Add(_note);
-        var btns = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
+        // פריסה: כרטיס הסבר למעלה, רשימה + תוכן באמצע (מתכווצים), תיאור וכפתורים למטה; כל גוש בכרטיס לבן מעוגל
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(14), BackColor = UiStyle.Page };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 38));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        UiStyle.Card Card(Control inner) { var c = new UiStyle.Card { Dock = DockStyle.Fill }; c.Controls.Add(inner); return c; }
+        layout.Controls.Add(Card(info), 0, 0);
+        layout.Controls.Add(Card(_list), 0, 1);
+        layout.Controls.Add(Card(_view), 0, 2);
+        var noteBox = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = Color.White };
+        noteBox.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        noteBox.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        noteBox.Controls.Add(new Label { Text = Lang.T("תיאור (מה קרה?) — יישלח עם הדיווח הבא:", "Description (what happened?) — sent with the next report:"), AutoSize = true, ForeColor = UiStyle.GoldText }, 0, 0);
+        noteBox.Controls.Add(_note, 0, 1);
+        layout.Controls.Add(Card(noteBox), 0, 3);
+        var btns = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, BackColor = UiStyle.Page };
         btns.Controls.AddRange(new Control[] { add, shot, _del, zip });
-        bottom.Controls.Add(btns);
-
-        Controls.Add(_view);
-        Controls.Add(_list);
-        Controls.Add(info);
-        Controls.Add(bottom);
+        layout.Controls.Add(btns, 0, 4);
+        Controls.Add(layout);
     }
 
     /// #60: צילום אזור (החלון מוסתר בזמן הצילום), נשמר בתיקיית report-shots ונרשם כתיאור לדיווח.

@@ -301,6 +301,7 @@ public static partial class Kiosk
         restCandleFlicker = Config.Get("kiosk.restCandleFlicker", true),
         lockScreenImage = Config.Get("kiosk.lockScreenImage", true),
         restNoteText = Config.Get("kiosk.restNoteText", ""),
+        restVerseText = Config.Get("kiosk.restVerseText", ""),
         showDafYomi = Config.Get("kiosk.showDafYomi", true),
         yahrzeitMonth = Config.Get("kiosk.yahrzeitMonth", ""),
         yahrzeitDay = Config.Get("kiosk.yahrzeitDay", 0),
@@ -852,6 +853,7 @@ public static partial class Kiosk
         if (b.Has("restDedicationText")) { string dt = (b.Str("restDedicationText") ?? "").Replace("\r", ""); Config.Set("kiosk.restDedicationText", dt.Length > 400 ? dt[..400] : dt); }
         if (b.Has("restDedicationStyle")) Config.Set("kiosk.restDedicationStyle", b.Str("restDedicationStyle") == "column" ? "column" : "fixed");
         if (b.Has("restCandleFlicker")) Config.Set("kiosk.restCandleFlicker", b.Bool("restCandleFlicker"));
+        if (b.Has("restVerseText")) { string vt = (b.Str("restVerseText") ?? "").Replace("\r", "").Replace("\n", " ").Trim(); Config.Set("kiosk.restVerseText", vt.Length > 160 ? vt[..160] : vt); }
         if (b.Has("restNoteText")) { string nt = (b.Str("restNoteText") ?? "").Replace("\r", ""); Config.Set("kiosk.restNoteText", nt.Length > 600 ? nt[..600] : nt); }
         if (b.Has("lockScreenImage")) Tray.Invoke(LockScreenImage.Update);
         if (b.Has("saverWhenUnlocked")) Config.Set("kiosk.saverWhenUnlocked", b.Bool("saverWhenUnlocked", true)); // D2

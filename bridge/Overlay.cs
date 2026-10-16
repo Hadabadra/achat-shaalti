@@ -14,6 +14,13 @@ namespace OtzariaBridge;
 /// </summary>
 public static class Overlay
 {
+    /// <summary>הפסוק בשומר המסך: פסוק מותאם אישית (kiosk.restVerseText) או ברירת המחדל</summary>
+    internal static string VerseText()
+    {
+        string v = Config.Get("kiosk.restVerseText", "").Trim();
+        return v.Length > 0 ? v : "שִׁבְתִּי בְּבֵית ה' כָּל יְמֵי חַיַּי";
+    }
+
     private static ClockBar _clock;
     // בעיה #14 סעיף 3: חלון "RestScreen-like" אחד לכל מסך (Screen.AllScreens), כולם מוצגים/מוסתרים יחד
     private static readonly List<RestScreen> _rest = new();
@@ -537,7 +544,7 @@ internal sealed class RestScreen : Form
             for (int k = 0; k < 12 && g.MeasureString(v1, vf).Width > W * 0.96f; k++) vf = new Font(vf.FontFamily, vf.Size * 0.92f, vf.Style, vf.Unit);
             var noWrap = (StringFormat)rtl.Clone(); noWrap.FormatFlags |= StringFormatFlags.NoWrap;
             g.DrawString(v1, vf, goldB, Line(y, 56 * s), noWrap);
-            g.DrawString("שִׁבְתִּי בְּבֵית ה' כָּל יְמֵי חַיַּי", verseF, goldB, Line(y + 54 * s, 56 * s), rtl);
+            g.DrawString(Overlay.VerseText(), verseF, goldB, Line(y + 54 * s, 56 * s), rtl);
             y += 54 * s;
         }
         y += 72 * s;
