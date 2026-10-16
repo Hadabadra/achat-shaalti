@@ -1289,6 +1289,24 @@ public static partial class Kiosk
         catch { /* נסגר כבר או ללא הרשאה */ }
     }
 
+    private static DateTime _snipSeen = DateTime.MinValue;
+
+    /// <summary>כלי החיתוך (שברשימת התוכנות המותרות) רץ בחשבון הזה - עד 120 שניות רצופות, ואז חוזרים לאכוף</summary>
+    private static bool SnipCaptureInProgress(int session)
+    {
+        bool found = false;
+        foreach (string n in new[] { "SnippingTool", "ScreenClippingHost" })
+            foreach (var p in Process.GetProcessesByName(n))
+                using (p)
+                {
+                    try { if (p.SessionId == session && Programs.IsAllowedForeground((uint)p.Id)) found = true; }
+                    catch { }
+                }
+        if (!found) { _snipSeen = DateTime.MinValue; return false; }
+        if (_snipSeen == DateTime.MinValue) { _snipSeen = DateTime.UtcNow; LogThrottled("snip", "watchdog: כלי החיתוך פתוח - explorer לא נהרג עד 120 שניות", 30); }
+        return (DateTime.UtcNow - _snipSeen).TotalSeconds < 120;
+    }
+
     private static void Watch()
     {
         if (!IsActive || Interlocked.Exchange(ref _watchBusy, 1) == 1) return;
@@ -1297,6 +1315,10 @@ public static partial class Kiosk
             int session = Process.GetCurrentProcess().SessionId;
             // ממצא ביקורת אבטחה: מתעדכן כאן (חוט הטיימר, כל 2 שניות) ולא בתוך ה-hook עצמו — ר' הערה ב-ForegroundIsAllowedProgram
             UpdateForegroundAllowedCache();
+            // בזמן שכלי החיתוך המאושר פתוח לא הורגים את explorer (עד 2 דקות): שכבת הצילום של "חדש" בווינדוס 11
+            // מתארחת בתוך explorer, ו-Kill כל 2 שניות הרג אותה מיד - נראה כרענון של כלי החיתוך בלי צילום (נצפה
+            // ברישום: explorer/userinit/SearchHost נולדים מחדש בכל מחזור). המחיר: שורת המשימות עשויה להופיע לשניות
+            if (!SnipCaptureInProgress(session))
             foreach (var p in Process.GetProcessesByName("explorer"))
             {
                 try
