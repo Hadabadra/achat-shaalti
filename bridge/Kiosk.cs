@@ -954,6 +954,7 @@ public static partial class Kiosk
                 Config.Save();
             }
             if (locked) return;
+            SetTaskbars(true); // אם התהליך הקודם קרס כשהסתיר את שורת המשימות - מחזירים אותה
             bool hadShell = ShellPointsToBridge();
             ClearRegistry();
             if (hadShell) Config.Log("kiosk: נמצאה מעטפת Shell שמפנה לגשר בלי נעילה פעילה — נמחקה, ו-explorer מופעל");

@@ -20,19 +20,24 @@ public static partial class Kiosk
 
     private static void StartFastGuard() => _fastGuard ??= new System.Threading.Timer(_ => FastGuard(), null, 0, 300);
 
+    private static bool _taskbarHidden;
+
     private static void StopFastGuard()
     {
         _fastGuard?.Dispose();
         _fastGuard = null;
+        // שחרור הנעילה חייב להחזיר את שורת המשימות שהוסתרה (אחרת היא נעלמת גם אחרי הביטול)
+        if (_taskbarHidden) SetTaskbars(true);
     }
 
-    private static void HideTaskbars()
+    private static void SetTaskbars(bool show)
     {
         foreach (string cls in new[] { "Shell_TrayWnd", "Shell_SecondaryTrayWnd" })
         {
             IntPtr h = IntPtr.Zero;
-            while ((h = FindWindowEx(IntPtr.Zero, h, cls, null)) != IntPtr.Zero) ShowWindow(h, 0 /* SW_HIDE */);
+            while ((h = FindWindowEx(IntPtr.Zero, h, cls, null)) != IntPtr.Zero) ShowWindow(h, show ? 5 /* SW_SHOW */ : 0 /* SW_HIDE */);
         }
+        _taskbarHidden = !show;
     }
 
     private static void FastGuard()
@@ -40,7 +45,8 @@ public static partial class Kiosk
         if (!IsActive || Interlocked.Exchange(ref _fastBusy, 1) == 1) return;
         try
         {
-            if (_snipSeen != DateTime.MinValue) HideTaskbars(); // explorer חי בזמן הצילום - שורת המשימות לא תוצג
+            if (_snipSeen != DateTime.MinValue) SetTaskbars(false); // explorer חי בזמן הצילום - שורת המשימות לא תוצג
+            else if (_taskbarHidden) SetTaskbars(true);             // הצילום הסתיים: מחזירים (explorer יעלה מחדש/יימחק כרגיל)
 
             IntPtr fg = GetForegroundWindow();
             if (fg == IntPtr.Zero) return;
