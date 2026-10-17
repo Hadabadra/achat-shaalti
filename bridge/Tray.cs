@@ -98,6 +98,7 @@ public static class Tray
         });
         Application.ApplicationExit += (_, _) =>
         {
+            try { if (!Kiosk.IsActive) LockScreenImage.RestoreOnExit(); } catch { }
             _icon.Visible = false;
             _icon.Dispose();
         };
