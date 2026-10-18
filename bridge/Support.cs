@@ -47,7 +47,8 @@ internal static class Outbox
             string id = DateTime.Now.ToString("yyyyMMdd-HHmmss-fff") + "-" + kind;
             if (body.Length > 4000) body = body[..4000];
             File.WriteAllText(Path.Combine(Dir, id + ".txt"), body, new UTF8Encoding(false));
-            GhRelay.Queue(id, body); // #65
+            // הקריסה המכוונת של הבדיקה העצמית נשמרת ב-outbox (הבדיקה מאמתת זאת ומוחקת), אבל לא נשלחת ל-GitHub כ-issue
+            if (!text.Contains("selftest-crash", StringComparison.Ordinal)) GhRelay.Queue(id, body); // #65
         }
         catch { }
     }
