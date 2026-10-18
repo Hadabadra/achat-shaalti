@@ -53,6 +53,11 @@ jobs:
           $parts = $base -split '\.'
           $majorMinor = "$($parts[0]).$($parts[1])"
           $full = "$majorMinor.${{ github.run_number }}"
+          # בשחרור על main (מספר הגרסה הרשמי) — שם הקובץ וגרסת ההתקנה הם גרסת הגשר עצמה, למשל 1.0.0
+          if ("${{ github.ref }}" -eq "refs/heads/main") {
+            $csv = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+            if ($csv) { $full = $csv }
+          }
           "version=$full" >> $env:GITHUB_OUTPUT
           "tag=v$full" >> $env:GITHUB_OUTPUT
 
