@@ -18,7 +18,13 @@ internal static class LockScreenImage
     private static System.Threading.Timer _timer;
     private static bool _flip;
 
-    public static void Start() => _timer ??= new System.Threading.Timer(_ => Tray.Invoke(Update), null, 20_000, 30 * 60_000);
+    public static void Start()
+    {
+        _timer ??= new System.Threading.Timer(_ => Tray.Invoke(Update), null, 20_000, 30 * 60_000);
+        // האפשרות כבויה אבל מסך הנעילה עדיין הוחלף (למשל התוכנה נסגרה לפני שבוטלה האפשרות בתוסף) — מחזירים את המקורי
+        if (!Config.Get("kiosk.lockScreenImage", false) && Config.Get(BackupKey + ".done", false))
+            Task.Run(() => Tray.Invoke(Restore));
+    }
 
     /// <summary>"זרקור Windows" מחליף את תמונת מסך הנעילה — מכבים אותו למשתמש הנוכחי (HKCU, בלי הרשאות מנהל)</summary>
     private static void DisableSpotlight()
@@ -100,6 +106,13 @@ internal static class LockScreenImage
             catch (Exception ex) { Config.Log("lockscreen restore spotlight: " + ex.Message); }
 
             string img = Config.Get(BackupKey + ".image", "");
+            // אין תמונה שמורה (למשל ההחלפה נעשתה לפני שהיה גיבוי) — חוזרים לתמונת ברירת המחדל של Windows, כדי שלא תישאר תמונת השומר
+            if (img.Length == 0)
+            {
+                string web = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Web", "Screen");
+                foreach (var cand in new[] { "img100.jpg", "img102.jpg", "img103.png", "img105.jpg" })
+                    if (File.Exists(Path.Combine(web, cand))) { img = Path.Combine(web, cand); break; }
+            }
             if (img.Length > 0 && File.Exists(img))
             {
                 var t = Task.Run(async () =>
@@ -128,7 +141,7 @@ internal static class LockScreenImage
 
     public static void Update()
     {
-        if (!Config.Get("kiosk.lockScreenImage", true)) return;
+        if (!Config.Get("kiosk.lockScreenImage", false)) return;
         BackupOriginal();
         try
         {

@@ -299,7 +299,7 @@ public static partial class Kiosk
         restDedicationText = Config.Get("kiosk.restDedicationText", ""),
         restDedicationStyle = Config.Get("kiosk.restDedicationStyle", "fixed"),
         restCandleFlicker = Config.Get("kiosk.restCandleFlicker", true),
-        lockScreenImage = Config.Get("kiosk.lockScreenImage", true),
+        lockScreenImage = Config.Get("kiosk.lockScreenImage", false),
         restNoteText = Config.Get("kiosk.restNoteText", ""),
         restVerseText = Config.Get("kiosk.restVerseText", ""),
         showDafYomi = Config.Get("kiosk.showDafYomi", true),
@@ -855,7 +855,7 @@ public static partial class Kiosk
         if (b.Has("restCandleFlicker")) Config.Set("kiosk.restCandleFlicker", b.Bool("restCandleFlicker"));
         if (b.Has("restVerseText")) { string vt = (b.Str("restVerseText") ?? "").Replace("\r", "").Replace("\n", " ").Trim(); Config.Set("kiosk.restVerseText", vt.Length > 160 ? vt[..160] : vt); }
         if (b.Has("restNoteText")) { string nt = (b.Str("restNoteText") ?? "").Replace("\r", ""); Config.Set("kiosk.restNoteText", nt.Length > 600 ? nt[..600] : nt); }
-        if (b.Has("lockScreenImage")) Tray.Invoke(() => { if (Config.Get("kiosk.lockScreenImage", true)) LockScreenImage.Update(); else LockScreenImage.Restore(); });
+        if (b.Has("lockScreenImage")) Tray.Invoke(() => { if (Config.Get("kiosk.lockScreenImage", false)) LockScreenImage.Update(); else LockScreenImage.Restore(); });
         if (b.Has("saverWhenUnlocked")) Config.Set("kiosk.saverWhenUnlocked", b.Bool("saverWhenUnlocked", true)); // D2
         if (b.Has("bootCover")) Config.Set("kiosk.bootCover", b.Bool("bootCover", true)); // D3
         if (b.Has("restIdleMinutes")) Config.Set("kiosk.restIdleMinutes", (int)Math.Clamp(b.Long("restIdleMinutes", 0), 0, 240));
