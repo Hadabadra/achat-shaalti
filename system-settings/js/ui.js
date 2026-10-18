@@ -139,6 +139,9 @@
   /* ---------- toasts ---------- */
   ui.toast = function (message, kind) {
     var host = document.getElementById('toasts');
+    /* אותה הודעה כבר מוצגת — לא מכפילים */
+    var dup = Array.prototype.some.call(host.querySelectorAll('.toast span'), function (s) { return s.textContent === message; });
+    if (dup) return;
     var t = ui.el('<div class="toast ' + (kind || '') + '" role="status">' +
       ui.icon(kind === 'error' ? 'warning' : kind === 'success' ? 'check' : 'info') +
       '<span>' + ui.esc(message) + '</span></div>');
@@ -426,4 +429,17 @@
     for (var i = 1; i <= 4; i++) s += '<i class="' + (i <= n ? 'on' : '') + '" style="height:' + (i * 25) + '%"></i>';
     return s + '</span>';
   };
+
+  /* נר מרצד רלוונטי רק בסגנון "עמודה": בסגנון "קבועה" השדה מוסתר */
+  function syncCandle() {
+    Array.prototype.forEach.call(document.querySelectorAll('select[name="dedStyle"]'), function (sel) {
+      var scope = sel.closest('form') || document;
+      var cb = scope.querySelector('input[name="candleFlicker"]');
+      var wrap = cb && cb.closest('label');
+      if (wrap) wrap.hidden = sel.value !== 'column';
+    });
+  }
+  document.addEventListener('change', function (e) { if (e.target && e.target.name === 'dedStyle') syncCandle(); });
+  function watchCandle() { try { new MutationObserver(syncCandle).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* כלום */ } syncCandle(); }
+  if (document.body) watchCandle(); else document.addEventListener('DOMContentLoaded', watchCandle);
 })();

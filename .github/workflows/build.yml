@@ -166,7 +166,7 @@ jobs:
             ($section -join "`n").Trim()
             ""
             "## התקנה"
-            "1. מורידים את **OtzariaBridge.exe** (למטה) ומפעילים פעם אחת: הגשר מותקן, עולה אוטומטית עם Windows, ופותח את תיקיית התוספים."
+            "1. מורידים את **OtzariaBridge-Setup-*.exe** (קובץ ההתקנה, למטה) ומפעילים: הגשר מותקן, עולה אוטומטית עם Windows, ומתקין את התוספים באוצריא."
             "2. באוצריא: התקנת תוסף מקובץ → **file-explorer.otzplugin** ו-**system-settings.otzplugin**."
             ""
             "> ⚠️ לפני הפעלת *נעילה קפדנית* — לרשום את קוד השחזור."
@@ -179,7 +179,8 @@ jobs:
             "## קבצים"
             "| קובץ | מה זה |"
             "|---|---|"
-            "| ``OtzariaBridge.exe`` | אחת שאלתי — תוכנת הרקע ל-Windows |"
+            "| ``OtzariaBridge-Setup-*.exe`` | **קובץ ההתקנה (Inno Setup) — מומלץ** |"
+            "| ``OtzariaBridge.exe`` | אחת שאלתי — תוכנת הרקע ל-Windows (ללא מתקין) |"
             "| ``file-explorer.otzplugin`` | תוסף סייר קבצים |"
             "| ``system-settings.otzplugin`` | תוסף הגדרות מערכת |"
             "| ``SHA256SUMS.txt`` | טביעות SHA256 לאימות הקבצים (גם העדכון האוטומטי בודק אותן) |"
@@ -207,10 +208,26 @@ jobs:
           make_latest: true
           body_path: release-notes.md
           files: |
+            installer/Output/*.exe
             out/OtzariaBridge.exe
             bridge/plugins/system-settings.otzplugin
             bridge/plugins/file-explorer.otzplugin
             SHA256SUMS.txt
+
+      # פורק (לא המאגר של המפתח): כל דחיפה לענף שאינו main מפרסמת pre-release מתגלגל "build-<ענף>" עם קובץ ההתקנה (Inno Setup),
+      # כך שלא צריך להוריד artifact ולפרוס zip. לא רץ במאגר המקורי כדי לא ללכלך את עמוד ה-Releases שלו.
+      - name: Pre-release מתגלגל לענף (פורק בלבד)
+        if: github.ref != 'refs/heads/main' && github.repository_owner != 'e0548433917-gif'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $branch = "${{ github.ref_name }}" -replace '[^A-Za-z0-9._-]', '-'
+          $tag = "build-$branch"
+          gh release delete $tag -R ${{ github.repository }} --cleanup-tag -y *> $null
+          $global:LASTEXITCODE = 0
+          $setup = Get-ChildItem installer/Output/*.exe | Select-Object -First 1 -ExpandProperty FullName
+          gh release create $tag -R ${{ github.repository }} --prerelease --target ${{ github.sha }} --title "בנייה — $branch (${{ steps.ver.outputs.version }})" --notes "בנייה אוטומטית של הענף $branch (קומיט ${{ github.sha }}). להתקנה: מורידים ומפעילים את קובץ ההתקנה (Setup)." $setup out/OtzariaBridge.exe bridge/plugins/system-settings.otzplugin bridge/plugins/file-explorer.otzplugin SHA256SUMS.txt
 
       - name: עדכון הערות של Release קיים
         if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'
@@ -227,5 +244,5 @@ jobs:
         run: |
           $draft = gh release view ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --json isDraft -q .isDraft
           if ($draft -ne 'true') { Write-Host "not a draft"; exit 0 }
-          gh release upload ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --clobber out/OtzariaBridge.exe bridge/plugins/system-settings.otzplugin bridge/plugins/file-explorer.otzplugin SHA256SUMS.txt
+          gh release upload ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --clobber (Get-ChildItem installer/Output/*.exe).FullName out/OtzariaBridge.exe bridge/plugins/system-settings.otzplugin bridge/plugins/file-explorer.otzplugin SHA256SUMS.txt
           gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --draft=false --latest --target ${{ github.sha }}

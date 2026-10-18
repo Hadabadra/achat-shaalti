@@ -12,8 +12,8 @@
     mount: function (body) {
       body.innerHTML =
         '<div class="card about-hero"><div class="about-ic">' + ui.icon('computer') + '</div><div>' +
-        '<img src="icon/brand.svg" alt="אחת שאלתי" width="72" height="72" style="display:block;margin:0 auto 8px">' +
-        '<h3>הגדרות מערכת</h3><p class="muted">גרסה ' + ui.esc(SS.VERSION) + ' · מאת גמח תורת אסתר</p>' +
+        '<img src="icon/brand.svg" alt="אחת שאלתי" width="144" height="144" style="display:block;margin:0 auto 12px">' +
+        '<h3>הגדרות מערכת</h3><p class="muted">גרסה ' + ui.esc(SS.VERSION) + ' · מאת חד בדרא, יאיר דניאל</p>' +
         '<p>כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה ותאריך, מקלדת, עכבר, מדפסות, USB, בלוטות׳ ורשת — ומצב נעילה שהופך את המחשב לעמדת לימוד באוצריא ובתוכנות הלימוד בלבד.</p></div></div>' +
         '<div class="card about-memorial"><p>לעילוי נשמת הנערה הצדקנית</p><h3>אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א</h3><p>תהא נשמתה צרורה בצרור החיים. תנצב"ה</p></div>' +
         '<div class="card"><div class="card-title">אחת שאלתי</div><div data-slot="bridge">' + ui.loading() + '</div>' +
@@ -24,7 +24,7 @@
         '<li>הגשר מאזין רק למחשב המקומי (127.0.0.1) ואינו נגיש מהרשת.</li>' +
         '<li>להסרה: <code dir="ltr">OtzariaBridge.exe --uninstall</code></li></ol>' +
         '<p class="muted small">עמוד ההוצאות (הגרסה האחרונה של הגשר): <bdi dir="ltr" class="path">' + ui.esc(SS.BRIDGE_URL) + '</bdi></p>' +
-        '<div class="row-actions"><button class="btn btn-primary" data-act="dl">' + ui.icon('download') + 'הורדת הגשר</button>' +
+        '<div class="row-actions full"><button class="btn btn-primary" data-act="dl">' + ui.icon('download') + 'הורדת הגשר</button>' +
         '<button class="btn btn-tonal" data-act="copy">' + ui.icon('link') + 'העתקת הקישור</button></div></div>';
       body.querySelector('[data-act=copy]').addEventListener('click', function () {
         SS.copyText(SS.BRIDGE_URL).then(function (ok) { ui.toast(ok ? 'הקישור הועתק' : 'ההעתקה נכשלה: ' + SS.BRIDGE_URL, ok ? 'success' : 'error'); });

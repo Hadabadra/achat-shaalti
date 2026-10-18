@@ -368,7 +368,7 @@ public static class InputDefault
     public static object Get()
     {
         var list = new List<object>();
-        string raw = Ps("Get-WinUserLanguageList | ForEach-Object { $l=$_; $l.InputMethodTips | ForEach-Object { $l.LanguageTag + '|' + $l.LocalizedName + '|' + $_ } }; '---'; (Get-WinDefaultInputMethodOverride).InputMethodTip");
+        string raw = Ps("$lst = Get-WinUserLanguageList; for ($i = 0; $i -lt $lst.Count; $i++) { $l = $lst[$i]; foreach ($t in @($l.InputMethodTips)) { $l.LanguageTag + '|' + $l.LocalizedName + '|' + $t } }; '---'; (Get-WinDefaultInputMethodOverride).InputMethodTip");
         var parts = (raw ?? "").Replace("\r", "").Split("---");
         foreach (var line in parts[0].Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {

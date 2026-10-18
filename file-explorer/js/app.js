@@ -785,17 +785,6 @@
         ic(c.icon) + '<span>' + (S.recycle && c.id === 'delete' ? 'מחיקה לצמיתות' : c.label) + '</span></button>';
     }).join('');
   }
-  /* #20 (13.10.2026): הוצאת כונן USB בבטחה מתפריט הלחצן הימני — אותה קריאה כמו בתוסף ההגדרות */
-  async function ejectDrive(e) {
-    var letter = String(e.path || '').charAt(0).toUpperCase();
-    busy(true, 'מוציא את הכונן…');
-    try {
-      var r = await FX.Bridge.call('/sys/usb/eject', { letter: letter }, { timeoutMs: 30000 });
-      ui.toast((r && r.poweredOff ? 'ההתקן כובה. ' : '') + 'אפשר לנתק את הכונן ' + letter + ' בבטחה', 'success');
-    } catch (err) { opError(err, 'הוצאת הכונן נכשלה'); }
-    busy(false);
-    if (S.isRoot) go(S.path);
-  }
   function run(id, ev) {
     var st = cmdState(id);
     if (!st.on) { if (st.why) ui.toast(st.why, 'info'); return; }
@@ -821,7 +810,6 @@
       case 'openInReader': return openInReader(selected()[0]);
       case 'openLocation': return openLocation(selected()[0]);
       case 'zip': case 'unzip': case 'sendTo': case 'eject': return FX.packb[id](selected(), S.path);
-      case 'eject': return ejectDrive(selected()[0]);
       case 'copyPath': return copyText(selected().map(function (x) { return S.prov.displayPath(x.path); }).join('\n')).then(function () { ui.toast('הנתיב הועתק', 'success'); });
     }
   }
@@ -1120,7 +1108,7 @@
       setRow('חלונית תצוגה מקדימה', 'פאנל בצד שמראה תצוגה מקדימה של הקובץ שנבחר (טקסט, תמונה, PDF ועוד)', setSwitch('preview', FX.layout.isPreview())) +
       setRow('חלונית פרטים', 'פאנל בצד שמראה מידע על הפריט שנבחר (סוג, גודל, תאריך) בלי לטעון תצוגה מקדימה. חולק את אותו אזור עם חלונית התצוגה המקדימה', setSwitch('details', FX.layout.isDetailsPane())) +
       setRow('גודל טקסט', 'גם ב-Ctrl+ / Ctrl- / Ctrl+0', seg('zoom', String(FX.layout.zoom()), [['0.8', 'קטן מאוד'], ['0.9', 'רגיל'], ['1', 'בינוני'], ['1.1', 'גדול'], ['1.2', 'גדול מאוד'], ['1.35', 'ענק']])) +
-      setRow('שורות מצוילות', 'צבע מתחלף בין השורות, כמו ב-Everything', setSwitch('stripes', S.stripes)) +
+      setRow('שורות מפוספסות', 'צבע מתחלף בין השורות', setSwitch('stripes', S.stripes)) +
       setRow('עמודות להצגה', 'רלוונטי לתצוגת "פרטים". אפשר גם בלחיצה ימנית על כותרת העמודות. הרחבת עמודה: גרירת הקצה שלה', seg('cols', '', [['date', 'תאריך ' + (S.cols.date !== false ? '✓' : '✗')], ['type', 'סוג ' + (S.cols.type !== false ? '✓' : '✗')], ['size', 'גודל ' + (S.cols.size !== false ? '✓' : '✗')]])) +
       setRow('הצגת קבצים מוסתרים', 'קבצים ותיקיות עם התכונה "מוסתר" יוצגו בצבע חלש', setSwitch('hidden', S.showHidden)) +
       '</div>';
@@ -1129,12 +1117,12 @@
       setRow('שליחת הערה או דיווח על תקלה', '', '<button type="button" class="btn btn-tonal" data-act="fb">שליחת הערה</button>') +
       setRow('איפוס הגדרות הסייר', 'מחזיר את כל ההגדרות שבמסך הזה לברירת המחדל', '<button type="button" class="btn btn-tonal" data-act="reset">איפוס</button>') +
       '</div>';
-    if (id === 'security') return '<div class="fx-set-card"><button type="button" class="fx-btn" data-act="open-ss-lock">' + ic('lock') + 'הגדרות הנעילה המלאות בהגדרות מערכת</button></div>' +
+    if (id === 'security') return '<div class="fx-set-card fx-set-lockcard"><button type="button" class="btn btn-primary fx-lock-btn" data-act="open-ss-lock">' + ic('lock') + 'הגדרות הנעילה המלאות בהגדרות מערכת</button></div>' +
       '<div id="fx-pol-host">' + ui.loading('טוען…') + '</div>';
     var b = FX.Bridge && FX.Bridge.info;
     return '<div class="fx-set-card fx-set-hero"><div class="fx-set-logo">' + ic('folder') + '</div><div>' +
-      '<img src="icon/brand.svg" alt="אחת שאלתי" width="72" height="72" style="display:block;margin:0 auto 8px">' +
-      '<h3>סייר קבצים</h3><p class="muted">גרסה ' + FX.esc(FX.VERSION) + ' · גמח תורת אסתר</p>' +
+      '<img src="icon/brand.svg" alt="אחת שאלתי" width="144" height="144" style="display:block;margin:0 auto 12px">' +
+      '<h3>סייר קבצים</h3><p class="muted">גרסה ' + FX.esc(FX.VERSION) + ' · חד בדרא, יאיר דניאל</p>' +
       '<p>עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, סל מיחזור, וצפייה ב-PDF, Word, טקסט ותמונות. עם אחת שאלתי — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.</p></div></div>' +
       '<div class="fx-set-card fx-set-memorial"><p>לעילוי נשמת</p><b>אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א</b><p>תנצב"ה</p></div>' +
       '<div class="fx-set-card"><div class="fx-set-title">' + ic('info') + 'אחת שאלתי</div>' +
@@ -1152,6 +1140,7 @@
     page.setAttribute('aria-label', 'הגדרות');
     page.innerHTML = '<header class="fx-set-head"><button type="button" class="icon-btn" data-act="close" title="חזרה (Esc)" aria-label="חזרה">' + ic('back') + '</button>' +
       '<h2>הגדרות</h2></header><div class="fx-set-body"><nav class="fx-set-nav">' +
+      '<input type="search" class="fx-set-search" placeholder="חיפוש הגדרה…" aria-label="חיפוש הגדרה">' +
       SET_CATS.map(function (c) { return '<button type="button" class="fx-set-navbtn" data-cat="' + c[0] + '">' + ic(c[2]) + '<span>' + c[1] + '</span></button>'; }).join('') +
       '</nav><div class="fx-set-content"></div></div>';
     document.body.appendChild(page);
@@ -1174,6 +1163,24 @@
       }
       try { localStorage.setItem('fx.setCat', id); } catch (e) { /* כלום */ }
     }
+    /* חיפוש הגדרה: עובר על כל הקטגוריות (חוץ מנעילה ואודות, שנטענות דינמית) ומציג את השורות שמתאימות, מקובצות לפי קטגוריה */
+    var search = page.querySelector('.fx-set-search');
+    search.addEventListener('input', function () {
+      var q = search.value.trim().toLowerCase();
+      if (!q) { showCat(localStorageGet('fx.setCat') || SET_CATS[0][0]); return; }
+      var html = '';
+      SET_CATS.forEach(function (c) {
+        if (c[0] === 'security' || c[0] === 'about') return;
+        var tmp = document.createElement('div');
+        tmp.innerHTML = setCat(c[0]);
+        var rows = Array.prototype.filter.call(tmp.querySelectorAll('.fx-set-row'), function (r) { return r.textContent.toLowerCase().indexOf(q) >= 0; });
+        if (rows.length) html += '<div class="fx-set-card"><div class="fx-set-title">' + ic(c[2]) + c[1] + '</div>' + rows.map(function (r) { return r.outerHTML; }).join('') + '</div>';
+      });
+      page.querySelectorAll('.fx-set-navbtn').forEach(function (x) { x.classList.remove('on'); });
+      content.innerHTML = html || '<p class="muted">לא נמצאו הגדרות</p>';
+      content.scrollTop = 0;
+    });
+    function localStorageGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
     function close() { page.remove(); document.removeEventListener('keydown', onKey, true); $('fx-main').focus(); }
     function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
     document.addEventListener('keydown', onKey, true);

@@ -131,6 +131,10 @@ public static class Programs
     /// </summary>
     private static void Save(List<Entry> list, string password)
     {
+        // רשומות ישנות (למשל shell:AppsFolder\... של אפליקציות Store) אינן נתיב exe מלא — רכיב ההקשחה דוחה את כל הרשימה
+        // בגללן ("רשומת תוכנה אינה תקינה"), ואז אי אפשר להסיר אף תוכנה. מנקים אותן בכל שמירה.
+        int dropped = list.RemoveAll(e => !System.IO.Path.IsPathFullyQualified(e.Path ?? "") || !(e.Path ?? "").EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+        if (dropped > 0) Config.Log("programs: הוסרו " + dropped + " רשומות ישנות עם נתיב לא תקין");
         if (HardLock.Available) HardLock.SetPrograms(password, ToJson(list), AutoEnabled, Keywords);
         Config.Set(Key, ToJson(list));
         Config.Save();
@@ -152,20 +156,66 @@ public static class Programs
 
     // ---------- נקודות קצה ----------
 
-    private static object ListResult() => new
+    /// <summary>
+    /// אילו תוכנות מהרשימה פתוחות כעת: מעבר אחד על החלונות (ותהליך אחד לכל חלון) במקום מעבר מלא לכל תוכנה —
+    /// עם תריסר תוכנות הרשימה לקחה כמה שניות והטאב "מצב נעילה" נטען לאט
+    /// </summary>
+    private static HashSet<string> RunningIds(List<Entry> list)
     {
-        autoTorah = AutoEnabled,
-        programs = Load().Select(e => new
+        var running = new HashSet<string>();
+        if (list.Count == 0) return running;
+        int session = Process.GetCurrentProcess().SessionId;
+        var procs = new Dictionary<uint, Process>();
+        try
         {
-            id = e.Id,
-            name = e.Name,
-            path = e.Path,
-            procs = e.Procs,
-            exists = File.Exists(e.Path),
-            running = ExistingWindow(e) != IntPtr.Zero,
-            auto = e.Auto,
-        }).ToArray()
-    };
+            EnumWindows((h, _) =>
+            {
+                if (running.Count == list.Count) return false;
+                if (!IsWindowVisible(h) || GetWindow(h, 4 /* GW_OWNER */) != IntPtr.Zero || GetWindowTextLength(h) == 0) return true;
+                GetWindowThreadProcessId(h, out uint pid);
+                if (!procs.TryGetValue(pid, out var p))
+                {
+                    try { p = Process.GetProcessById((int)pid); } catch { p = null; }
+                    procs[pid] = p;
+                    if (p != null)
+                    {
+                        try { if (p.SessionId != session || IsOwnOrBlocked(p)) { p.Dispose(); procs[pid] = null; } }
+                        catch { procs[pid] = null; }
+                    }
+                    else return true;
+                    p = procs[pid];
+                    if (p == null) return true;
+                }
+                if (p == null) return true;
+                try { foreach (var e in list) if (!running.Contains(e.Id) && MatchesList(p, new[] { e })) running.Add(e.Id); }
+                catch { }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch { }
+        foreach (var p in procs.Values) try { p?.Dispose(); } catch { }
+        return running;
+    }
+
+    private static object ListResult()
+    {
+        var all = Load();
+        var running = RunningIds(all);
+        return new
+        {
+            autoTorah = AutoEnabled,
+            programs = all.Select(e => new
+            {
+                id = e.Id,
+                name = e.Name,
+                path = e.Path,
+                procs = e.Procs,
+                exists = ExeExists(e.Path),
+                running = running.Contains(e.Id),
+                auto = e.Auto,
+            }).ToArray()
+        };
+    }
 
     private static object SetAuto(JsonElement b)
     {
@@ -196,6 +246,9 @@ public static class Programs
     /// עוד לפני שהחלון שנפתח מספיק להיראות בכלל.
     /// </summary>
     internal static void GrantForegroundGrace() => GraceUntil = DateTime.UtcNow.AddSeconds(GraceSeconds);
+
+    /// <summary>חלון חסד פתוח כרגע (למשל אחרי "הצגה בסייר Windows") - KioskGuard לא סוגר אז חלון סייר שנפתח בכוונה</summary>
+    internal static bool InForegroundGrace => DateTime.UtcNow < GraceUntil;
 
     public static bool Activate(Entry e)
     {

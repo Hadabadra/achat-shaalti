@@ -25,6 +25,25 @@ public static class Pairing
     {
         Server.Route("/pair/list", _ => new { clients = List() });
         Server.Route("/pair/revoke", Revoke);
+        PruneDuplicates();
+    }
+
+    /// <summary>חיבורים ישנים כפולים של אותו תוסף (client) — נשאר רק זה שנעשה בו שימוש לאחרונה</summary>
+    private static void PruneDuplicates()
+    {
+        try
+        {
+            lock (Gate)
+            {
+                var all = Clients().OfType<JsonObject>().ToList();
+                string Stamp(JsonObject c) => (c["lastUsed"]?.ToString() ?? "") + "|" + (c["created"]?.ToString() ?? "");
+                var keep = all.GroupBy(c => c["client"]?.ToString() ?? "").Select(g => g.OrderByDescending(Stamp).First()).ToList();
+                if (keep.Count == all.Count) return;
+                SaveClients(new JsonArray(keep.Select(c => (JsonNode)c.DeepClone()).ToArray()));
+                Config.Log("pair: נוקו " + (all.Count - keep.Count) + " חיבורים כפולים");
+            }
+        }
+        catch (Exception ex) { Config.Log("pair prune: " + ex.Message); }
     }
 
     private static string Sha(string token) =>
@@ -181,7 +200,9 @@ public static class Pairing
             string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
             lock (Gate)
             {
-                var a = Clients();
+                // צימוד חדש של אותו תוסף מחליף את הקודמים (התקנה מחדש / מזהה תוסף שהשתנה) — לא נשארים חיבורים כפולים
+                var a = new JsonArray(Clients().OfType<JsonObject>().Where(c => c["client"]?.ToString() != client)
+                    .Select(c => (JsonNode)c.DeepClone()).ToArray());
                 a.Add(new JsonObject
                 {
                     ["id"] = Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant(),
@@ -229,10 +250,21 @@ public static class PairDialog
             AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Padding = new Padding(16), Font = new Font("Segoe UI", 10f),
         };
-        var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Dock = DockStyle.Fill };
+        f.BackColor = UiStyle.Page;
+        f.Padding = new Padding(20);
+        var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
+        // כותרת עם פס זהב (כמו כותרות הכרטיסים בתוספים)
+        var head = new Label
+        {
+            AutoSize = true, Font = new Font("Segoe UI Semibold", 14f), ForeColor = UiStyle.GoldText,
+            Text = Lang.T("בקשת חיבור לגשר", "Bridge connection request"),
+            Padding = new Padding(0, 0, 0, 10),
+        };
+        panel.Controls.Add(head);
         panel.Controls.Add(new Label
         {
-            AutoSize = true, MaximumSize = new Size(440, 0),
+            AutoSize = true, MaximumSize = new Size(440, 0), ForeColor = Color.FromArgb(60, 44, 20),
+            Margin = new Padding(0, 0, 0, 10),
             Text = Lang.T(
                 $"התוסף \"{name}\" באוצריא מבקש להתחבר לגשר.\nהחיבור נותן גישה לקבצים במחשב ולהגדרות המחשב.\n\nאם לא פתחת עכשיו תוסף של אוצריא — לחצו \"דחה\".",
                 $"The Otzaria plugin \"{name}\" asks to connect to the bridge.\nThis gives it access to files and computer settings.\n\nIf you did not just open an Otzaria plugin, click \"Deny\"."),
@@ -240,15 +272,16 @@ public static class PairDialog
         TextBox pw = null;
         if (needPassword)
         {
-            panel.Controls.Add(new Label { AutoSize = true, Text = Lang.T("מצב נעילה פעיל — נדרשת סיסמת הנעילה:", "Lock mode is on — lock password required:") });
-            pw = new TextBox { UseSystemPasswordChar = true, Width = 260 };
+            panel.Controls.Add(new Label { AutoSize = true, ForeColor = UiStyle.GoldText, Text = Lang.T("מצב נעילה פעיל — נדרשת סיסמת הנעילה:", "Lock mode is on — lock password required:") });
+            pw = new TextBox { UseSystemPasswordChar = true, Width = 280, BorderStyle = BorderStyle.FixedSingle, Font = new Font("Segoe UI", 11f) };
             panel.Controls.Add(pw);
         }
         var err = new Label { AutoSize = true, ForeColor = Color.Firebrick };
         panel.Controls.Add(err);
-        var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft };
+        var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = Lang.En ? FlowDirection.LeftToRight : FlowDirection.RightToLeft, Margin = new Padding(0, 6, 0, 0) };
         var ok = new Button { Text = Lang.T("אשר", "Allow"), AutoSize = true };
         var no = new Button { Text = Lang.T("דחה", "Deny"), AutoSize = true, DialogResult = DialogResult.Cancel };
+        UiStyle.Button(ok, primary: true); UiStyle.Button(no);
         buttons.Controls.Add(ok);
         buttons.Controls.Add(no);
         panel.Controls.Add(buttons);
