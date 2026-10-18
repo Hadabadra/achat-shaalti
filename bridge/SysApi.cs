@@ -10,6 +10,30 @@ using Windows.Devices.Radios;
 
 namespace OtzariaBridge;
 
+internal static class OsInfo
+{
+    /// <summary>
+    /// שם מערכת ההפעלה כפי שהמשתמש מכיר: Windows 11 מדווח על עצמו כגרסה 10.0 (וגם ב-ProductName ברישום כתוב "Windows 10"),
+    /// לכן קובעים לפי מספר ה-build (22000 ומעלה = Windows 11), ומוסיפים מהדורה וגרסת תצוגה (25H2) מהרישום.
+    /// </summary>
+    public static string Name()
+    {
+        var v = Environment.OSVersion.Version;
+        string name = v.Major == 10 ? (v.Build >= 22000 ? "Windows 11" : "Windows 10") : "Windows " + v.Major + "." + v.Minor;
+        string edition = "", disp = "";
+        try
+        {
+            using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+            string pn = k?.GetValue("ProductName") as string ?? "";
+            foreach (var e in new[] { "Pro", "Home", "Enterprise", "Education" })
+                if (pn.Contains(e, StringComparison.OrdinalIgnoreCase)) { edition = e; break; }
+            disp = k?.GetValue("DisplayVersion") as string ?? "";
+        }
+        catch { }
+        return name + (edition.Length > 0 ? " " + edition : "") + (disp.Length > 0 ? " " + disp : "") + " (build " + v.Build + ")";
+    }
+}
+
 /// <summary>נקודות הקצה /sys/* — מה שלא נתמך מחזיר unsupported</summary>
 public static class SysApi
 {
@@ -53,7 +77,7 @@ public static class SysApi
         {
             computerName = Environment.MachineName,
             userName = Environment.UserName,
-            os = RuntimeInformation.OSDescription,
+            os = OsInfo.Name(),
             battery,
             time = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ssK"),
         };

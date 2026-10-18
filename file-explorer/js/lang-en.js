@@ -52,8 +52,10 @@
     'כרטיסיות': 'Tabs',
     'איפוס רוחב העמודות': 'Reset column widths',
     'גררו לשינוי הרוחב': 'Drag to resize',
-    'שורות מצוילות': 'Striped rows',
-    'צבע מתחלף בין השורות, כמו ב-Everything': 'Alternating row shading, like Everything',
+    'שורות מפוספסות': 'Striped rows',
+    'חיפוש הגדרה…': 'Search settings…',
+    'לא נמצאו הגדרות': 'No settings found',
+    'צבע מתחלף בין השורות': 'Alternating row shading',
     'עמודות להצגה': 'Columns to show',
     'אפשר גם בלחיצה ימנית על כותרת העמודות. הרחבת עמודה: גרירת הקצה שלה': 'Also via right-click on the column header. Resize a column by dragging its edge',
     'נמצאו': 'Found',
@@ -369,7 +371,7 @@
     'סרטונים': 'Videos',
     'תיקיית הבית': 'Home'
   }, [
-    [/^— סייר קבצים (.*) · גמח תורת אסתר$/, '— File Explorer $1 · by Torat Esther Gemach'],
+    [/^— סייר קבצים (.*) · חד בדרא, יאיר דניאל$/, '— File Explorer $1 · by Chad Bedera, Yair Daniel'],
     [/^([\d,.]+) עמודים$/, '$1 pages'],
     [/^([\d,.]+) פריטים נבחרו$/, '$1 items selected'],
     [/^([\d,.]+) בתים$/, '$1 bytes'],
@@ -481,7 +483,7 @@
     'איפוס': 'Reset',
     'הגדרות הנעילה המלאות בהגדרות מערכת': 'Full lock settings in System Settings',
     'גרסה': 'Version',
-    '· גמח תורת אסתר': '· Gemach Torat Esther',
+    '· חד בדרא, יאיר דניאל': '· Chad Bedera, Yair Daniel',
     'עיון וניהול קבצים מתוך אוצריא: העתקה, העברה, מחיקה, שינוי שם, חיפוש, סל מיחזור, וצפייה ב-PDF, Word, טקסט ותמונות. עם אחת שאלתי — גישה לכל המחשב; בלעדיו — לתיקיות שאישרתם.': 'Browse and manage files from inside Otzaria: copy, move, delete, rename, search, recycle bin, and view PDF, Word, text and images. With Achat Shaalti — access to the whole computer; without it — to folders you approved.',
     'לעילוי נשמת': 'In memory of',
     'תנצב"ה': 'May her soul be bound in the bond of life',
@@ -544,6 +546,20 @@
     'גשר:': 'Bridge:',
     'לא מחובר': 'Not connected',
     'יש לאשר את החיבור בחלון שנפתח במחשב': 'Approve the connection in the window that opened on the computer',
-    'פתיחה עם קיצור מקשים': 'Open with a keyboard shortcut'
+    'פתיחה עם קיצור מקשים': 'Open with a keyboard shortcut',
+    'הקטגוריה לא נמצאה': 'Category not found',
+    'ספריית אוצריא': 'Otzaria library',
+    'פתיחה בעיון של אוצריא': 'Open in Otzaria reader',
+    'הקובץ לא נמצא כספר בספריית אוצריא': 'The file was not found as a book in the Otzaria library',
+    'הפתיחה בעיון נכשלה': 'Opening in the reader failed',
+    'השם אינו יכול לכלול את התווים \\ / : * ? " < > |': 'The name cannot contain the characters \\ / : * ? " < > |',
+    'תיקיות הגישה המהירה בספריית אוצריא': 'Quick-access folders in the Otzaria library',
+    'תיקיות הגישה המהירה מוצגות בספרייה תחת "סייר קבצים", ולחיצה פותחת אותן בסייר. רק התיקיות — לא הקבצים.': 'Quick-access folders are shown in the library under "File Explorer", and clicking opens them in the Explorer. Folders only — not the files.',
+    'אסתר גיטה דינר בת רבי מיכאל שלום הלוי שיבדלט"א': 'Esther Gitta Diner, daughter of Rabbi Michael Shalom HaLevi, may he live long',
+    'תשובה לא צפויה מ-network.fetchStream': 'Unexpected response from network.fetchStream',
+    ' - עותק': ' - copy',
+    'ההערה נשלחת לצוות אוצריא ולמפתח התוסף דרך מערכת הדיווח של אוצריא, וגם כ-issue ציבורי בגיטהאב של התוסף (פרטים אישיים מוסתרים). לפני השליחה תוצג בקשת אישור.': 'The note is sent to the Otzaria team and the plugin developer through Otzaria\'s reporting system, and also as a public issue on the plugin\'s GitHub (personal details are hidden). A confirmation prompt is shown before sending.',
+    'סיסמה שגויה (בדמה: 1234)': 'Wrong password (in the demo: 1234)',
+    'יש להזין נתיב מלא, למשל C:\\Users\\שם\\Desktop': 'Enter a full path, e.g. C:\\Users\\Name\\Desktop'
   });
 })();

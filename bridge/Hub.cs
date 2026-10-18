@@ -12,7 +12,7 @@ internal sealed class Hub : Form
     private static Hub _inst;
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, ItemSize = new Size(0, 1), SizeMode = TabSizeMode.Fixed };
     // משוב 15.10: רשימת הטאבים בצד (ימין בעברית — Dock.Left מתהפך ב-RightToLeftLayout) במקום כותרות למעלה
-    private readonly FlowLayoutPanel _side = new() { Dock = DockStyle.Left, Width = 170, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(6, 10, 6, 6), BackColor = SystemColors.ControlLight };
+    private readonly FlowLayoutPanel _side = new() { Dock = DockStyle.Left, Width = 170, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(6, 10, 6, 6), BackColor = Color.FromArgb(243, 236, 220) };
     private readonly Dictionary<string, TabPage> _pages = new();
 
     private static bool _filling;
@@ -42,9 +42,19 @@ internal sealed class Hub : Form
         Font = new Font("Segoe UI", 10f);
         Size = new Size(760, 620);
         MinimumSize = new Size(520, 420);
+        BackColor = UiStyle.Page;
         Controls.Add(_tabs);
         Controls.Add(_side);
         _tabs.SelectedIndexChanged += (_, _) => { if (_tabs.SelectedTab != null) Text = Program.AppName + " — " + _tabs.SelectedTab.Text; PaintSide(); };
+    }
+
+    /// <summary>שם קצר לטאב: בלי הסיומת אחרי " — " ובלי שם המוצר ("אודות אחת שאלתי" ← "אודות"), כדי שלא ייחתך בסרגל הצד</summary>
+    private static string ShortName(string t)
+    {
+        int i = t.IndexOf(" — ", StringComparison.Ordinal);
+        if (i > 0) t = t[..i];
+        foreach (var p in new[] { "אודות ", "About " }) if (t.StartsWith(p, StringComparison.Ordinal)) return p.Trim();
+        return t.Trim();
     }
 
     private void PaintSide()
@@ -52,7 +62,8 @@ internal sealed class Hub : Form
         foreach (Control c in _side.Controls)
         {
             bool sel = c.Tag == _tabs.SelectedTab;
-            c.BackColor = sel ? SystemColors.Window : SystemColors.ControlLight;
+            c.BackColor = sel ? Color.White : Color.FromArgb(243, 236, 220);
+            c.ForeColor = UiStyle.GoldText;
             c.Font = new Font(Font, sel ? FontStyle.Bold : FontStyle.Regular);
         }
     }
@@ -62,12 +73,14 @@ internal sealed class Hub : Form
         if (!_pages.TryGetValue(key, out var page) || page.IsDisposed || page.Controls.Count == 0)
         {
             var f = make();
-            page = new TabPage(f.Text) { UseVisualStyleBackColor = true };
+            UiStyle.Theme(f);
+            string name = ShortName(f.Text);
+            page = new TabPage(name) { UseVisualStyleBackColor = true };
             f.TopLevel = false;
             f.FormBorderStyle = FormBorderStyle.None;
             f.Dock = DockStyle.Fill;
             page.Controls.Add(f);
-            var btn = new Button { Text = f.Text, Width = 156, Height = 36, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleRight, Margin = new Padding(0, 0, 0, 4), Tag = page, Cursor = Cursors.Hand };
+            var btn = new Button { Text = name, Width = 156, Height = 36, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleRight, Margin = new Padding(0, 0, 0, 4), Tag = page, Cursor = Cursors.Hand };
             btn.FlatAppearance.BorderSize = 0;
             if (Lang.En) btn.TextAlign = ContentAlignment.MiddleLeft;
             btn.Click += (_, _) => _tabs.SelectedTab = page;

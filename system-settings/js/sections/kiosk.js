@@ -38,7 +38,7 @@
     if (!body.__kioskShown) {
       var cached = null;
       try { cached = JSON.parse(localStorage.getItem('ss.kiosk.status') || 'null'); } catch (e) { cached = null; }
-      if (cached) { body.__kioskShown = true; render(body, cached, [], [], [], null); body.__kioskLive = live; live.then(function () { load(body); }).catch(function () {}); return; }
+      if (cached) { body.__kioskShown = true; render(body, cached, [], [], null, null); body.__kioskLive = live; live.then(function () { load(body); }).catch(function () {}); return; }
     }
     body.__kioskShown = false;
     for (var i = 0; ; i++) {
@@ -59,7 +59,7 @@
       /* משוב 15.10: זיהוי תוכנות (סריקת כוננים) איטי והשהה את כל הטאב — כולל ריבוע הגדרות הנעילה.
          התוצאה נשמרת למשך הסשן; אם עוד לא מוכנה אחרי 1.5 שנ' מציגים בלעדיה ומשלימים כשהיא מגיעה */
       detectFast(body),
-      lim(SS.bridge.call('/pair/list', {}), 4000, 'צימוד'),
+      lim(SS.bridge.call('/pair/list', {}), 12000, 'צימוד'),
       lim(SS.bridge.call('/bios/status', {}), 4000, 'BIOS'),
       lim(SS.bridge.call('/kiosk/recovery/backup/status', {}), 4000, 'קודי שחזור') /* #69 */
     ]);
@@ -71,9 +71,9 @@
     found = found.filter(function (f) {
       return !progs.some(function (p) { return p.path.toLowerCase() === f.path.toLowerCase(); });
     });
-    var pairs = (pairsRes && pairsRes.clients) || [];
+    var pairsKnown = !!pairsRes, pairs = (pairsRes && pairsRes.clients) || [];
 
-    render(body, st, progs, found, pairs, bios, backup);
+    render(body, st, progs, found, pairsKnown ? pairs : null, bios, backup);
   }
 
   var detPromise = null, detResult = null;
@@ -141,6 +141,12 @@
       '<li>' + ui.icon('shield') + '<span><b>הכי בטוח לעמדת לימוד:</b> חשבון Windows <b>רגיל</b> (בלי הרשאות מנהל) ללא גישה להגדרות המחשב, שבו מפעילים את הנעילה; חשבון המנהל נשאר עם סיסמה נפרדת.</span></li>' +
       '<li>' + ui.icon('key') + '<span><b>חירום:</b> קיצור Ctrl+Alt+Shift+F12 פותח חלון קוד שחזור לביטול הנעילה כולה. בלי הקוד אי אפשר לבטל, כדי שלא יהיה קיצור שעוקף את הנעילה.</span></li>' +
       '</ul></details>';
+    html += '<details class="card explain"><summary class="card-title">קיצור חירום לביטול הנעילה</summary><ul class="feature-list">' +
+      '<li>' + ui.icon('key') + '<span><b dir="ltr">Ctrl + Alt + Shift + F12</b> — פותח בכל רגע (גם בזמן נעילה) חלון להזנת קוד שחזור או קוד גיבוי חד-פעמי, ומבטל את הנעילה כולה.</span></li>' +
+      '<li>' + ui.icon('info') + '<span><b>במחשבים רבים (בעיקר ניידים) צריך ללחוץ גם על מקש Fn</b> — כלומר <b dir="ltr">Fn + Ctrl + Alt + Shift + F12</b> — כי מקשי F משמשים שם כמקשי מדיה (בהירות, עוצמת קול). אם הקיצור לא עובד, נסו עם Fn או כבו את "Fn Lock".</span></li>' +
+      '<li>' + ui.icon('lock') + '<span><b>בלי מקלדת תקינה:</b> 7 לחיצות מהירות על השעון בפינת המסך פותחות את אותו חלון.</span></li>' +
+      '<li>' + ui.icon('shield') + '<span>הקוד נמצא בדף השחזור שנשמר בעת הפעלת הנעילה. בלי הקוד אי אפשר לבטל, כדי שלא יהיה קיצור שעוקף את הנעילה.</span></li>' +
+      '</ul></details>';
 
     if ((st.warnings || []).indexOf('admin') >= 0) {
       html += '<div class="card"><div class="card-title">' + ui.icon('warning') + 'אזהרה: חשבון עם הרשאות מנהל</div>' +
@@ -149,7 +155,7 @@
     }
 
     /* C6: מתקפל */
-    html += '<details class="card subtle"><summary class="card-title">זו נעילה "רכה" — להקשחה מלאה</summary>' +
+    html += '<details class="card subtle explain"><summary class="card-title">זו נעילה "רכה" — להקשחה מלאה</summary>' +
       '<p class="muted">הנעילה רצה בהרשאות המשתמש ומונעת שימוש מזדמן. מי שמבין במחשבים יכול לעקוף אותה. ' +
       'כדי שתעמוד גם מול ניסיון מכוון, השלימו שכבות שאינן תלויות בתוכנה:</p>' +
       '<ul class="feature-list">' +
@@ -188,7 +194,7 @@
         '<div class="setting-row"><div class="setting-text"><b>יומן פעולות מנהל</b><span class="muted">הפעלה וביטול נעילה, שינויי סיסמה והגדרות, יבוא וייצוא</span></div>' +
         '<button class="btn btn-tonal" data-act="adminlog">' + ui.icon('info') + 'הצגה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>ייצוא ויבוא הגדרות</b><span class="muted">העברת הגדרות הנעילה, הסייר ושומר המסך למחשב אחר (בלי סיסמאות וקודים)</span></div>' +
-        '<button class="btn btn-tonal" data-act="export">ייצוא</button> <button class="btn btn-tonal" data-act="import">יבוא</button></div>' +
+        '<div class="btn-group"><button class="btn btn-tonal" data-act="export">ייצוא</button><button class="btn btn-tonal" data-act="import">יבוא</button></div></div>' +
         '<div class="setting-row"><div class="setting-text"><b>מה פתוח בזמן נעילה</b><span class="muted">' +
         ui.esc((st.openSections || []).map(function (id) { return SECTION_NAMES[id] || id; }).join(', ') || 'רק תוכנות לימוד ואודות') +
         (st.readOnly ? ' · קבצים לקריאה בלבד' : '') + (st.allowExcelDocs ? ' · Excel מותר בסייר' : '') + (st.clock !== false ? ' · שעון צף' : '') + '</span></div>' +
@@ -216,7 +222,7 @@
       html += fxCard();
       html += hardCard(st.hard || {});
       html += biosCard(bios);
-      html += pairCard(pairs);
+      html += pairCard(pairs || [], !!pairs);
       html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
         '<p class="muted">בחלון „ביטול נעילה” אפשר להקליד גם את <b>קוד השחזור</b> שקיבלתם בהגדרת הסיסמה. במקרה חירום אפשר להריץ משורת הפקודה:</p>' +
         '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock &lt;קוד-שחזור&gt;</code>' +
@@ -226,7 +232,7 @@
     body.innerHTML = html;
     if (!active && tu.active) startTempCountdown(body, tu.secondsLeft);
     wire(body, st, progs, found);
-    wireHard(body, st, pairs);
+    wireHard(body, st, pairs || []);
     wireBios(body, bios);
   }
 
@@ -295,7 +301,7 @@
         '<button type="button" class="btn btn-text" data-copy-code title="העתקת הקוד">' + ui.icon('copy') + '</button></div>' +
         '<p>רשמו אותו על דף ושמרו במקום בטוח, <b>לא ליד המחשב</b>. אם תשכחו את הסיסמה, אפשר לבטל את הנעילה עם הקוד הזה בחלון „ביטול נעילה”, או מחלון פקודה:</p>' +
         '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock ' + ui.esc(code) + '</code>' +
-        '<p><b>חובה לשמור את הקוד לפני הפעלת הנעילה:</b></p><div class="row-actions">' +
+        '<p><b>חובה לשמור את הקוד לפני הפעלת הנעילה:</b></p><div class="row-actions full">' +
         '<button type="button" class="btn btn-tonal" data-keep="file">' + ui.icon('download') + 'שמירה לקובץ</button>' +
         '<button type="button" class="btn btn-tonal" data-keep="print">' + ui.icon('edit') + 'הדפסה</button></div>',
       fields: [{ name: 'ack', type: 'checkbox', label: 'שמרתי/הדפסתי את הקוד והוא במקום בטוח' }],
@@ -457,8 +463,9 @@
   async function wizardRest(pw) {
     var prof = await ui.dialog({
       title: 'שלב 2 מתוך 3: פרופיל נעילה', icon: 'lock',
-      body: '<p class="muted">סט הגדרות מוכן. אפשר לשנות כל הגדרה אחר כך.</p>',
-      fields: [{ name: 'prof', type: 'select', label: 'פרופיל', value: 'student', options: Object.keys(PROFILES).map(function (k) { return { value: k, label: PROFILES[k].label + ' — ' + PROFILES[k].desc }; }) }],
+      body: '<p class="muted">סט הגדרות מוכן. אפשר לשנות כל הגדרה אחר כך.</p><p data-prof-desc>' + ui.esc(PROFILES.student.desc) + '</p>',
+      onOpen: profDescWire,
+      fields: [{ name: 'prof', type: 'select', label: 'פרופיל', value: 'student', options: Object.keys(PROFILES).map(function (k) { return { value: k, label: PROFILES[k].label }; }) }],
       actions: [{ label: 'דילוג', value: false }, { label: 'החלה', value: true, kind: 'primary' }],
       onSubmit: async function (x) {
         var pr = PROFILES[x.prof]; if (!pr) return false;
@@ -475,11 +482,20 @@
     if (go) setTimeout(function () { SS.show('programs'); }, 50);
   }
 
+  /* תיאור הפרופיל מתחת לבחירה (ולא בתוך הרשימה הנפתחת, שגולשת מהחלון) */
+  function profDescWire(form) {
+    var sel = form.querySelector('select[name="prof"]'), d = form.parentNode.querySelector('[data-prof-desc]') || form.querySelector('[data-prof-desc]');
+    if (!sel || !d) return;
+    sel.addEventListener('change', function () { d.textContent = (PROFILES[sel.value] || {}).desc || ''; });
+  }
+
   async function applyProfile(body) {
     var ok = await ui.dialog({
       title: 'פרופיל נעילה מוכן', icon: 'lock',
+      body: '<p class="muted" data-prof-desc>' + ui.esc(PROFILES.student.desc) + '</p>',
+      onOpen: profDescWire,
       fields: [
-        { name: 'prof', type: 'select', label: 'פרופיל', value: 'student', options: Object.keys(PROFILES).map(function (k) { return { value: k, label: PROFILES[k].label + ' — ' + PROFILES[k].desc }; }) },
+        { name: 'prof', type: 'select', label: 'פרופיל', value: 'student', options: Object.keys(PROFILES).map(function (k) { return { value: k, label: PROFILES[k].label }; }) },
         { name: 'pw', label: 'סיסמת נעילה', type: 'password', dir: 'ltr' }
       ],
       actions: [{ label: 'ביטול', value: false }, { label: 'החלה', value: true, kind: 'primary' }],
@@ -582,12 +598,12 @@
       'ההתקנה דורשת אישור מנהל פעם אחת.</p>' +
       updateWarning +
       '<div class="setting-row"><div class="setting-text"><b>מצב</b><span class="muted">' + state +
-      (h.blockUsbStorage ? ' · אחסון USB חסום' : '') + '</span></div>' + actions + '</div>' +
+      (h.blockUsbStorage ? ' · אחסון USB חסום' : '') + '</span></div><div class="btn-group">' + actions + '</div></div>' +
       '<p class="muted small">הרכיב אינו משנה את הכניסה ל-Windows ואינו רץ במצב בטוח, כך שאינו יכול להשבית את המחשב. ' +
       'גם הוא אינו מחליף סיסמת BIOS. פרטים: docs/HARDLOCK.md במאגר.</p></div>';
   }
 
-  function pairCard(pairs) {
+  function pairCard(pairs, known) {
     var rows = pairs.map(function (c) {
       return '<div class="setting-row"><div class="setting-text"><b>' + ui.esc(c.name || c.client) + '</b><span class="muted">חובר: ' +
         ui.esc((c.created || '').replace('T', ' ')) + ' · שימוש אחרון: ' + ui.esc((c.lastUsed || '').replace('T', ' ')) + '</span></div>' +
@@ -596,7 +612,10 @@
     /* סטטוס פשוט למעלה (כמה תוספים מחוברים) - הרשימה המלאה עם זמנים/ניתוק רק למי שבאמת צריך,
        מאחורי "פרטים נוספים". אם יש כפילויות (למשל אחרי שינוי מזהה תוסף - הישן נשאר מחובר כ"יתום"
        עד שמנתקים אותו ידנית), זה בדיוק המקום לנקות אותן */
-    var status = pairs.length
+    /* אם הקריאה לגשר לא הסתיימה בזמן — לא מכריזים "אין תוספים" (זו לא אמת), אלא מציינים שהמצב לא נטען */
+    var status = known === false
+      ? '<span class="chip warn">' + ui.icon('warning') + 'מצב החיבורים לא נטען — נסו לרענן</span>'
+      : pairs.length
       ? '<span class="chip ok">' + ui.icon('check') + pairs.length + ' תוספים מחוברים</span>'
       : '<span class="chip warn">' + ui.icon('warning') + 'אין תוספים מחוברים</span>';
     return '<div class="card"><div class="card-title">תוספים מחוברים לגשר</div>' +
@@ -604,7 +623,6 @@
       status +
       '<details class="more-details"><summary>פרטים נוספים (' + pairs.length + ')</summary><div class="more-details-body">' +
       (rows || '<p class="muted">אין תוספים מחוברים.</p>') +
-      '<p class="muted small">רואים כפילות (אותו שם פעמיים)? כנראה חיבור ישן משארית התקנה קודמת - אפשר לנתק אותו בבטחה, השני ימשיך לעבוד.</p>' +
       '</div></details></div>';
   }
 
@@ -643,7 +661,7 @@
       'בלי להיכנס ידנית להגדרות ה-BIOS. <b>לא כל פעולה מובטחת להצליח</b> — תלוי ביצרן ובדגם המחשב.</p>' +
       '<div class="setting-row"><div class="setting-text"><b>יצרן המחשב שזוהה</b><span class="muted">' +
       ui.esc(BIOS_VENDOR_NAMES[bios.vendor] || bios.vendor) + (bios.model ? ' · ' + ui.esc(bios.model) : '') + '</span></div></div>';
-    var manualBtn = '<div class="row-actions"><button class="btn btn-tonal" data-act="bios-manual">' + ui.icon('info') + 'הדרכה ידנית (כל היצרנים)</button></div>';
+    var manualBtn = '<div class="row-actions full"><button class="btn btn-tonal" data-act="bios-manual">' + ui.icon('info') + 'הדרכה ידנית (כל היצרנים)</button></div>';
 
     if (!bios.supported) {
       return head + '<div class="state-box"><div><b>לא נתמך להקשחה אוטומטית במחשב זה</b><span class="muted">' +
@@ -663,7 +681,7 @@
         ui.esc(bios.wmiError || '') + '</span></div></div>';
     }
     if (bios.note) head += '<p class="muted small">' + ui.esc(bios.note) + '</p>';
-    head += '<div class="row-actions">' +
+    head += '<div class="row-actions full">' +
       '<button class="btn btn-primary" data-act="bios-harden">' + ui.icon('shield') + 'הפעלת הקשחה</button>' +
       '<button class="btn btn-tonal" data-act="bios-manual">' + ui.icon('info') + 'הדרכה ידנית (כל היצרנים)</button></div></div>';
     return head;
@@ -941,6 +959,8 @@
       { name: 'parsha', label: 'פרשת השבוע', value: !!st.showParsha },
       { name: 'dafyomi', label: 'דף יומי', value: !!st.showDafYomi }
     ] });
+    fields.push({ name: 'verseText', label: 'פסוק מותאם אישית בשומר המסך', value: st.restVerseText || '', placeholder: "שִׁבְתִּי בְּבֵית ה' כָּל יְמֵי חַיַּי",
+      hint: "הפסוק שיוצג כשהאפשרות \"פסוק\" מסומנת. ריק = ברירת המחדל: שִׁבְתִּי בְּבֵית ה' כָּל יְמֵי חַיַּי" });
     fields.push({ name: 'noteText', type: 'textarea', rows: 3, label: 'כיתוב אישי בשומר המסך', value: st.restNoteText || '',
       placeholder: 'למשל: סדר הלימוד היום, הודעה למשפחה, חיזוק…', hint: 'מוצג בריבוע ממוסגר בצד שמול זמני היום. ריק = לא מוצג' });
     fields.push({ name: 'lockImg', type: 'checkbox', label: 'להציג גם במסך הנעילה של Windows', value: !!st.lockScreenImage,
@@ -970,7 +990,7 @@
   };
   SS.screensaverPayload = function (x) {
     return {
-      restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi, restShowVerse: !!x.rsVerse, restShowClock: !!x.rsClock, restShowZmanim: !!x.rsZmanim, restShowLogo: !!x.rsLogo, restShowDedication: !!x.rsDed, restDedicationStyle: x.dedStyle === 'column' ? 'column' : 'fixed', restCandleFlicker: !!x.candleFlicker, restDedicationText: String(x.dedText || '').slice(0, 400), lockScreenImage: !!x.lockImg, restNoteText: String(x.noteText || '').slice(0, 600),
+      restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi, restShowVerse: !!x.rsVerse, restVerseText: (x.verseText || '').trim(), restShowClock: !!x.rsClock, restShowZmanim: !!x.rsZmanim, restShowLogo: !!x.rsLogo, restShowDedication: !!x.rsDed, restDedicationStyle: x.dedStyle === 'column' ? 'column' : 'fixed', restCandleFlicker: !!x.candleFlicker, restDedicationText: String(x.dedText || '').slice(0, 400), lockScreenImage: !!x.lockImg, restNoteText: String(x.noteText || '').slice(0, 600),
       zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
       zmanimElevation: +String(x.zelev).trim() || 0, zmanimAlert: ZMAN_FIELDS.filter(function (z) { return x['za_' + z.id]; }).map(function (z) { return z.id; }).join(','), zmanimAlertMinutes: +String(x.zalertmin).trim() || 10, zmanimFallbackEngine: x.zengine,
       zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
@@ -1105,7 +1125,7 @@
     /* 049b564 (יאיר): הטופס מחולק לקבוצות מתקפלות לפי נושא (ר' ui.fieldsHtml) — כל קבוצה סגורה חוץ מהראשונה.
        השדות נבנים כמו קודם (כולל שינויי 15.10) ומסודרים כאן לתוך הקבוצות. סיסמת הנעילה מעל הקבוצות (חובה לשמירה). */
     var GROUPS = [
-      { g: { type: 'group', icon: 'display', label: 'תצוגה ושולחן עבודה', open: true, hint: 'שעון, שם המחשב, סרגל התוכנות ומסך מלא' }, n: ['clock', 'pos', 'venue', 'fs', 'side', 'barProgs', 'sideIcons', 'sidePos'] },
+      { g: { type: 'group', icon: 'display', label: 'תצוגה ושולחן עבודה', hint: 'שעון, שם המחשב, סרגל התוכנות ומסך מלא' }, n: ['clock', 'pos', 'venue', 'fs', 'side', 'barProgs', 'sideIcons', 'sidePos'] },
       { g: { type: 'group', icon: 'edit', label: 'קבצים ותוכן', hint: 'נתיב אוצריא, סיומות מותרות, קריאה-בלבד' }, n: ['path', 'ext', 'ro'] },
       { g: { type: 'group', icon: 'shield', label: 'אבטחה', hint: 'אימות דו-שלבי, ביטול נעילה בכיבוי' }, n: ['tfa', 'reset'] },
       { g: { type: 'group', icon: 'key', label: 'פתיחה זמנית בסיסמה נפרדת', hint: 'לתת למישהו את המחשב לזמן קצר בלי לגלות את הסיסמה הראשית' }, n: ['tu', 'tuMin', 'tuPw', 'tuPw2'] },
@@ -1203,22 +1223,39 @@
       '<p class="muted">אפשר לנעול את סייר הקבצים בסיסמת המנהל, או להגביל אותו לתיקיות מסוימות (למשל שולחן העבודה). ההגדרה נמצאת בתוסף „סייר קבצים”: הגדרות ← נעילה והגבלה, ונאכפת בגשר.</p></div>';
   }
 
+  document.addEventListener('input', function (e) {
+    var t = e.target;
+    if (!t || !t.classList || !t.classList.contains('prog-search')) return;
+    var q = t.value.trim().toLowerCase();
+    Array.prototype.forEach.call(t.parentNode.querySelectorAll('.prog-item'), function (it) {
+      it.hidden = !!q && (it.getAttribute('data-name') || '').indexOf(q) < 0;
+    });
+  });
+
   function programsCard(progs, found, autoTorah) {
     var rows = progs.map(function (p) {
       return '<div class="setting-row"><div class="setting-text"><b>' + ui.esc(p.name) + '</b>' + (p.auto ? ' <span class="muted small">(זוהתה אוטומטית)</span>' : '') + (p.running ? ' <span class="muted small">· פתוחה עכשיו</span>' : '') +
         '<span class="muted path"><bdi dir="ltr">' + ui.esc(p.path) + '</bdi>' + (p.exists ? '' : ' · הקובץ לא נמצא') + '</span></div>' +
-        '<button class="btn btn-tonal" data-act="prog-open-' + ui.esc(p.id) + '"' + (p.exists ? '' : ' disabled') + '>' + ui.icon('computer') + (p.running ? 'העבר לחזית' : 'פתיחה') + '</button>' +
+        /* סדר הכפתורים (RTL): הסרה (X) מימין, ואחריה סגירה, ופתיחה צמודה לשמאל */
+        '<div class="btn-group prog-actions">' +
+        (p.auto ? '' : '<button class="btn btn-tonal btn-x" data-act="prog-del-' + ui.esc(p.id) + '" aria-label="הסרה" title="הסרה">' + ui.icon('close') + '</button>') +
         (p.running ? '<button class="btn btn-tonal" data-act="prog-close-' + ui.esc(p.id) + '">' + ui.icon('close') + 'סגירה</button>' : '') +
-        (p.auto ? '' : '<button class="btn btn-tonal" data-act="prog-del-' + ui.esc(p.id) + '" aria-label="הסרה">' + ui.icon('close') + '</button>') + '</div>';
+        '<button class="btn btn-tonal" data-act="prog-open-' + ui.esc(p.id) + '"' + (p.exists ? '' : ' disabled') + '>' + ui.icon('computer') + (p.running ? 'העבר לחזית' : 'פתיחה') + '</button>' +
+        '</div></div>';
     }).join('');
-    var suggest = found.map(function (f, i) {
-      return '<button class="btn btn-tonal" data-act="prog-found-' + i + '">' + ui.icon('edit') + 'הוספת ' + ui.esc(f.name) + '</button>';
-    }).join('');
+    /* רשימה ארוכה של תוכנות שזוהו — קומפקטית: נפתחת בלחיצה, עם חיפוש וגלילה, במקום עשרות כפתורים */
+    /* תפריט נפתח אחד: בראשו הוספה ידנית מהמחשב, מתחתיו חיפוש ורשימת תוכנות שנמצאו בתפריט התחל (הצעות בלבד) */
+    var suggest = '<details class="prog-suggest"><summary>' + ui.icon('edit') + 'הוספת תוכנה</summary>' +
+      '<button type="button" class="prog-item prog-manual" data-act="prog-add">' + ui.icon('edit') + '<span>הוספת תוכנה / רכיב מהמחשב ידנית…</span></button>' +
+      (found.length ? '<input type="search" class="prog-search" placeholder="חיפוש בין ' + found.length + ' התוכנות שנמצאו במחשב…" aria-label="חיפוש תוכנה">' +
+      '<div class="prog-list">' + found.map(function (f, i) {
+        return '<button type="button" class="prog-item" data-act="prog-found-' + i + '" data-name="' + ui.esc(String(f.name || '').toLowerCase()) + '">' + ui.icon('computer') + '<span>' + ui.esc(f.name) + '</span></button>';
+      }).join('') + '</div>' : '') + '</details>';
     return '<div class="card"><div class="card-title">תוכנות מותרות לפתיחה</div>' +
       '<p class="muted">תוכנות לימוד (כתבי הקודש, אוצר החכמה, בר אילן, Word ועוד) שאפשר לפתוח מכאן גם בזמן נעילה. ההוספה וההסרה דורשות את סיסמת הנעילה. בסיום העבודה סוגרים את התוכנה וחוזרים לאוצריא.</p>' +
       /* #5: הזיהוי האוטומטי עבר לטאב "תוכנות לימוד" */
       (rows || '<p class="muted">עדיין לא הוגדרו תוכנות.</p>') +
-      '<div class="row-actions"><button class="btn btn-tonal" data-act="prog-add">' + ui.icon('edit') + 'הוספת תוכנה</button>' + suggest + '</div></div>';
+      suggest + '</div>';
   }
 
   async function openProgram(p) {
