@@ -70,6 +70,8 @@ public static class Server
         Theme.Register();
         AdminLog.Register();
         SettingsIO.Register();
+        PdfApi.Register();      // שלבים א-ב של docs/PDF-INTEGRATION-SPEC.md
+        LocationApi.Register(); // מיקום מ-Windows ו-/feedback (כיוון תפילה 2.6)
 
         int port = FindPort();
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory });

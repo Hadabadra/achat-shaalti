@@ -32,3 +32,5 @@
 - 14.10: סבב E חלקי — E5/E6/E7 ✅; E9 חלקי (README); נותרו E1–E4, E8 (Windows/SignPath).
 - 14.10: E1/E4 בדיקות עצמיות אוטומטיות (SelfTestMore.cs); E2 ממצא 8 — עדכון עצמי מאומת של השירות (SvcUpdate.cs). שליחה ל-GitHub — ממתינה (A7).
 - 14.10: נוסף סבב F (ניקוי GitHub + גרסה רשמית) ב-ROUNDS-3.7.1.md.
+- 20.10: נוספו בלי אריזה: `LocationApi.cs` (`/sys/location`, `/location`, `/sys/location/settings`, `/feedback`) ו-`PdfApi.cs` (`/pdf/handlers`, `/pdf/open`, שלבים א-ב של PDF-INTEGRATION-SPEC). נבנה בהצלחה (dotnet build), לא נבדק ב-Windows.
+  **נשאר לאריזה הבאה:** בדיקה ב-Windows (מיקום כבוי/דלוק, אישור הרשאת מיקום לאפליקציות שולחן עבודה, Sumatra/Acrobat בעמוד מסוים, נעילה); הוספת `/location` ו-`/pdf/*` לבדיקה העצמית; כפתור "מיקום" בהגדרות מערכת (לא חובה); שלבים ג-ה של PDF לפי תשובות לסעיף 9.

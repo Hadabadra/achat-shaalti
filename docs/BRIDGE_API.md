@@ -248,3 +248,17 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 
 כל שלב מדווח בכנות `success`/`message` גם כשהפעולה נכשלת (למשל הגדרה לא נמצאה בדגם הזה, או שכבר מוגדרת סיסמה אחרת) —
 אין החזרת "הצלחה" ללא אישור בפועל מה-WMI.
+
+## מיקום, משוב ו-PDF (20.10.2026, לא ארוז עדיין)
+
+כל הנקודות POST עם `X-Otzaria-Bridge: 1` ו-`X-Otzaria-Token` (צימוד), כמו כל השאר.
+
+| נתיב | גוף | תשובה |
+|---|---|---|
+| `/sys/location` (וגם `/location`) | `{ maxAgeSec?: 600, timeoutSec?: 15 }` | `{ lat, lon, accuracy, source: "gnss"\|"wifi"\|"cellular"\|"ip"\|"default"\|"unknown", time }`. מיקום כבוי או חסום → `location_off` (403) עם הסבר איך להפעיל; לא התקבל בזמן → `location_timeout` (504) |
+| `/sys/location/settings` | `{}` | פותח את הגדרות המיקום של Windows (`ms-settings:privacy-location`) |
+| `/feedback` | `{ text, plugin, version, repo?, title?, kind? }` | `{ queued: true }`. כינוי ל-`/sys/feedback`: נכנס לתור ונשלח למתווך `achat-relay` |
+| `/pdf/handlers` | `{ force? }` | `{ defaultId, handlers: [{ id, name, kind, exists, isDefault, capabilities }] }`. מזהים: `windows-default`, `windows-chooser`, `sumatra`, `acrobat`/`acrobat-reader`, `foxit` |
+| `/pdf/open` | `{ path, handlerId?, page? }` | `{ opened, handlerId, pageHonored }`. נתיב עובר `FxPolicy`; בנעילה רק אם `pdf` ב-`kiosk.allowOpenExtensions`, ותמיד בתוכנת ברירת המחדל |
+
+הערה: בתוכנית "כיוון תפילה" נכתב `GET /location`. בגשר כל הבקשות (חוץ מ-`/health`) הן POST עם צימוד, ולכן המימוש הוא `POST /location`.
