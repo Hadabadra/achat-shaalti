@@ -262,3 +262,16 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 | `/pdf/open` | `{ path, handlerId?, page? }` | `{ opened, handlerId, pageHonored }`. נתיב עובר `FxPolicy`; בנעילה רק אם `pdf` ב-`kiosk.allowOpenExtensions`, ותמיד בתוכנת ברירת המחדל |
 
 הערה: בתוכנית "כיוון תפילה" נכתב `GET /location`. בגשר כל הבקשות (חוץ מ-`/health`) הן POST עם צימוד, ולכן המימוש הוא `POST /location`.
+
+## 1.0.2 (20.10.2026)
+| נקודת קצה | גוף | תשובה |
+|---|---|---|
+| `/pdf/assoc/status` | `{}` | `{ registered, isDefault, command }` |
+| `/pdf/assoc/register` / `unregister` | `{}` | כמו status. נרשם אוטומטית בעלייה אלא אם `pdf.assoc=false` |
+| `/pdf/assoc/open-settings` | `{}` | פותח `ms-settings:defaultapps` |
+| `/pdf/inbox/list` | `{}` | `{ items: [{ id, path, name, size, at, source }] }` (תוקף 10 דק', אחרי FxPolicy) |
+| `/pdf/inbox/ack` | `{ ids }` | `{ removed }` |
+| `/pdf/engines` | `{}` | `{ engines: [{id,name,path,ops}], ops }` — ghostscript, qpdf, mutool, pdftk, poppler, libreoffice, word |
+| `/pdf/op/begin` → `chunk {id,data}` → `run {id,op,params}` → `read {id,offset}` → `end {id}` | | `run` מקבל `engine`. פעולות: compress {level}, grayscale, pdfa, repair, protect, unlock, linearize, pdf2png (ZIP), totext, office2pdf {ext} |
+| `/sys/compass` (וגם `/compass`) | `{}` | `{ available, headingTrue, headingMagnetic, accuracy, time }` — רק במכשיר עם חיישן מצפן |
+שורת פקודה: `OtzariaBridge.exe --open-pdf "<path>"` (שם הקובץ בתור, פותח את אוצריא בתוסף הצופה).

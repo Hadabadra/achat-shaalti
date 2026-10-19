@@ -1,6 +1,6 @@
 # מפרט: שילוב תוכנות PDF בגשר (הצעה)
 
-> **20.10.2026:** שלבים א ו-ב מומשו ב-`bridge/PdfApi.cs` (`/pdf/handlers`, `/pdf/open` עם `sumatra -page N` ו-`acrobat /A page=N`). עדיין לא נבדקו ב-Windows ולא נארזו. שלבים ג-ה ממתינים לתשובות לשאלות הפתוחות (סעיף 9; הצעות תשובה שם).
+> **20.10.2026 (1.0.2):** גם שלבים ג (PdfOps.cs, Ghostscript של PDF24 / qpdf) וד (PdfAssoc.cs, "פתח באמצעות" + inbox) מומשו. **קודם לכן:** שלבים א ו-ב מומשו ב-`bridge/PdfApi.cs` (`/pdf/handlers`, `/pdf/open` עם `sumatra -page N` ו-`acrobat /A page=N`). עדיין לא נבדקו ב-Windows ולא נארזו. שלבים ג-ה ממתינים לתשובות לשאלות הפתוחות (סעיף 9; הצעות תשובה שם).
 
 > סטטוס: **הצעה, לא ממומש.** נכתב ב-19.10.2026 מול גרסה 1.0.0, על סמך `docs/BRIDGE_API.md` ועל סמך קריאה חלקית של `bridge/` (`Programs.cs`, `FsApi.cs`, `Installer.cs`).
 > רכיבים שלא נבדקו בקוד מסומנים **[לאמת]**.

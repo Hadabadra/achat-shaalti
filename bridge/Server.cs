@@ -71,6 +71,9 @@ public static class Server
         AdminLog.Register();
         SettingsIO.Register();
         PdfApi.Register();      // שלבים א-ב של docs/PDF-INTEGRATION-SPEC.md
+        PdfOps.Register();      // שלב ג: פעולות PDF במנוע מותקן (PDF24/Ghostscript, qpdf)
+        CompassApi.Register();  // כיוון תפילה: כיוון הצפון
+        PdfAssoc.Register();    // שלב ד: "פתח באמצעות" לתוסף + תור פתיחה
         LocationApi.Register(); // מיקום מ-Windows ו-/feedback (כיוון תפילה 2.6)
 
         int port = FindPort();

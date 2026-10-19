@@ -65,7 +65,12 @@ internal static class Outbox
         var list = new JsonArray();
         if (Directory.Exists(Dir))
             foreach (var f in Directory.GetFiles(Dir, "*.txt").OrderBy(x => x).Take(10))
-                list.Add(new JsonObject { ["id"] = Path.GetFileNameWithoutExtension(f), ["text"] = File.ReadAllText(f) });
+            {
+                string t = File.ReadAllText(f);
+                // #81-#90: קריסת הבדיקה העצמית דלפה ל-GitHub דרך התוסף (/diag/pending) — לא נמסרת לשליחה
+                if (t.Contains("selftest-crash", StringComparison.Ordinal)) continue;
+                list.Add(new JsonObject { ["id"] = Path.GetFileNameWithoutExtension(f), ["text"] = t });
+            }
         return new JsonObject { ["enabled"] = Config.Get("diag.autoReport", true), ["items"] = list };
     }
 
