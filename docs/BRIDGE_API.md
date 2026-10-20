@@ -1,5 +1,8 @@
 # תוכנת חסימת אוצריא (Otzaria Blocking Software) — חוזה API v1
 
+> ⚠️ **מצב (20.10.2026):** המסמך מתאר גם את גשר 1.0.2, שעדיין **לא שוחרר**. הקוד שלו נמצא בענף `next`. כל מה שמסומן 1.0.2 (פתח באמצעות, `/pdf/op/*`, `/pdf/engines`, `/sys/compass`) אינו זמין בגרסה המותקנת 1.0.1.
+
+
 > #69 (next): `POST /kiosk/recovery/backup {password, mode:"file"|"print"|"none"}` — יוצר 10 קודי גיבוי חד-פעמיים (מחליף קודמים; סיסמה או קוד ראשי + 2FA), מחזיר `{codes[], path, left}` פעם אחת בלבד; `POST /kiosk/recovery/backup/status` → `{left}`. קוד גיבוי מתקבל ב-`/kiosk/disable`, ב-`/kiosk/set-password` (`oldPassword`), ב-`--unlock`, ב-F12 ובהסרה — ונשרף. שירות ההקשחה: `op=set-backup {password, codes:["salt|hash"]}`, ו-`status.backupLeft`; `disable`/`set-password` שורפים קוד גיבוי בעצמם.
 > 3.8.0: `POST /kiosk/recovery/keep {code, mode:"file"|"print"}` — שמירת קוד השחזור לקובץ במסמכים/הדפסה; `/kiosk/status` מחזיר `recoverySaved` ו-`schedule.days`; `/kiosk/settings` מקבל `schedule.days` (מערך 0–6, ריק=כל הימים). `/kiosk/enable` נדחה כל עוד `recoverySaved=false`.
 
@@ -262,3 +265,16 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 | `/pdf/open` | `{ path, handlerId?, page? }` | `{ opened, handlerId, pageHonored }`. נתיב עובר `FxPolicy`; בנעילה רק אם `pdf` ב-`kiosk.allowOpenExtensions`, ותמיד בתוכנת ברירת המחדל |
 
 הערה: בתוכנית "כיוון תפילה" נכתב `GET /location`. בגשר כל הבקשות (חוץ מ-`/health`) הן POST עם צימוד, ולכן המימוש הוא `POST /location`.
+
+## 1.0.2 (20.10.2026)
+| נקודת קצה | גוף | תשובה |
+|---|---|---|
+| `/pdf/assoc/status` | `{}` | `{ registered, isDefault, command }` |
+| `/pdf/assoc/register` / `unregister` | `{}` | כמו status. נרשם אוטומטית בעלייה אלא אם `pdf.assoc=false` |
+| `/pdf/assoc/open-settings` | `{}` | פותח `ms-settings:defaultapps` |
+| `/pdf/inbox/list` | `{}` | `{ items: [{ id, path, name, size, at, source }] }` (תוקף 10 דק', אחרי FxPolicy) |
+| `/pdf/inbox/ack` | `{ ids }` | `{ removed }` |
+| `/pdf/engines` | `{}` | `{ engines: [{id,name,path,ops}], ops }` — ghostscript, qpdf, mutool, pdftk, poppler, libreoffice, word |
+| `/pdf/op/begin` → `chunk {id,data}` → `run {id,op,params}` → `read {id,offset}` → `end {id}` | | `run` מקבל `engine`. פעולות: compress {level}, grayscale, pdfa, repair, protect, unlock, linearize, pdf2png (ZIP), totext, office2pdf {ext} |
+| `/sys/compass` (וגם `/compass`) | `{}` | `{ available, headingTrue, headingMagnetic, accuracy, time }` — רק במכשיר עם חיישן מצפן |
+שורת פקודה: `OtzariaBridge.exe --open-pdf "<path>"` (שם הקובץ בתור, פותח את אוצריא בתוסף הצופה).
