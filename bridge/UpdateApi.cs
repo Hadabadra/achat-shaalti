@@ -89,6 +89,19 @@ public static class UpdateApi
 
             // מועמד יחיד: ה-Release האחרון (latest=true) בפורק האישי, לא "הכי גבוה לפי תגית" - כי
             // התגית כאן היא מספור עצמאי (RELEASE_VERSION.txt), לא גרסת הגשר, ולכן לא בר-השוואה כסדר.
+            string latestTag = null;
+            try
+            {
+                using var lreq = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/" + Repo + "/releases/latest");
+                lreq.Headers.Accept.ParseAdd("application/vnd.github+json");
+                using var lres = await Http.SendAsync(lreq);
+                if (lres.IsSuccessStatusCode)
+                    using (var ld = JsonDocument.Parse(await lres.Content.ReadAsStringAsync()))
+                        if (ld.RootElement.TryGetProperty("tag_name", out var lt)) latestTag = lt.GetString();
+            }
+            catch { /* בלי latest — נופלים לחדש ביותר לפי זמן */ }
+            if (latestTag != null && !json.Contains("\"" + latestTag + "\"")) latestTag = null;
+
             // 1.0.4: רשימת ה-Releases של GitHub אינה כוללת שדה "latest", והסדר לפי זמן יצירה —
             // Release עזר (bridge-min, build-next) שנוצר באותה שנייה הגיע לפעמים ראשון, בלי OtzariaBridge.exe,
             // והעדכון נכשל. עכשיו: רק Release עם OtzariaBridge.exe ותגית גרסה, והגבוה מביניהם.
@@ -115,7 +128,9 @@ public static class UpdateApi
                             if (string.Equals(name, BridgeVersionAssetName, StringComparison.OrdinalIgnoreCase)) bv = dl;
                         }
                     if (ex == null) continue;
-                    if (bestV != null && tv <= bestV) continue;
+                    // 1.0.5: ה-Release שמסומן ב-GitHub כ-latest קובע; אחרת החדש ביותר לפי זמן (הרשימה ממוינת מהחדש לישן).
+                    // לא לפי המספר הגבוה — בריפו יש Releases ישנים ממספור קודם (3.x) שאינם חדשים יותר.
+                    if (latestTag != null ? !string.Equals(tag, latestTag, StringComparison.OrdinalIgnoreCase) : bestV != null) continue;
                     bestV = tv; bestTag = tag; exeUrl = ex; sumsUrl = su; bridgeVerUrl = bv;
                     bestUrl = rel.TryGetProperty("html_url", out var u) ? u.GetString() : null;
                     notes = rel.TryGetProperty("body", out var bd) ? bd.GetString() : null;
