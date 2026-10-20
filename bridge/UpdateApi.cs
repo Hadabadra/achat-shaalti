@@ -89,7 +89,11 @@ public static class UpdateApi
 
             // מועמד יחיד: ה-Release האחרון (latest=true) בפורק האישי, לא "הכי גבוה לפי תגית" - כי
             // התגית כאן היא מספור עצמאי (RELEASE_VERSION.txt), לא גרסת הגשר, ולכן לא בר-השוואה כסדר.
+            // 1.0.4: רשימת ה-Releases של GitHub אינה כוללת שדה "latest", והסדר לפי זמן יצירה —
+            // Release עזר (bridge-min, build-next) שנוצר באותה שנייה הגיע לפעמים ראשון, בלי OtzariaBridge.exe,
+            // והעדכון נכשל. עכשיו: רק Release עם OtzariaBridge.exe ותגית גרסה, והגבוה מביניהם.
             string bestTag = null, bestUrl = null, exeUrl = null, sumsUrl = null, bridgeVerUrl = null, notes = null;
+            Version bestV = null;
             using (var doc = JsonDocument.Parse(json))
             {
                 foreach (var rel in doc.RootElement.EnumerateArray())
@@ -98,22 +102,23 @@ public static class UpdateApi
                     if (tag == null) continue;
                     if (rel.TryGetProperty("draft", out var d) && d.GetBoolean()) continue;
                     if (rel.TryGetProperty("prerelease", out var p) && p.GetBoolean()) continue;
-                    bool isLatest = rel.TryGetProperty("latest", out var l) && l.GetBoolean();
-                    if (!isLatest && bestTag != null) continue; // כבר נמצא Release מסומן "latest" - עדיף עליו
-                    bestTag = tag;
-                    bestUrl = rel.TryGetProperty("html_url", out var u) ? u.GetString() : null;
-                    notes = rel.TryGetProperty("body", out var bd) ? bd.GetString() : null;
-                    exeUrl = sumsUrl = bridgeVerUrl = null;
+                    var tv = Regex.IsMatch(tag, @"^[vV]?\d+\.\d+") ? Parse(tag) : null;
+                    if (tv == null) continue;
+                    string ex = null, su = null, bv = null;
                     if (rel.TryGetProperty("assets", out var assets))
                         foreach (var a in assets.EnumerateArray())
                         {
                             string name = a.GetProperty("name").GetString();
                             string dl = a.GetProperty("browser_download_url").GetString();
-                            if (string.Equals(name, "OtzariaBridge.exe", StringComparison.OrdinalIgnoreCase)) exeUrl = dl;
-                            if (string.Equals(name, "SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase)) sumsUrl = dl;
-                            if (string.Equals(name, BridgeVersionAssetName, StringComparison.OrdinalIgnoreCase)) bridgeVerUrl = dl;
+                            if (string.Equals(name, "OtzariaBridge.exe", StringComparison.OrdinalIgnoreCase)) ex = dl;
+                            if (string.Equals(name, "SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase)) su = dl;
+                            if (string.Equals(name, BridgeVersionAssetName, StringComparison.OrdinalIgnoreCase)) bv = dl;
                         }
-                    if (isLatest) break;
+                    if (ex == null) continue;
+                    if (bestV != null && tv <= bestV) continue;
+                    bestV = tv; bestTag = tag; exeUrl = ex; sumsUrl = su; bridgeVerUrl = bv;
+                    bestUrl = rel.TryGetProperty("html_url", out var u) ? u.GetString() : null;
+                    notes = rel.TryGetProperty("body", out var bd) ? bd.GetString() : null;
                 }
             }
 

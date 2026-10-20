@@ -533,7 +533,7 @@
   mockRoutes['/kiosk/hard/status'] = function () { return clone(M.hard); };
   mockRoutes['/kiosk/hard/install'] = function (b) {
     checkPw(b.password, false);
-    M.hard = { installed: true, running: true, configured: true, active: M.kiosk.active, blockUsbStorage: false, version: '1.0.3', needsUpdate: false, sessions: 1 };
+    M.hard = { installed: true, running: true, configured: true, active: M.kiosk.active, blockUsbStorage: false, version: '1.0.4', needsUpdate: false, sessions: 1 };
     return clone(M.hard);
   };
   mockRoutes['/kiosk/hard/settings'] = function (b) { checkPw(b.password, false); M.hard.blockUsbStorage = !!b.blockUsbStorage; return clone(M.hard); };
@@ -580,7 +580,7 @@
     return { vendor: M.bios.vendor, manufacturer: M.bios.manufacturer, model: M.bios.model, steps: steps };
   };
   mockRoutes['/sys/update-check'] = function () {
-    return { current: '1.0.3', latest: '1.0.3', newer: false, canInstall: false, url: 'https://github.com/Hadabadra/achat-shaalti/releases/latest' };
+    return { current: '1.0.4', latest: '1.0.4', newer: false, canInstall: false, url: 'https://github.com/Hadabadra/achat-shaalti/releases/latest' };
   };
   mockRoutes['/sys/update-install'] = function () { return { started: false, message: 'הגשר מעודכן (1.0.3)' }; };
 
@@ -589,7 +589,7 @@
     async probe() {
       await delay(250);
       if (/[?&]offline=1/.test(location.search)) return null;
-      return { name: 'otzaria-bridge', version: '1.0.3', port: 47917, auth: 'token', paired: true, kioskActive: M.kiosk.active, platform: 'windows' };
+      return { name: 'otzaria-bridge', version: '1.0.4', port: 47917, auth: 'token', paired: true, kioskActive: M.kiosk.active, platform: 'windows' };
     },
     async call(path, body) {
       await delay(180);
