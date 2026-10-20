@@ -672,7 +672,7 @@ public static class FsApi
         // החלון מאפשר לדפדף לכל תוכנה במחשב, ולכן שם נשארת הפתיחה בתוכנת ברירת המחדל בלבד.
         if (b.Has("openWith") && b.Bool("openWith") && File.Exists(path) && !Kiosk.IsActive && !FxPolicy.IsRestricted)
         {
-            Process.Start(new ProcessStartInfo("rundll32.exe", "shell32.dll,OpenAs_RunDLL " + path) { UseShellExecute = false });
+            PdfAssoc.ShowOpenWith(path);
             return new { opened = true, chooser = true };
         }
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });

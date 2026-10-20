@@ -680,7 +680,7 @@
     'תוספים מחוברים': 'Paired plugins',
     'אין תוספים מחוברים': 'No paired plugins',
     'תוספים מחוברים לגשר': 'Plugins paired with the bridge',
-    'מגרסה 3.0 רק תוסף שאושר בחלון של הגשר יכול להשתמש בו. תוכנה אחרת במחשב לא יכולה לגשת לקבצים ולהגדרות בלי אישור כזה.': 'Since version 3.0 only a plugin approved in the bridge\'s window can use it. Other software on the computer can\'t access files and settings without such approval.',
+    'רק תוסף שאושר בחלון של הגשר יכול להשתמש בו. תוכנה אחרת במחשב לא יכולה לגשת לקבצים ולהגדרות בלי אישור כזה.': 'Only a plugin approved in the bridge\'s window can use it. Other software on the computer can\'t access files and settings without such approval.',
     'פרטים נוספים (': 'More details (',
     'אין תוספים מחוברים.': 'No paired plugins.',
     'רואים כפילות (אותו שם פעמיים)? כנראה חיבור ישן משארית התקנה קודמת - אפשר לנתק אותו בבטחה, השני ימשיך לעבוד.': 'See a duplicate (same name twice)? It\'s probably an old pairing left from a previous install — you can safely unpair it; the other one keeps working.',

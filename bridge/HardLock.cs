@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
@@ -56,7 +55,8 @@ public static class HardLock
             var r = new StreamReader(pipe, Encoding.UTF8);
             w.WriteLine(req.ToJsonString());
             var readTask = r.ReadLineAsync();
-            // #104: אחרי timeout הצינור נסגר והקריאה נכשלת ברקע — לצפות בחריגה כדי שלא תדווח כ-UnobservedTaskException
+            // #83-#92: בפסק זמן הצינור נסגר (using) והקריאה נכשלת אחר כך ב-ObjectDisposedException שאיש לא צופה בה —
+            // מסמנים אותה כנצפית כדי שלא תדווח כ-task-error
             _ = readTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
             // בעיה #14 סעיף 2: רצפת המתנה קשיחה, לא 15ש' שחוסמות חוט HTTP גם כשנדרש timeout קצר בהרבה
             if (!readTask.Wait(Math.Max(timeoutMs, 3000))) return null;

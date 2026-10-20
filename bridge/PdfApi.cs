@@ -56,11 +56,19 @@ internal static class PdfApi
                 "AcroRd32.exe", Path.Combine(pf86, "Adobe", "Acrobat Reader DC", "Reader", "AcroRd32.exe"), Path.Combine(pf, "Adobe", "Acrobat Reader DC", "Reader", "AcroRd32.exe"));
         Add("foxit", "Foxit PDF Reader", "viewer", new[] { "open" },
             "FoxitPDFReader.exe", Path.Combine(pf86, "Foxit Software", "Foxit PDF Reader", "FoxitPDFReader.exe"), Path.Combine(pf, "Foxit Software", "Foxit PDF Reader", "FoxitPDFReader.exe"));
+        // 1.0.2: עוד תוכנות PDF נפוצות — כל מה שמותקן מופיע ב"פתיחה בתוכנה אחרת"
+        Add("pdfxchange", "PDF-XChange Editor", "editor", new[] { "open" },
+            "PDFXEdit.exe", Path.Combine(pf, "Tracker Software", "PDF Editor", "PDFXEdit.exe"));
+        Add("nitro", "Nitro PDF", "editor", new[] { "open" }, "NitroPDF.exe", Path.Combine(pf, "Nitro", "PDF Pro", "14", "NitroPDF.exe"));
+        Add("pdf24", "PDF24", "tool", new[] { "open" }, Path.Combine(pf, "PDF24", "pdf24-Toolbox.exe"), Path.Combine(pf, "PDF24", "pdf24.exe"));
+        Add("pdfsam", "PDFsam", "tool", new[] { "open" }, Path.Combine(pf, "PDFsam Basic", "pdfsam.exe"));
+        Add("edge", "Microsoft Edge", "viewer", new[] { "open" }, "msedge.exe", Path.Combine(pf86, "Microsoft", "Edge", "Application", "msedge.exe"));
+        Add("wps", "WPS PDF", "editor", new[] { "open" }, Path.Combine(la, "Kingsoft", "WPS Office", "ksolaunch.exe"));
         // כל התוכנות ש-Windows מציע ב"פתח באמצעות" (ABBYY, PDF-XChange, LibreOffice, אפליקציות Store ועוד)
         try
         {
             var known = new HashSet<string>(list.Where(h => h.Exe != null).Select(h => Path.GetFileName(h.Exe).ToLowerInvariant()));
-            foreach (var (id, name) in PdfAssoc.Sta(() => PdfAssoc.Enumerate(".pdf").Select(i => (i.Id, i.Name)).ToList()))
+            foreach (var (id, name) in PdfOpenWith.Sta(() => PdfOpenWith.Enumerate(".pdf").Select(i => (i.Id, i.Name)).ToList()))
             {
                 string file = Path.GetFileName(id.Substring(6));
                 if (known.Contains(file) || list.Any(h => h.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
@@ -127,14 +135,12 @@ internal static class PdfApi
         else if (h.Id == "windows-chooser")
         {
             if (FxPolicy.IsRestricted) throw FxPolicy.Outside("במצב מוגבל אי אפשר לבחור תוכנה");
-            var psi = new ProcessStartInfo("rundll32.exe") { UseShellExecute = false };
-            psi.ArgumentList.Add("shell32.dll,OpenAs_RunDLL"); psi.ArgumentList.Add(path);
-            Process.Start(psi);
+            PdfAssoc.ShowOpenWith(path); // חלון שנשאר בחזית (במקום rundll32 שנעלם)
         }
         else if (h.Id.StartsWith("assoc:"))
         {
             if (FxPolicy.IsRestricted) throw FxPolicy.Outside("במצב מוגבל אי אפשר לבחור תוכנה");
-            if (!PdfAssoc.Sta(() => PdfAssoc.Open(".pdf", h.Id, path))) throw new BridgeException("open_failed", "הפתיחה בתוכנה שנבחרה נכשלה", 500);
+            if (!PdfOpenWith.Sta(() => PdfOpenWith.Open(".pdf", h.Id, path))) throw new BridgeException("open_failed", "הפתיחה בתוכנה שנבחרה נכשלה", 500);
         }
         else
         {

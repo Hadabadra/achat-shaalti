@@ -619,7 +619,7 @@
       ? '<span class="chip ok">' + ui.icon('check') + pairs.length + ' תוספים מחוברים</span>'
       : '<span class="chip warn">' + ui.icon('warning') + 'אין תוספים מחוברים</span>';
     return '<div class="card"><div class="card-title">תוספים מחוברים לגשר</div>' +
-      '<p class="muted">מגרסה 3.0 רק תוסף שאושר בחלון של הגשר יכול להשתמש בו. תוכנה אחרת במחשב לא יכולה לגשת לקבצים ולהגדרות בלי אישור כזה.</p>' +
+      '<p class="muted">רק תוסף שאושר בחלון של הגשר יכול להשתמש בו. תוכנה אחרת במחשב לא יכולה לגשת לקבצים ולהגדרות בלי אישור כזה.</p>' +
       status +
       '<details class="more-details"><summary>פרטים נוספים (' + pairs.length + ')</summary><div class="more-details-body">' +
       (rows || '<p class="muted">אין תוספים מחוברים.</p>') +

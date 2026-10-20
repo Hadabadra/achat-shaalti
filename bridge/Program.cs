@@ -85,6 +85,9 @@ public static class Program
             // לפני הכול: אם אין נעילה פעילה — שולחן העבודה חייב לעלות (בעיה #8)
             Kiosk.BootGuard();
 
+            // "פתח באמצעות ← צופה PDF+OCR": הקובץ נכנס לתור ואוצריא נפתחת בתוסף; אם הגשר כבר רץ — יוצאים, אחרת ממשיכים לעלות כרגיל
+            if (Has("--open-pdf")) PdfAssoc.Enqueue(Arg("--open-pdf"));
+
             using var mutex = new Mutex(true, @"Local\OtzariaBridge", out bool first);
             if (!first) return 0;
             Installer.CleanupOldExe();

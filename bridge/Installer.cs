@@ -212,6 +212,7 @@ public static class Installer
 
         StopOtherInstances();
         using (var k = Registry.CurrentUser.OpenSubKey(RunKey, true)) k?.DeleteValue(RunValue, false);
+        PdfAssoc.Remove(); // "פתח באמצעות"
         try { if (File.Exists(ShortcutPath)) File.Delete(ShortcutPath); } catch { }
 
         if (IsRunningFromInstallDir())
