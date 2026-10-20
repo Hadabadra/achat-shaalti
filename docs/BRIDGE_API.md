@@ -1,6 +1,6 @@
 # תוכנת חסימת אוצריא (Otzaria Blocking Software) — חוזה API v1
 
-> ⚠️ **מצב (20.10.2026):** המסמך מתאר גם את גשר 1.0.2, שעדיין **לא שוחרר**. הקוד שלו נמצא בענף `next`. כל מה שמסומן 1.0.2 (פתח באמצעות, `/pdf/op/*`, `/pdf/engines`, `/sys/compass`) אינו זמין בגרסה המותקנת 1.0.1.
+> ⚠️ **מצב (20.10.2026):** המסמך מתאר גם את גשר 1.0.2, שעדיין **לא שוחרר**. הקוד שלו נמצא בענף `bridge-1.0.2`. כל מה שמסומן 1.0.2 (פתח באמצעות, `/pdf/op/*`, `/pdf/engines`, `/sys/compass`) אינו זמין בגרסה המותקנת 1.0.1.
 
 
 > #69 (next): `POST /kiosk/recovery/backup {password, mode:"file"|"print"|"none"}` — יוצר 10 קודי גיבוי חד-פעמיים (מחליף קודמים; סיסמה או קוד ראשי + 2FA), מחזיר `{codes[], path, left}` פעם אחת בלבד; `POST /kiosk/recovery/backup/status` → `{left}`. קוד גיבוי מתקבל ב-`/kiosk/disable`, ב-`/kiosk/set-password` (`oldPassword`), ב-`--unlock`, ב-F12 ובהסרה — ונשרף. שירות ההקשחה: `op=set-backup {password, codes:["salt|hash"]}`, ו-`status.backupLeft`; `disable`/`set-password` שורפים קוד גיבוי בעצמם.
