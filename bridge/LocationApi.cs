@@ -64,6 +64,10 @@ internal static class LocationApi
                     _ => "unknown",
                 },
                 time = c.Timestamp.ToString("o"),
+                // #105: רק במחשב עם GPS; אחרת null (גובה במטרים, כיוון תנועה במעלות מהצפון האמיתי, מהירות במ׳/ש׳)
+                altitude = c.Point.Position.Altitude is double alt && alt != 0 ? Math.Round(alt, 1) : (double?)null,
+                heading = c.Heading is double hd && !double.IsNaN(hd) ? Math.Round(hd, 1) : (double?)null,
+                speed = c.Speed is double sp && !double.IsNaN(sp) ? Math.Round(sp, 2) : (double?)null,
             };
         }
         catch (UnauthorizedAccessException) { throw new BridgeException("location_off", HowTo, 403); }

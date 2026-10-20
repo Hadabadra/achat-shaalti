@@ -255,7 +255,7 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 
 | נתיב | גוף | תשובה |
 |---|---|---|
-| `/sys/location` (וגם `/location`) | `{ maxAgeSec?: 600, timeoutSec?: 15 }` | `{ lat, lon, accuracy, source: "gnss"\|"wifi"\|"cellular"\|"ip"\|"default"\|"unknown", time }`. מיקום כבוי או חסום → `location_off` (403) עם הסבר איך להפעיל; לא התקבל בזמן → `location_timeout` (504) |
+| `/sys/location` (וגם `/location`) | `{ maxAgeSec?: 600, timeoutSec?: 15 }` | `{ lat, lon, accuracy, source: "gnss"\|"wifi"\|"cellular"\|"ip"\|"default"\|"unknown", time, altitude?, heading?, speed? }` (שלושת האחרונים רק עם GPS, אחרת null — מהשחרור הבא). מיקום כבוי או חסום → `location_off` (403) עם הסבר איך להפעיל; לא התקבל בזמן → `location_timeout` (504) |
 | `/sys/location/settings` | `{}` | פותח את הגדרות המיקום של Windows (`ms-settings:privacy-location`) |
 | `/feedback` | `{ text, plugin, version, repo?, title?, kind? }` | `{ queued: true }`. כינוי ל-`/sys/feedback`: נכנס לתור ונשלח למתווך `achat-relay` |
 | `/pdf/handlers` | `{ force? }` | `{ defaultId, handlers: [{ id, name, kind, exists, isDefault, capabilities }] }`. מזהים: `windows-default`, `windows-chooser`, `sumatra`, `acrobat`/`acrobat-reader`, `foxit` |

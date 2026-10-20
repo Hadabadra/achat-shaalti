@@ -10,6 +10,7 @@
 - גשר: רשימת "פתח באמצעות" ל-PDF מגיעה מ-Windows (SHAssocEnumHandlers) וכוללת את כל התוכנות הרשומות, גם אפליקציות Store.
 - הגדרות מערכת: מתג ראשי "שומר מסך" (`kiosk.saverEnabled`) שמכבה/מדליק את שומר המסך כולו.
 - **גשר מינימלי לצופה PDF+OCR** (תיקייה `bridge-min/`, קוד של arye000001-boop, MIT): גשר קטן רק ל-OCR, קבצים וצימוד. הורדה קבועה: https://github.com/Hadabadra/achat-shaalti/releases/download/bridge-min/OtzariaBridgeMin.exe (וגרסה קלה `OtzariaBridgeMin-light.exe`).
+- גשר: `/sys/location` מחזיר גם `altitude`, `heading`, `speed` כשיש GPS במחשב (אחרת `null`) — #105.
 - כולל את כל מה ששוחרר ב-1.0.2 (מוזג ל-next). טרם נבדק ב-Windows.
 
 ## 1.0.2 — 20.10.2026

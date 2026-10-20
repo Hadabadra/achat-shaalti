@@ -7,7 +7,7 @@
 - ✅ גשר מינימלי `bridge-min/` (מהמאגר arye000001-boop/-PDF) עם workflow `bridge-min.yml`, שמעדכן את המהדורה הקבועה `bridge-min` בכל דחיפה ל-main.
 - ✅ issues #81–#104 (דיווחים אוטומטיים) נסגרו.
 - ⏳ לא הוכנסו (אופציונלי, #32): ענפי יאיר `harden-fs-protected-write`, `kiosk-posture-warnings`, `kiosk-runtime-hardening` מ-11.10.
-- ⏳ פתוח: #105 (מיקום מ-Windows לתוספים).
+- ✅ #105: גובה, כיוון ומהירות ב-`/sys/location` (נכנס מ-main).
 
 ## לעתיד: SDK אוצריא 0.9.99 (נבדק 14.10.2026 בענף dev, טרם שוחרר — לממש רק אחרי שחרור הגרסה)
 - **כפתור בשדה החיפוש** (`search.field_actions`: `search.setFieldText`, `search.setFieldActionState`, `search.endFieldSession`). התוסף מוסיף כפתור בשדה החיפוש של אוצריא וכותב לתוכו טקסט. רעיון: "הקלד מהמסך/מתמונה" — המשתמש מסמן אזור על המסך, וה-OCR המהיר בגשר (`/oneocr/*`) ממלא את החיפוש. מתאים גם ל"עינים למקרא".
