@@ -49,3 +49,6 @@ build לגשר (/opt/dn8/dotnet, ר' KNOWLEDGE); commit+push ל-next; fast-forwa
 - CSS רק עם טוקנים ו-em; כל timeoutMs ל-fetchStream ≤ 120000.
 - בסוף: לעדכן ROADMAP (מה בוצע/נשאר), לדחוף ל-next, וסיכום של 3 שורות.
 ```
+
+## מצב 20.10.2026
+1.0.3 נארז מ-next (כולל 1.0.2, "פתח באמצעות" מ-Windows, מתג שומר מסך, גשר מינימלי `bridge-min/`). הפרטים ב-docs/ROADMAP.md, בסעיף "שוחרר ב-1.0.3". פתוח: #105, ענפי ההקשחה של יאיר (#32), בדיקה ב-Windows.

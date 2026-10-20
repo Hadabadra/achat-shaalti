@@ -6,9 +6,11 @@
 ---
 
 
-## לא שוחרר
+## 1.0.3 — 20.10.2026
 - גשר: רשימת "פתח באמצעות" ל-PDF מגיעה מ-Windows (SHAssocEnumHandlers) וכוללת את כל התוכנות הרשומות, גם אפליקציות Store.
 - הגדרות מערכת: מתג ראשי "שומר מסך" (`kiosk.saverEnabled`) שמכבה/מדליק את שומר המסך כולו.
+- **גשר מינימלי לצופה PDF+OCR** (תיקייה `bridge-min/`, קוד של arye000001-boop, MIT): גשר קטן רק ל-OCR, קבצים וצימוד. הורדה קבועה: https://github.com/Hadabadra/achat-shaalti/releases/download/bridge-min/OtzariaBridgeMin.exe (וגרסה קלה `OtzariaBridgeMin-light.exe`).
+- כולל את כל מה ששוחרר ב-1.0.2 (מוזג ל-next). טרם נבדק ב-Windows.
 
 ## 1.0.2 — 20.10.2026
 - **"פתח באמצעות" ← צופה PDF+OCR:** הגשר נרשם ב-Windows (HKCU, בלי הרשאות מנהל) כאפשרות פתיחה לקובצי PDF, וגם ב"אפליקציות ברירת מחדל". בחירה בו פותחת את אוצריא ישירות בתוסף "צופה PDF+OCR" עם הקובץ, עם כל יכולות התוסף. נקודות קצה: `/pdf/assoc/status|register|unregister|open-settings`, `/pdf/inbox/list|ack`; שורת פקודה `--open-pdf "<path>"`. הרישום מוסר בהסרת הגשר.

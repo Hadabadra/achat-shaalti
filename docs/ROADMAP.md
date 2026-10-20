@@ -1,8 +1,13 @@
 # תוכנית המשך — כלי מערכת לאוצריא
 
-## בוצע ב-next (20.10.2026) — ייכנס באריזה הבאה
+## שוחרר ב-1.0.3 (20.10.2026)
 - ✅ "פתח באמצעות" ל-PDF: הרשימה נלקחת מ-Windows (SHAssocEnumHandlers), כולל אפליקציות Store.
 - ✅ מתג ראשי "שומר מסך" (`kiosk.saverEnabled`) בהגדרות מערכת.
+- ✅ 1.0.2 (שוחרר מענף צדדי) מוזג ל-next. רשימת "פתח באמצעות" מ-Windows עברה ל-`bridge/PdfOpenWith.cs`, ו-`PdfAssoc.cs` של 1.0.2 (רישום הגשר כ"פתח באמצעות") נשאר.
+- ✅ גשר מינימלי `bridge-min/` (מהמאגר arye000001-boop/-PDF) עם workflow `bridge-min.yml`, שמעדכן את המהדורה הקבועה `bridge-min` בכל דחיפה ל-main.
+- ✅ issues #81–#104 (דיווחים אוטומטיים) נסגרו.
+- ⏳ לא הוכנסו (אופציונלי, #32): ענפי יאיר `harden-fs-protected-write`, `kiosk-posture-warnings`, `kiosk-runtime-hardening` מ-11.10.
+- ⏳ פתוח: #105 (מיקום מ-Windows לתוספים).
 
 ## לעתיד: SDK אוצריא 0.9.99 (נבדק 14.10.2026 בענף dev, טרם שוחרר — לממש רק אחרי שחרור הגרסה)
 - **כפתור בשדה החיפוש** (`search.field_actions`: `search.setFieldText`, `search.setFieldActionState`, `search.endFieldSession`). התוסף מוסיף כפתור בשדה החיפוש של אוצריא וכותב לתוכו טקסט. רעיון: "הקלד מהמסך/מתמונה" — המשתמש מסמן אזור על המסך, וה-OCR המהיר בגשר (`/oneocr/*`) ממלא את החיפוש. מתאים גם ל"עינים למקרא".
