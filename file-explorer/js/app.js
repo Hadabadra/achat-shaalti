@@ -5,7 +5,7 @@
   var ui = window.SS.ui;
   FX.ui = ui;
   FX.t = window.I18N ? window.I18N.t : function (x) { return x; };
-  FX.VERSION = '1.0.3';
+  FX.VERSION = '1.0.4';
   FX.CHANGELOG_URL = 'https://github.com/Hadabadra/achat-shaalti/blob/main/CHANGELOG.md';
   FX.BRIDGE_URL = 'https://github.com/Hadabadra/achat-shaalti/releases/latest';
 
