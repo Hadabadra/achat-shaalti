@@ -28,7 +28,7 @@ public static class Saver
         {
             if (Kiosk.IsActive) { _shownByUs = false; return; } // בנעילה: Kiosk.Watch מנהל את המסך
             if (_shownByUs && !Overlay.RestVisible) _shownByUs = false;
-            if (!Config.Get("kiosk.saverWhenUnlocked", true)) return;
+            if (!Config.Get("kiosk.saverEnabled", true) || !Config.Get("kiosk.saverWhenUnlocked", true)) return;
             int min = Config.Get("kiosk.restIdleMinutes", 1);
             if (min <= 0 || Overlay.RestVisible) return;
             if (Kiosk.IdleMs() < min * 60000L) return;

@@ -56,6 +56,18 @@ internal static class PdfApi
                 "AcroRd32.exe", Path.Combine(pf86, "Adobe", "Acrobat Reader DC", "Reader", "AcroRd32.exe"), Path.Combine(pf, "Adobe", "Acrobat Reader DC", "Reader", "AcroRd32.exe"));
         Add("foxit", "Foxit PDF Reader", "viewer", new[] { "open" },
             "FoxitPDFReader.exe", Path.Combine(pf86, "Foxit Software", "Foxit PDF Reader", "FoxitPDFReader.exe"), Path.Combine(pf, "Foxit Software", "Foxit PDF Reader", "FoxitPDFReader.exe"));
+        // כל התוכנות ש-Windows מציע ב"פתח באמצעות" (ABBYY, PDF-XChange, LibreOffice, אפליקציות Store ועוד)
+        try
+        {
+            var known = new HashSet<string>(list.Where(h => h.Exe != null).Select(h => Path.GetFileName(h.Exe).ToLowerInvariant()));
+            foreach (var (id, name) in PdfAssoc.Sta(() => PdfAssoc.Enumerate(".pdf").Select(i => (i.Id, i.Name)).ToList()))
+            {
+                string file = Path.GetFileName(id.Substring(6));
+                if (known.Contains(file) || list.Any(h => h.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
+                list.Add(new(id, name, "viewer", null, new[] { "open" }));
+            }
+        }
+        catch (Exception ex) { Config.Log("pdf assoc: " + ex.Message); }
         _cache = (DateTime.UtcNow, list);
         return list;
     }
@@ -118,6 +130,11 @@ internal static class PdfApi
             var psi = new ProcessStartInfo("rundll32.exe") { UseShellExecute = false };
             psi.ArgumentList.Add("shell32.dll,OpenAs_RunDLL"); psi.ArgumentList.Add(path);
             Process.Start(psi);
+        }
+        else if (h.Id.StartsWith("assoc:"))
+        {
+            if (FxPolicy.IsRestricted) throw FxPolicy.Outside("במצב מוגבל אי אפשר לבחור תוכנה");
+            if (!PdfAssoc.Sta(() => PdfAssoc.Open(".pdf", h.Id, path))) throw new BridgeException("open_failed", "הפתיחה בתוכנה שנבחרה נכשלה", 500);
         }
         else
         {

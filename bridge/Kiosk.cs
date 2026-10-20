@@ -277,6 +277,7 @@ public static partial class Kiosk
         clockPosition = Config.Get("kiosk.clockPosition", "bottom-left"),
         restScreen = Config.Get("kiosk.restScreen", true),
         restIdleMinutes = Config.Get("kiosk.restIdleMinutes", 1),
+        saverEnabled = Config.Get("kiosk.saverEnabled", true), // מתג ראשי לשומר המסך
         saverWhenUnlocked = Config.Get("kiosk.saverWhenUnlocked", true), // D2
         bootCover = Config.Get("kiosk.bootCover", true), // D3
         restZmanimSide = Config.Get("kiosk.restZmanimSide", "right"),
@@ -848,7 +849,7 @@ public static partial class Kiosk
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
         { string rcv = b.Str("restContent"); if (rcv is "full" or "zmanim" or "clock" or "verse") Config.Set("kiosk.restContent", rcv); }
         foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "barPrograms", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi",
-            "lockScreenImage", "restShowVerse", "restShowClock", "restShowZmanim", "restShowLogo", "restShowDedication" })
+            "lockScreenImage", "restShowVerse", "restShowClock", "restShowZmanim", "restShowLogo", "restShowDedication", "saverEnabled" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restDedicationText")) { string dt = (b.Str("restDedicationText") ?? "").Replace("\r", ""); Config.Set("kiosk.restDedicationText", dt.Length > 400 ? dt[..400] : dt); }
         if (b.Has("restDedicationStyle")) Config.Set("kiosk.restDedicationStyle", b.Str("restDedicationStyle") == "column" ? "column" : "fixed");
@@ -1520,7 +1521,7 @@ public static partial class Kiosk
             // אוצריא ממוזערת: מסך מנוחה עם סמל אוצריא, שעה ותאריך, במקום החזרה מיידית
             // שומר מסך אחרי זמן ללא פעילות (0 = כבוי), גם כשאוצריא פתוחה
             int idleMin = Config.Get("kiosk.restIdleMinutes", 1);
-            if (idleMin > 0 && !Overlay.RestVisible && IdleMs() >= idleMin * 60000L) { Overlay.ShowRest(hwnd, idle: true); return; }
+            if (idleMin > 0 && Config.Get("kiosk.saverEnabled", true) && !Overlay.RestVisible && IdleMs() >= idleMin * 60000L) { Overlay.ShowRest(hwnd, idle: true); return; }
             if (Overlay.RestIdle) return;
             if (IsIconic(hwnd))
             {

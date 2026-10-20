@@ -914,7 +914,8 @@
     cities.forEach(function (c) { cityByName[c.name] = c; });
     var fields = [
       { name: 'rest', type: 'checkbox', label: 'מסך מנוחה כשאוצריא ממוזערת', value: st.restScreen !== false, hint: 'סמל אוצריא, שעה ותאריך במסך מלא. לחיצה בכל מקום מחזירה לאוצריא' },
-      { name: 'idle', label: 'שומר מסך אחרי דקות ללא פעילות (0 = כבוי, ברירת מחדל: 1)', value: String(st.restIdleMinutes || 0), dir: 'ltr', placeholder: '0', hint: 'מסך המנוחה מופיע גם כשאוצריא פתוחה, אחרי הזמן הזה בלי מקלדת ועכבר. עד 240 דקות' },
+      { name: 'saverOn', type: 'checkbox', label: 'שומר מסך', value: st.saverEnabled !== false, hint: 'מתג ראשי. כשהוא כבוי שומר המסך לא מופיע בכלל: לא בנעילה ולא בלעדיה. מסך המנוחה כשאוצריא ממוזערת נשלט בנפרד' },
+      { name: 'idle', label: 'שומר מסך אחרי דקות ללא פעילות (ברירת מחדל: 1)', value: String(st.restIdleMinutes || 0), dir: 'ltr', placeholder: '0', hint: 'מסך המנוחה מופיע גם כשאוצריא פתוחה, אחרי הזמן הזה בלי מקלדת ועכבר. עד 240 דקות' },
       { name: 'saverUnl', type: 'checkbox', label: 'שומר מסך גם כשהנעילה כבויה', value: st.saverWhenUnlocked !== false, hint: 'אחרי זמן ההמתנה שלמעלה, גם בלי מצב נעילה. לחיצה או מקש חוזרים לחלון הקודם' },
       { name: 'bootCover', type: 'checkbox', label: 'מסך מנוחה מיד בהדלקת המחשב (בנעילה), עד שאוצריא עולה', value: st.bootCover !== false, hint: 'נסגר לבד כשאוצריא מוכנה, או אחרי דקה. לחיצה סוגרת אותו מיד' }
     ];
@@ -990,7 +991,7 @@
   };
   SS.screensaverPayload = function (x) {
     return {
-      restScreen: !!x.rest, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi, restShowVerse: !!x.rsVerse, restVerseText: (x.verseText || '').trim(), restShowClock: !!x.rsClock, restShowZmanim: !!x.rsZmanim, restShowLogo: !!x.rsLogo, restShowDedication: !!x.rsDed, restDedicationStyle: x.dedStyle === 'column' ? 'column' : 'fixed', restCandleFlicker: !!x.candleFlicker, restDedicationText: String(x.dedText || '').slice(0, 400), lockScreenImage: !!x.lockImg, restNoteText: String(x.noteText || '').slice(0, 600),
+      restScreen: !!x.rest, saverEnabled: !!x.saverOn, saverWhenUnlocked: !!x.saverUnl, bootCover: !!x.bootCover, restIdleMinutes: +String(x.idle).trim() || 0, restZmanimSide: x.zmSide, showParsha: !!x.parsha, showDafYomi: !!x.dafyomi, restShowVerse: !!x.rsVerse, restVerseText: (x.verseText || '').trim(), restShowClock: !!x.rsClock, restShowZmanim: !!x.rsZmanim, restShowLogo: !!x.rsLogo, restShowDedication: !!x.rsDed, restDedicationStyle: x.dedStyle === 'column' ? 'column' : 'fixed', restCandleFlicker: !!x.candleFlicker, restDedicationText: String(x.dedText || '').slice(0, 400), lockScreenImage: !!x.lockImg, restNoteText: String(x.noteText || '').slice(0, 600),
       zmanimLocation: x.zloc.trim(), zmanimCity: (x.zcity || '').trim(),
       zmanimElevation: +String(x.zelev).trim() || 0, zmanimAlert: ZMAN_FIELDS.filter(function (z) { return x['za_' + z.id]; }).map(function (z) { return z.id; }).join(','), zmanimAlertMinutes: +String(x.zalertmin).trim() || 10, zmanimFallbackEngine: x.zengine,
       zmanimDiaspora: !!x.diaspora, candleLightingMinutes: +String(x.candle).trim() || 0,
