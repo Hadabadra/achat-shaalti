@@ -1,10 +1,10 @@
 {
   "id": "com.chadbedera.systemsettings",
   "name": "הגדרות מערכת",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "כל הגדרות המחשב מתוך אוצריא: מסך, שמע, חשמל, שעה, מקלדת, עכבר, מדפסות, USB, רשת, ומצב נעילה ללימוד. דורש את אחת שאלתי.",
   "author": "חד בדרא, יאיר דניאל",
-  "homepage": "https://github.com/e0548433917-gif/achat-shaalti",
+  "homepage": "https://github.com/Hadabadra/achat-shaalti",
   "schemaVersion": 1,
   "sdkVersion": "1.x",
   "stability": "stable",

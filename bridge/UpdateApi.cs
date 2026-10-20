@@ -13,7 +13,7 @@ namespace OtzariaBridge;
 /// </summary>
 public static class UpdateApi
 {
-    public const string Repo = "e0548433917-gif/achat-shaalti";
+    public const string Repo = "Hadabadra/achat-shaalti";
     public const string ReleasesUrl = "https://github.com/" + Repo + "/releases/latest";
     public const string AllReleasesUrl = "https://github.com/" + Repo + "/releases";
     private const string ApiUrl = "https://api.github.com/repos/" + Repo + "/releases?per_page=20";
