@@ -527,7 +527,7 @@ public static class HardLock
             using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System", true);
             if (k == null) return;
             bool cleared = false;
-            foreach (string name in new[] { "DisableTaskMgr", "DisableRegistryTools" })
+            foreach (string name in new[] { "DisableTaskMgr", "DisableRegistryTools", "DisableLockWorkstation" })
                 if (k.GetValue(name) is int v && v == 1) { k.DeleteValue(name, false); cleared = true; }
             if (cleared) Config.Log("hardlock: מדיניות נעילה יתומה (השירות הוסר בלי SelfUninstall) נוקתה בחשבון הנוכחי");
         }
@@ -1523,7 +1523,7 @@ public class HardLockService : ServiceBase
                 if (active)
                 {
                     using var k = Registry.Users.CreateSubKey(sid + "\\" + PoliciesSub);
-                    foreach (var name in new[] { "DisableTaskMgr", "DisableRegistryTools" })
+                    foreach (var name in new[] { "DisableTaskMgr", "DisableRegistryTools", "DisableLockWorkstation" })
                         if (!(k.GetValue(name) is int v && v == 1)) k.SetValue(name, 1, RegistryValueKind.DWord);
                     if (touched.Add(sid)) changed = true;
                 }
@@ -1532,6 +1532,7 @@ public class HardLockService : ServiceBase
                     using var k = Registry.Users.OpenSubKey(sid + "\\" + PoliciesSub, true);
                     k?.DeleteValue("DisableTaskMgr", false);
                     k?.DeleteValue("DisableRegistryTools", false);
+                    k?.DeleteValue("DisableLockWorkstation", false);
                     touched.Remove(sid);
                     changed = true;
                 }

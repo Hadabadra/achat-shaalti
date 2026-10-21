@@ -1152,6 +1152,9 @@ public static partial class Kiosk
             try
             {
                 using var k = Registry.CurrentUser.CreateSubKey(PoliciesKey);
+                // Ctrl+Alt+Del ← "נעילה" ו-Win+L מובילים למסך הנעילה של Windows, ושם כפתור "נגישות" שמאפשר לצאת מהנעילה
+                // (דיווח בפורום: ילדים פותחים דרכו את המחשב). בזמן הנעילה פעולת הנעילה של Windows מבוטלת; משתחררת עם ביטול הנעילה
+                k.SetValue("DisableLockWorkstation", 1, RegistryValueKind.DWord);
                 if (Config.Get("kiosk.blockTaskManager", true)) { k.SetValue("DisableTaskMgr", 1, RegistryValueKind.DWord); _taskMgrByPolicy = true; }
                 else k.DeleteValue("DisableTaskMgr", false);
             }
@@ -1216,7 +1219,7 @@ public static partial class Kiosk
         // כל מפתח בנפרד: כישלון במדיניות (מפתח נעול) לא ימנע את מחיקת המעטפת, שהיא הקריטית
         try { using var k = Registry.CurrentUser.OpenSubKey(WinlogonKey, true); k?.DeleteValue("Shell", false); }
         catch (Exception ex) { Config.Log("kiosk clear shell: " + ex.Message); }
-        try { using var k = Registry.CurrentUser.OpenSubKey(PoliciesKey, true); k?.DeleteValue("DisableTaskMgr", false); }
+        try { using var k = Registry.CurrentUser.OpenSubKey(PoliciesKey, true); k?.DeleteValue("DisableTaskMgr", false); k?.DeleteValue("DisableLockWorkstation", false); }
         catch (Exception ex) { Config.Log("kiosk clear policy: " + ex.Message); }
         if (ShellPointsToBridge()) Config.Log("kiosk clear: אזהרה — המעטפת עדיין מפנה לגשר");
     }
