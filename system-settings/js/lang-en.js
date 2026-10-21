@@ -94,6 +94,12 @@
     'תשובה לא תקינה מהגשר': 'Invalid response from the bridge',
     'שגיאה לא ידועה': 'Unknown error',
     'אודות': 'About',
+    'הסברים על הנעילה': 'About lock mode',
+    'הקשחה ושחזור': 'Hardening and recovery',
+    'נעילה והגבלה של סייר הקבצים': 'Lock and restrict File Explorer',
+    'לטאב נעילת סייר': 'Go to File Explorer lock',
+    'נעילת הסייר בסיסמת המנהל או הגבלתו לתיקיות מסוימות (למשל שולחן העבודה) — בטאב „נעילת סייר הקבצים” כאן בתוסף': 'Lock the explorer with the admin password or restrict it to certain folders (e.g. the desktop) — in the "File explorer lock" tab here',
+
     'גרסה': 'Version',
     'שליטה בשמע, במסך, בבלוטות׳, ברשת ובהפעלת המחשב — ומצב נעילה שהופך את המחשב לעמדת לימוד באוצריא בלבד.': 'Control sound, display, Bluetooth, network and power — plus a lock mode that turns the computer into an Otzaria-only study station.',
     'התקנת הגשר': 'Installing the bridge',

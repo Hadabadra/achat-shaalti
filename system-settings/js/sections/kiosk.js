@@ -128,20 +128,22 @@
         : '') +
       '</div>';
 
-    html += '<details class="card explain"><summary class="card-title">מה עושה מצב נעילה?</summary><ul class="feature-list">' +
+    /* #136.3: כל ההסברים המתקפלים בריבוע אחד */
+    html += '<div class="card explain-group"><div class="card-title">' + ui.icon('info') + 'הסברים על הנעילה</div>';
+    html += '<details class="explain-sub"><summary>מה עושה מצב נעילה?</summary><ul class="feature-list">' +
       '<li>' + ui.icon('shield') + '<span><b>רק אוצריא פתוחה.</b> אם מישהו סוגר אותה — היא נפתחת מחדש מעצמה ונשארת בחזית.</span></li>' +
       '<li>' + ui.icon('computer') + '<span><b>שורת המשימות ותפריט התחל מוסתרים,</b> כך שאי אפשר לפתוח תוכנות אחרות.</span></li>' +
       '<li>' + ui.icon('key') + '<span><b>מקשי מעבר חסומים:</b> Win, ‏Alt+Tab, ‏Alt+F4, ‏Ctrl+Esc ומנהל המשימות.</span></li>' +
       '<li>' + ui.icon('lock') + '<span><b>יציאה רק עם סיסמה</b> — מכאן, מתוך התוסף. הנעילה חוזרת אוטומטית גם אחרי הפעלה מחדש.</span></li>' +
       '</ul></details>';
 
-    html += '<details class="card explain"><summary class="card-title">מה קורה בכיבוי, בהפעלה מחדש ובחשבון Windows אחר?</summary><ul class="feature-list">' +
+    html += '<details class="explain-sub"><summary>מה קורה בכיבוי, בהפעלה מחדש ובחשבון Windows אחר?</summary><ul class="feature-list">' +
       '<li>' + ui.icon('lock') + '<span><b>כיבוי או הפעלה מחדש:</b> כברירת מחדל הנעילה <b>נשמרת</b>. הגשר עולה עם Windows וננעל שוב, ואוצריא נפתחת. אם רוצים שבכיבוי הנעילה תתאפס, מסמנים "ביטול נעילה בכיבוי המחשב" בהגדרות הנעילה (לא פועל עם נעילה מוקשחת).</span></li>' +
       '<li>' + ui.icon('computer') + '<span><b>חשבון Windows אחר:</b> נעילה רגילה חלה רק בחשבון שבו הופעלה. מחשבון אחר אפשר לעצור את הגשר. <b>נעילה מוקשחת</b> (אופציונלית) מפעילה את הגשר גם בחשבונות אחרים וחוסמת בהם את מנהל המשימות.</span></li>' +
       '<li>' + ui.icon('shield') + '<span><b>הכי בטוח לעמדת לימוד:</b> חשבון Windows <b>רגיל</b> (בלי הרשאות מנהל) ללא גישה להגדרות המחשב, שבו מפעילים את הנעילה; חשבון המנהל נשאר עם סיסמה נפרדת.</span></li>' +
       '<li>' + ui.icon('key') + '<span><b>חירום:</b> קיצור Ctrl+Alt+Shift+F12 פותח חלון קוד שחזור לביטול הנעילה כולה. בלי הקוד אי אפשר לבטל, כדי שלא יהיה קיצור שעוקף את הנעילה.</span></li>' +
       '</ul></details>';
-    html += '<details class="card explain"><summary class="card-title">קיצור חירום לביטול הנעילה</summary><ul class="feature-list">' +
+    html += '<details class="explain-sub"><summary>קיצור חירום לביטול הנעילה</summary><ul class="feature-list">' +
       '<li>' + ui.icon('key') + '<span><b dir="ltr">Ctrl + Alt + Shift + F12</b> — פותח בכל רגע (גם בזמן נעילה) חלון להזנת קוד שחזור או קוד גיבוי חד-פעמי, ומבטל את הנעילה כולה.</span></li>' +
       '<li>' + ui.icon('info') + '<span><b>במחשבים רבים (בעיקר ניידים) צריך ללחוץ גם על מקש Fn</b> — כלומר <b dir="ltr">Fn + Ctrl + Alt + Shift + F12</b> — כי מקשי F משמשים שם כמקשי מדיה (בהירות, עוצמת קול). אם הקיצור לא עובד, נסו עם Fn או כבו את "Fn Lock".</span></li>' +
       '<li>' + ui.icon('lock') + '<span><b>בלי מקלדת תקינה:</b> 7 לחיצות מהירות על השעון בפינת המסך פותחות את אותו חלון.</span></li>' +
@@ -149,13 +151,14 @@
       '</ul></details>';
 
     if ((st.warnings || []).indexOf('admin') >= 0) {
-      html += '<div class="card"><div class="card-title">' + ui.icon('warning') + 'אזהרה: חשבון עם הרשאות מנהל</div>' +
+      html += '<div class="explain-warn"><b>' + ui.icon('warning') + 'אזהרה: חשבון עם הרשאות מנהל</b>' +
         '<p class="muted">המחשב מופעל בחשבון Windows עם הרשאות מנהל, שממנו אפשר לעקוף את הנעילה. ' +
         'מומלץ ליצור חשבון משתמש <b>רגיל (ללא הרשאות מנהל)</b> לעמדת הלימוד, ולהפעיל בו את הנעילה.</p></div>';
     }
 
+
     /* C6: מתקפל */
-    html += '<details class="card subtle explain"><summary class="card-title">זו נעילה "רכה" — להקשחה מלאה</summary>' +
+    html += '<details class="explain-sub"><summary>זו נעילה "רכה" — להקשחה מלאה</summary>' +
       '<p class="muted">הנעילה רצה בהרשאות המשתמש ומונעת שימוש מזדמן. מי שמבין במחשבים יכול לעקוף אותה. ' +
       'כדי שתעמוד גם מול ניסיון מכוון, השלימו שכבות שאינן תלויות בתוכנה:</p>' +
       '<ul class="feature-list">' +
@@ -166,6 +169,7 @@
       '<li>' + ui.icon('computer') + '<span><b>סינון תוכן על המחשב עצמו</b> (למשל נטפרי), ולא רק ברמת הרשת — כך מעבר לרשת אחרת אינו עוקף את הסינון.</span></li>' +
       '<li>' + ui.icon('lock') + '<span><b>Safe Mode:</b> במצב בטוח הגשר אינו עולה והנעילה אינה חלה. סיסמת BIOS שחוסמת את תפריט האתחול סוגרת גם את זה.</span></li>' +
       '</ul></details>';
+    html += '</div>';
 
     if (st.hasPassword && st.recoverySaved === false) {
       html += '<div class="card"><div class="card-title">' + ui.icon('key') + ' קוד השחזור עוד לא נשמר</div>' +
@@ -213,20 +217,22 @@
         ui.esc(st.zmanimCity || (st.zmanimLocation ? 'קואורדינטות מותאמות אישית' : 'לא הוגדר מיקום')) +
         (st.yahrzeitDay ? ' · יום השנה מוגדר' : '') + '</span></div>' +
         '<button class="btn btn-tonal" data-act="settings3">' + ui.icon('clock') + 'לטאב שומר מסך</button></div>' +
+        '<div class="setting-row"><div class="setting-text"><b>נעילה והגבלה של סייר הקבצים</b><span class="muted">נעילת הסייר בסיסמת המנהל או הגבלתו לתיקיות מסוימות (למשל שולחן העבודה) — בטאב „נעילת סייר הקבצים” כאן בתוסף</span></div>' +
+        '<button class="btn btn-tonal" data-act="fx-manage">' + ui.icon('lock') + 'לטאב נעילת סייר</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
         '</div>';
       html += '<div class="card"><div class="card-title">הגדרות נעילה</div><div data-slot="kset">' + ui.loading('טוען הגדרות…') + '</div></div>';
       /* #60: הרשימה המלאה עברה לטאב "תוכנות תורניות" */
       html += '<div class="card"><div class="card-title">תוכנות מותרות לפתיחה</div><div class="setting-row"><div class="setting-text"><span class="muted">' + progs.length + ' תוכנות מותרות' + (st.autoTorah ? ' · זיהוי אוטומטי פעיל' : '') + '</span></div>' +
         '<button class="btn btn-tonal" data-act="prog-manage">' + ui.icon('computer') + 'ניהול בטאב „תוכנות לימוד”</button></div></div>';
-      html += fxCard();
-      html += hardCard(st.hard || {});
-      html += biosCard(bios);
       html += pairCard(pairs || [], !!pairs);
-      html += '<div class="card subtle"><div class="card-title">שכחתם את הסיסמה?</div>' +
+      /* #136.4: כרטיסי המידע (נעילה מוקשחת, BIOS, שכחתם סיסמה) בריבוע אחד */
+      html += '<div class="card info-group"><div class="card-title">' + ui.icon('shield') + 'הקשחה ושחזור</div>' +
+        infoSub(hardCard(st.hard || {})) + infoSub(biosCard(bios)) +
+        '<div class="info-sub"><div class="info-sub-title">שכחתם את הסיסמה?</div>' +
         '<p class="muted">בחלון „ביטול נעילה” אפשר להקליד גם את <b>קוד השחזור</b> שקיבלתם בהגדרת הסיסמה. במקרה חירום אפשר להריץ משורת הפקודה:</p>' +
         '<code class="cmd" dir="ltr">OtzariaBridge.exe --unlock &lt;קוד-שחזור&gt;</code>' +
-        '<p class="muted small">אפשרות נוספת: הפעלה ב-Safe Mode, שבו הגשר אינו עולה והנעילה אינה חלה.</p></div>';
+        '<p class="muted small">אפשרות נוספת: הפעלה ב-Safe Mode, שבו הגשר אינו עולה והנעילה אינה חלה.</p></div></div>';
     }
 
     body.innerHTML = html;
@@ -275,6 +281,7 @@
     editSettings(body, st); /* הגדרות הנעילה מוצגות ישירות בעמוד, לא מאחורי כפתור */
     on('settings3', function () { SS.show('screensaver'); });
     on('prog-manage', function () { SS.show('programs'); });
+    on('fx-manage', function () { SS.show('fxpolicy'); });
     on('prog-add', function () { addProgram(body, {}); });
     found.forEach(function (f, i) {
       on('prog-found-' + i, function () { addProgram(body, f); });
@@ -1218,10 +1225,10 @@
     if (ok) { ui.toast('ההגדרות נשמרו', 'success'); if (SS.pushZmanimNow) SS.pushZmanimNow(); if (SS.pushLockCalendar) SS.pushLockCalendar(); load(body); }
   }
 
-  /* מדיניות סייר הקבצים נערכת בתוסף "סייר קבצים" עצמו; כאן רק מפנים אליה */
-  function fxCard() {
-    return '<div class="card subtle"><div class="card-title">נעילה והגבלה של סייר הקבצים</div>' +
-      '<p class="muted">אפשר לנעול את סייר הקבצים בסיסמת המנהל, או להגביל אותו לתיקיות מסוימות (למשל שולחן העבודה). ההגדרה נמצאת בתוסף „סייר קבצים”: הגדרות ← נעילה והגבלה, ונאכפת בגשר.</p></div>';
+  /* #136.4: כרטיס עצמאי -> תת-חלק בתוך ריבוע המידע המשותף */
+  function infoSub(h) {
+    if (!h) return '';
+    return h.replace(/class="card( subtle)?"/g, 'class="info-sub"').replace(/class="card-title"/g, 'class="info-sub-title"');
   }
 
   document.addEventListener('input', function (e) {

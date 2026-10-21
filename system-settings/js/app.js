@@ -415,6 +415,8 @@
     var lb = document.getElementById('top-lang');
     lb.textContent = window.I18N.toggleLabel();
     lb.addEventListener('click', function () { window.I18N.toggle(); });
+    var ab = document.getElementById('top-about');
+    if (ab) { ab.innerHTML = ui.icon('info'); ab.addEventListener('click', function () { show('about'); }); }
     var fb = document.getElementById('top-feedback');
     fb.innerHTML = window.Feedback.ICON;
     fb.addEventListener('click', function () {

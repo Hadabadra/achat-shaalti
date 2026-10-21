@@ -1623,7 +1623,9 @@
       savePrefs(); refresh();
     });
     $('fx-add-folder').addEventListener('click', addFolder);
-    $('fx-settings').addEventListener('click', settingsDialog);
+    $('fx-settings').addEventListener('click', function () { settingsDialog(); });
+    $('fx-about').innerHTML = ic('info');
+    $('fx-about').addEventListener('click', function () { settingsDialog('about'); });
     $('fx-feedback').innerHTML = window.Feedback.ICON;
     $('fx-feedback').addEventListener('click', sendFeedback);
 

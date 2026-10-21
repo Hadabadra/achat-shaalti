@@ -215,3 +215,17 @@ html[dir="ltr"] .row-actions:not(.center):not(.full) { justify-content: flex-sta
 .about-hero p.muted { font-size: 1.05em; }
 
 label.check-row[hidden] { display: none !important; }
+
+/* #136: ריבועי הסברים ומידע מאוחדים */
+.explain-group > details.explain-sub { border-top: 1px solid var(--color-outline-variant); padding: .6em 0; }
+.explain-group > details.explain-sub:first-of-type { border-top: 0; }
+details.explain-sub > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: .5em; font-weight: 600; }
+details.explain-sub > summary::-webkit-details-marker { display: none; }
+details.explain-sub > summary::before { content: '◂'; transition: transform .15s; }
+details.explain-sub[open] > summary::before { transform: rotate(-90deg); }
+details.explain-sub[open] > summary { margin-bottom: .5em; }
+.explain-warn { border-top: 1px solid var(--color-outline-variant); padding: .6em 0; }
+.explain-warn > b { display: flex; align-items: center; gap: .4em; }
+.info-group .info-sub { border-top: 1px solid var(--color-outline-variant); padding: .75em 0; }
+.info-group .info-sub:first-of-type { border-top: 0; padding-top: 0; }
+.info-sub-title { font-weight: 700; margin-bottom: .4em; display: flex; align-items: center; gap: .4em; }
