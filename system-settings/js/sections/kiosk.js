@@ -186,19 +186,26 @@
         '<p class="muted small">לפחות ' + MIN_PW + ' תווים. אחרי השמירה יוצג קוד שחזור חד-פעמי — חשוב לרשום אותו.</p>' +
         '</form></div>';
     } else {
+      /* #136: עיצוב כמו „הגדרות נעילה” — הסבר וקבוצות מתקפלות */
       html += '<div class="card"><div class="card-title">סיסמה והגדרות</div>' +
+        '<p class="muted">סיסמת המנהל, כלי ניהול, ותקציר ההגדרות הפעילות כעת.</p><div class="dlg-fields">' +
+        '<details class="field-group" open><summary><span>סיסמה וקודי שחזור</span><small>שינוי סיסמה וקודי גיבוי</small></summary><div class="field-group-body">' +
         '<div class="setting-row"><div class="setting-text"><b>שינוי סיסמה</b><span class="muted">החלפת סיסמת הנעילה (נדרשת הסיסמה הנוכחית)</span></div>' +
         '<button class="btn btn-tonal" data-act="chpw">' + ui.icon('edit') + 'שינוי</button></div>' +
         (backup ? '<div class="setting-row"><div class="setting-text"><b>קודי גיבוי לשחזור</b><span class="muted">' +
           (backup.left ? (window.I18N && I18N.isEn && I18N.isEn() ? backup.left + ' one-time codes left' : 'נשארו ' + backup.left + ' קודים חד-פעמיים') : 'עוד לא נוצרו') +
           ' · למקרה ששכחתם גם את הסיסמה וגם את קוד השחזור. כל קוד עובד פעם אחת</span></div>' +
           '<button class="btn btn-tonal" data-act="backup">' + ui.icon('key') + (backup.left ? 'יצירה מחדש' : 'יצירה') + '</button></div>' : '') +
+        '</div></details>' +
+        '<details class="field-group"><summary><span>כלי ניהול</span><small>פרופיל, יומן, ייצוא ויבוא, נעילת הסייר</small></summary><div class="field-group-body">' +
         '<div class="setting-row"><div class="setting-text"><b>פרופיל נעילה מוכן</b><span class="muted">תלמיד / בית מדרש / מנהל — מחיל סט הגדרות בלחיצה (אפשר לשנות אחר כך)</span></div>' +
         '<button class="btn btn-tonal" data-act="profile">' + ui.icon('lock') + 'בחירה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>יומן פעולות מנהל</b><span class="muted">הפעלה וביטול נעילה, שינויי סיסמה והגדרות, יבוא וייצוא</span></div>' +
         '<button class="btn btn-tonal" data-act="adminlog">' + ui.icon('info') + 'הצגה</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>ייצוא ויבוא הגדרות</b><span class="muted">העברת הגדרות הנעילה, הסייר ושומר המסך למחשב אחר (בלי סיסמאות וקודים)</span></div>' +
         '<div class="btn-group"><button class="btn btn-tonal" data-act="export">ייצוא</button><button class="btn btn-tonal" data-act="import">יבוא</button></div></div>' +
+        '</div></details>' +
+        '<details class="field-group"><summary><span>מצב נוכחי</span><small>מה פתוח, תזמון, קבצים, שומר מסך</small></summary><div class="field-group-body">' +
         '<div class="setting-row"><div class="setting-text"><b>מה פתוח בזמן נעילה</b><span class="muted">' +
         ui.esc((st.openSections || []).map(function (id) { return SECTION_NAMES[id] || id; }).join(', ') || 'רק תוכנות לימוד ואודות') +
         (st.readOnly ? ' · קבצים לקריאה בלבד' : '') + (st.allowExcelDocs ? ' · Excel מותר בסייר' : '') + (st.clock !== false ? ' · שעון צף' : '') + '</span></div>' +
@@ -220,7 +227,7 @@
         '<div class="setting-row"><div class="setting-text"><b>נעילה והגבלה של סייר הקבצים</b><span class="muted">נעילת הסייר בסיסמת המנהל או הגבלתו לתיקיות מסוימות (למשל שולחן העבודה) — בטאב „נעילת סייר הקבצים” כאן בתוסף</span></div>' +
         '<button class="btn btn-tonal" data-act="fx-manage">' + ui.icon('lock') + 'לטאב נעילת סייר</button></div>' +
         '<div class="setting-row"><div class="setting-text"><b>נתיב אוצריא</b><span class="muted path"><bdi dir="ltr">' + ui.esc(st.otzariaPath || 'זיהוי אוטומטי') + '</bdi></span></div></div>' +
-        '</div>';
+        '</div></details></div></div>';
       html += '<div class="card"><div class="card-title">הגדרות נעילה</div><div data-slot="kset">' + ui.loading('טוען הגדרות…') + '</div></div>';
       /* #60: הרשימה המלאה עברה לטאב "תוכנות תורניות" */
       html += '<div class="card"><div class="card-title">תוכנות מותרות לפתיחה</div><div class="setting-row"><div class="setting-text"><span class="muted">' + progs.length + ' תוכנות מותרות' + (st.autoTorah ? ' · זיהוי אוטומטי פעיל' : '') + '</span></div>' +
