@@ -70,7 +70,7 @@ internal sealed class SideBar : Form
     // שגם מריץ את hook המקלדת: חסימה שם מאטה/מנתקת את ה-hook ותוקעת את המקלדת והעכבר (נראה כמו "נתקע בנעילה")
     public void Rebuild()
     {
-        Task.Run(() =>
+        SafeTask.Run(() =>
         {
             List<Programs.Entry> progs = null;
             try { progs = Programs.Load(); } catch { }
@@ -160,7 +160,7 @@ internal sealed class SideBar : Form
         _flyout ??= new Flyout(h =>
         {
             _flyout.Hide();
-            Task.Run(() => { try { Kiosk.BringToFront(h); } catch (Exception ex) { Config.Log("sidebar flyout: " + ex.Message); } });
+            SafeTask.Run(() => { try { Kiosk.BringToFront(h); } catch (Exception ex) { Config.Log("sidebar flyout: " + ex.Message); } });
         });
         _flyout.ShowFor(it.Windows, RectangleToScreen(RowRect(i)), _horizontal, _edge, S);
     }
@@ -170,7 +170,7 @@ internal sealed class SideBar : Form
         _lastScan = DateTime.UtcNow;
         if (Interlocked.Exchange(ref _scanBusy, 1) == 1) return;
         var snapshot = _items.ToList();
-        Task.Run(() =>
+        SafeTask.Run(() =>
         {
             try
             {
@@ -214,7 +214,7 @@ internal sealed class SideBar : Form
         if (i < 0 || i >= _items.Count) return;
         var it = _items[i];
         if (it.UiAction != null) { Tray.Invoke(it.UiAction); return; }
-        Task.Run(() =>
+        SafeTask.Run(() =>
         {
             try
             {

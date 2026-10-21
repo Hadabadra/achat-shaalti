@@ -141,7 +141,7 @@ public static class SnipApi
 
         using var p = Process.Start(psi) ?? throw new BridgeException("unsupported", "לא ניתן להפעיל PowerShell", 501);
         var stderr = p.StandardError.ReadToEndAsync();
-        _ = p.StandardOutput.ReadToEndAsync();
+        p.StandardOutput.ReadToEndAsync().Observe("snip stdout", quiet: true);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec + 20));
         try { await p.WaitForExitAsync(cts.Token); }
         catch (OperationCanceledException)

@@ -112,7 +112,7 @@ internal sealed class ToolsForm : Form
     {
         var top = TopLevelControl as Form;
         top?.Hide();
-        Task.Run(() =>
+        SafeTask.Run(() =>
         {
             Thread.Sleep(300);
             try { Tray.Invoke(() => { try { Screenshot.Capture(region); } finally { top?.Show(); } }); }

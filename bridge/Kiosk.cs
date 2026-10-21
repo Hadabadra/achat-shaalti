@@ -1681,7 +1681,7 @@ public static partial class Kiosk
             // Ctrl+Alt+O: חזרה לאוצריא מתוכנה מותרת (רק כשתוכנה מותרת בחזית; באוצריא עצמה המקשים עוברים הלאה)
             if (ctrl && (alt || (GetAsyncKeyState(0x12) & 0x8000) != 0) && vk == 0x4F && (wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104) && ForegroundIsAllowedProgram())
             {
-                Task.Run(ReturnToOtzaria);
+                SafeTask.Run(ReturnToOtzaria);
                 return (IntPtr)1;
             }
             // Ctrl+Alt+Shift+F12: חלון קוד שחזור לביטול חירום של הנעילה
@@ -1692,7 +1692,7 @@ public static partial class Kiosk
             {
                 // לא מריצים כאן ישירות: ה-hook רץ בחוט ה-UI, ו-Tray.Invoke מריץ סינכרונית כשכבר בו -
                 // פתיחת טופס + BringToFront + קריאת pipe לשירות בתוך callback חורגים מ-300ms ו-Windows מתעלמת מה-hook
-                Task.Run(() => { try { Config.Log("emergency: זוהה Ctrl+Alt+Shift+F12 ב-hook"); Tray.Invoke(EmergencyForm.Open); } catch (Exception ex) { Config.Log("emergency open: " + ex.Message); } });
+                SafeTask.Run(() => { try { Config.Log("emergency: זוהה Ctrl+Alt+Shift+F12 ב-hook"); Tray.Invoke(EmergencyForm.Open); } catch (Exception ex) { Config.Log("emergency open: " + ex.Message); } });
                 return (IntPtr)1;
             }
             if (block) return (IntPtr)1;

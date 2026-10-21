@@ -238,11 +238,11 @@ public static class SysApi
         switch (action)
         {
             case "sleep":
-                Task.Run(async () => { await Task.Delay(500); Application.SetSuspendState(PowerState.Suspend, false, false); });
+                SafeTask.Run(async () => { await Task.Delay(500); Application.SetSuspendState(PowerState.Suspend, false, false); });
                 break;
             case "hibernate":
                 // שינה עמוקה (Hibernate): העבודה נשמרת לדיסק והמחשב כבה לגמרי
-                Task.Run(async () => { await Task.Delay(500); Application.SetSuspendState(PowerState.Hibernate, false, false); });
+                SafeTask.Run(async () => { await Task.Delay(500); Application.SetSuspendState(PowerState.Hibernate, false, false); });
                 break;
             case "signout":
                 if (Kiosk.IsActive) throw BridgeException.Locked();

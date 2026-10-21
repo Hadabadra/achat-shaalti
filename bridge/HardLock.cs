@@ -57,7 +57,7 @@ public static class HardLock
             var readTask = r.ReadLineAsync();
             // #83-#92: בפסק זמן הצינור נסגר (using) והקריאה נכשלת אחר כך ב-ObjectDisposedException שאיש לא צופה בה —
             // מסמנים אותה כנצפית כדי שלא תדווח כ-task-error
-            _ = readTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+            readTask.Observe("hardlock pipe read", quiet: true);
             // בעיה #14 סעיף 2: רצפת המתנה קשיחה, לא 15ש' שחוסמות חוט HTTP גם כשנדרש timeout קצר בהרבה
             if (!readTask.Wait(Math.Max(timeoutMs, 3000))) return null;
             return JsonNode.Parse(readTask.Result ?? "") as JsonObject;
@@ -1028,7 +1028,7 @@ public class HardLockService : ServiceBase
                 catch { pipe.Dispose(); throw; }
                 // ביקורת #30 ממצא 5: כל חיבור מטופל בנפרד, עם מגבלת אורך ודדליין, כך שלקוח תקוע
                 // לא חוסם את הבאים אחריו (ולא דוחף את הגשר ל-fallback של config.json)
-                _ = Task.Run(() => ServeOne(pipe, ct));
+                SafeTask.Run(() => ServeOne(pipe, ct), "pipe ServeOne");
             }
             catch (OperationCanceledException) { return; }
             catch (Exception ex) { HardLock.SvcLog("pipe loop: " + ex.Message); await Task.Delay(1000); }
@@ -1208,7 +1208,7 @@ public class HardLockService : ServiceBase
                     if (!string.IsNullOrEmpty(otz)) _state["otzariaPath"] = otz;
                     Save();
                     HardLock.SvcLog("service: נעילה הופעלה");
-                    Task.Run(Tick);
+                    SafeTask.Run(Tick);
                     return Ok();
 
                 case "disable":
@@ -1226,7 +1226,7 @@ public class HardLockService : ServiceBase
                         _state["skipUntil"] = new DateTimeOffset(winEnd).ToString("o");
                     Save();
                     HardLock.SvcLog("service: נעילה בוטלה");
-                    Task.Run(Tick);
+                    SafeTask.Run(Tick);
                     return Ok();
 
                 case "set-password":
@@ -1288,7 +1288,7 @@ public class HardLockService : ServiceBase
                     Save();
                     if (policy.Count > 0) HardLock.SvcLog("service: עודכנה מדיניות הנעילה (" + string.Join(", ", policy.Keys) + ")");
                     if (temp.Count > 0) HardLock.SvcLog("service: עודכנו הגדרות הפתיחה הזמנית (" + string.Join(", ", temp.Keys.Where(k => k != "tempUnlockSalt")) + ")");
-                    Task.Run(Tick);
+                    SafeTask.Run(Tick);
                     return Ok();
                 }
 
@@ -1314,7 +1314,7 @@ public class HardLockService : ServiceBase
                     _state["tempUnlockUntil"] = until.ToString("o");
                     Save();
                     HardLock.SvcLog($"service: פתיחה זמנית ל-{minutes} דקות (עד {until:HH:mm:ss})");
-                    Task.Run(Tick);
+                    SafeTask.Run(Tick);
                     return new JsonObject { ["ok"] = true, ["until"] = until.ToString("o"), ["secondsLeft"] = TempSecondsLeft };
                 }
 
@@ -1324,7 +1324,7 @@ public class HardLockService : ServiceBase
                     _state["tempUnlockUntil"] = "";
                     Save();
                     HardLock.SvcLog("service: הפתיחה הזמנית הסתיימה ידנית");
-                    Task.Run(Tick);
+                    SafeTask.Run(Tick);
                     return Ok();
 
                 case "skip":
@@ -1343,7 +1343,7 @@ public class HardLockService : ServiceBase
                         _state["skipUntil"] = until;
                     }
                     Save();
-                    Task.Run(Tick);
+                    SafeTask.Run(Tick);
                     return Ok();
 
                 case "set-mac-key":
@@ -1409,7 +1409,7 @@ public class HardLockService : ServiceBase
                     _state["active"] = false;
                     _state["uninstalling"] = true;
                     Save();
-                    Task.Run(SelfUninstall);
+                    SafeTask.Run(SelfUninstall);
                     return Ok();
 
                 default:

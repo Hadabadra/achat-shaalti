@@ -23,7 +23,7 @@ internal static class LockScreenImage
         _timer ??= new System.Threading.Timer(_ => Tray.Invoke(Update), null, 20_000, 30 * 60_000);
         // האפשרות כבויה אבל מסך הנעילה עדיין הוחלף (למשל התוכנה נסגרה לפני שבוטלה האפשרות בתוסף) — מחזירים את המקורי
         if (!Config.Get("kiosk.lockScreenImage", false) && Config.Get(BackupKey + ".done", false))
-            Task.Run(() => Tray.Invoke(Restore));
+            SafeTask.Run(() => Tray.Invoke(Restore));
     }
 
     /// <summary>"זרקור Windows" מחליף את תמונת מסך הנעילה — מכבים אותו למשתמש הנוכחי (HKCU, בלי הרשאות מנהל)</summary>
@@ -159,7 +159,7 @@ internal static class LockScreenImage
                 bmp.Save(path, ImageFormat.Png);
             }
             DisableSpotlight();
-            Task.Run(async () =>
+            SafeTask.Run(async () =>
             {
                 try
                 {

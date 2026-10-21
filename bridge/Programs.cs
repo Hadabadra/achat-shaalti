@@ -258,7 +258,7 @@ public static class Programs
         if (h != IntPtr.Zero)
         {
             Kiosk.BringToFront(h);
-            Task.Run(() => { Thread.Sleep(400); Kiosk.BringToFront(h); }); // ניסיון שני: חלק מהתוכנות גוזלות פוקוס בעת הטעינה
+            SafeTask.Run(() => { Thread.Sleep(400); Kiosk.BringToFront(h); }); // ניסיון שני: חלק מהתוכנות גוזלות פוקוס בעת הטעינה
             return true;
         }
         LastLaunchAt = DateTime.UtcNow;
@@ -279,7 +279,7 @@ public static class Programs
             }
             catch (Exception ex2) { throw new BridgeException("launch_failed", "הפעלת התוכנה נכשלה: " + ex2.Message, 500); }
         }
-        Task.Run(() => Focus(e));
+        SafeTask.Run(() => Focus(e));
         return false;
     }
 
@@ -298,7 +298,7 @@ public static class Programs
                 if (p.SessionId != session || IsOwnOrBlocked(p) || !MatchesList(p, new[] { e })) { p.Dispose(); continue; }
                 n++;
                 var proc = p;
-                Task.Run(() =>
+                SafeTask.Run(() =>
                 {
                     try { if (!proc.CloseMainWindow() || !proc.WaitForExit(3000)) proc.Kill(entireProcessTree: true); } catch { }
                     finally { proc.Dispose(); }

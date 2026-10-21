@@ -1036,7 +1036,7 @@ internal sealed class LockCountdown : Form
         _confirm.Enabled = _back.Enabled = false;
         _err.Text = Lang.T("מאמת…", "Verifying…");
         CenterRows();
-        Task.Run(() =>
+        SafeTask.Run(() =>
         {
             Exception error = null;
             try { Kiosk.ScheduleSkipCurrent(pw); } catch (Exception ex) { error = ex; }

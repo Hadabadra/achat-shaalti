@@ -226,7 +226,7 @@ internal static class PdfOps
         var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
         foreach (var x in a) psi.ArgumentList.Add(x);
         using var pr = Process.Start(psi);
-        var err = pr.StandardError.ReadToEndAsync(); _ = pr.StandardOutput.ReadToEndAsync();
+        var err = pr.StandardError.ReadToEndAsync().Observe("pdfops stderr", quiet: true); pr.StandardOutput.ReadToEndAsync().Observe("pdfops stdout", quiet: true);
         if (!pr.WaitForExit(10 * 60 * 1000)) { try { pr.Kill(true); } catch { } throw new BridgeException("timeout", "הפעולה ארכה יותר מדי", 504); }
 
         if (op == "office2pdf") { var made = Path.Combine(dir, "in.pdf"); if (eng.Id == "libreoffice" && File.Exists(made)) File.Move(made, outp, true); }

@@ -256,6 +256,7 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 | נתיב | גוף | תשובה |
 |---|---|---|
 | `/sys/location` (וגם `/location`) | `{ maxAgeSec?: 600, timeoutSec?: 15 }` | `{ lat, lon, accuracy, source: "gnss"\|"wifi"\|"cellular"\|"ip"\|"default"\|"unknown", time, altitude?, heading?, speed? }` (שלושת האחרונים רק עם GPS, אחרת null — מהשחרור הבא). מיקום כבוי או חסום → `location_off` (403) עם הסבר איך להפעיל; לא התקבל בזמן → `location_timeout` (504) |
+| `/sys/location/address` | `{ lat, lon }` | #105, ניסיון בלבד (MapLocationFinder של Windows, לרוב דורש מפתח שירות): `{ found: true, source: "windows", town, district, region, country, street, number, postcode, display }` או `{ found: false, reason }` — אז ליפול ל-OpenStreetMap בתוסף. תמיד 200 |
 | `/sys/location/settings` | `{}` | פותח את הגדרות המיקום של Windows (`ms-settings:privacy-location`) |
 | `/feedback` | `{ text, plugin, version, repo?, title?, kind? }` | `{ queued: true }`. כינוי ל-`/sys/feedback`: נכנס לתור ונשלח למתווך `achat-relay` |
 | `/pdf/handlers` | `{ force? }` | `{ defaultId, handlers: [{ id, name, kind, exists, isDefault, capabilities }] }`. מזהים: `windows-default`, `windows-chooser`, `sumatra`, `acrobat`/`acrobat-reader`, `foxit` |
@@ -275,3 +276,7 @@ Win / Alt+Tab / Alt+Esc / Ctrl+Esc / Alt+F4 על חלון אוצריא, מעקב
 | `/pdf/op/begin` → `chunk {id,data}` → `run {id,op,params}` → `read {id,offset}` → `end {id}` | | `run` מקבל `engine`. פעולות: compress {level}, grayscale, pdfa, repair, protect, unlock, linearize, pdf2png (ZIP), totext, office2pdf {ext} |
 | `/sys/compass` (וגם `/compass`) | `{}` | `{ available, headingTrue, headingMagnetic, accuracy, time }` — רק במכשיר עם חיישן מצפן |
 שורת פקודה: `OtzariaBridge.exe --open-pdf "<path>"` (שם הקובץ בתור, פותח את אוצריא בתוסף הצופה).
+
+
+## משימות רקע (#134–#135)
+כל משימת "שגר ושכח" בגשר עוברת דרך `SafeTask.Run(...)` או `.Observe(where)` (bridge/SafeTask.cs): חריגה נרשמת ליומן ונצפית, ולא מגיעה ל-`UnobservedTaskException` כדיווח task-error. קוד חדש: לא להשאיר `Task.Run`/`ReadToEndAsync` בלי await — להשתמש ב-SafeTask.

@@ -145,7 +145,7 @@ public static class DialogGuard
             if (GetClassName(hwnd, sb, sb.Capacity) <= 0) return;
             if (sb.ToString() != DialogClass) return;
             if (!_tracked.TryAdd(hwnd, 0)) return; // כבר במעקב
-            Task.Run(() => MonitorDialog(hwnd));
+            SafeTask.Run(() => MonitorDialog(hwnd));
         }
         catch (Exception ex) { Config.Log("dialog-guard event: " + ex.Message); }
     }
