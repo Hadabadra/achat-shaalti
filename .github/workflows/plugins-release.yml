@@ -7,6 +7,17 @@ on:
   push:
     tags:
       - "plugins-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "גרסת התוספים (למשל 1.0.6) — יוצר תג plugins-v<גרסה> על הקומיט שנבחר"
+        required: true
+      store:
+        description: "פרסום בחנות (לא נתמך כאן; תמיד false)"
+        default: "false"
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && format('plugins-v{0}', inputs.version) || github.ref_name }}
 
 permissions:
   contents: write
@@ -20,7 +31,7 @@ jobs:
       - name: בדיקת גרסת המניפסטים מול התג
         shell: pwsh
         run: |
-          $want = "${{ github.ref_name }}".Substring("plugins-v".Length)
+          $want = "${{ env.TAG }}".Substring("plugins-v".Length)
           foreach ($f in @("file-explorer/manifest.json", "system-settings/manifest.json")) {
             $v = (Get-Content $f -Raw | ConvertFrom-Json).version
             Write-Host "$f = $v"
@@ -43,8 +54,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: true
-          tag_name: ${{ github.ref_name }}
-          name: תוספים ${{ github.ref_name }} (סייר קבצים + הגדרות מערכת)
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: תוספים ${{ env.TAG }} (סייר קבצים + הגדרות מערכת)
           prerelease: false
           make_latest: false
           body: |
