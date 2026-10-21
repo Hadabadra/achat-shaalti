@@ -51,8 +51,9 @@ public static partial class Kiosk
         if (Interlocked.Exchange(ref _fastBusy, 1) == 1) return;
         try
         {
-            if (_snipSeen != DateTime.MinValue && IsActive) SetTaskbars(false); // explorer חי בזמן הצילום - שורת המשימות לא תוצג
-            else if (_taskbarHidden) SetTaskbars(true);             // הצילום הסתיים: מחזירים (explorer יעלה מחדש/יימחק כרגיל)
+            // כל עוד הנעילה פעילה שורת המשימות מוסתרת: Windows מרימה את explorer מחדש אחרי כל הריגה (כל 2 שניות),
+            // והסתרה בכל מחזור של 300ms מונעת מהפס להבהב (דיווח בפורום). שחרור הנעילה מחזיר אותה (StopFastGuard).
+            SetTaskbars(false);
 
             IntPtr fg = GetForegroundWindow();
             if (fg == IntPtr.Zero) return;

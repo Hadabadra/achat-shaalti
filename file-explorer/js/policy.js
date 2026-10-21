@@ -93,6 +93,8 @@
       var shell = document.querySelector('.fx-shell');
       var box = document.getElementById('fx-lock');
       if (!shell || !box) return;
+      /* כבר מוצג: לא בונים מחדש (בנייה מחדש מוחקת את מה שהוקלד ומאבדת פוקוס אחרי כל ספרה) */
+      if (box.querySelector('#fx-lock-pw')) { shell.classList.add('is-locked'); return; }
       var mins = state && state.unlockMinutes || 15;
       box.innerHTML = '<div class="fx-lock-card">' +
         '<div class="fx-lock-ic">' + ic('lock') + '</div>' +
