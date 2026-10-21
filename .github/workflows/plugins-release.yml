@@ -4,9 +4,12 @@ name: Release תוספים בלבד (בלי גשר)
 # ויוצר Release שאינו מסומן latest — כדי לא לשבש את בדיקת העדכונים של הגשר (UpdateApi.cs).
 
 on:
+  # תג plugins-v<גרסה>, או (כשדחיפת תגים חסומה) ענף release/plugins-v<גרסה> — ואז ה-CI עצמו יוצר את התג
   push:
     tags:
       - "plugins-v*"
+    branches:
+      - "release/plugins-v*"
   workflow_dispatch:
     inputs:
       version:
@@ -16,9 +19,6 @@ on:
         description: "פרסום בחנות (לא נתמך כאן; תמיד false)"
         default: "false"
 
-env:
-  TAG: ${{ github.event_name == 'workflow_dispatch' && format('plugins-v{0}', inputs.version) || github.ref_name }}
-
 permissions:
   contents: write
 
@@ -27,6 +27,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: שם התג
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") { $t = "plugins-v${{ inputs.version }}" }
+          else { $t = "${{ github.ref_name }}" -replace '^release/', '' }
+          "TAG=$t" >> $env:GITHUB_ENV
+          Write-Host "tag=$t"
 
       - name: בדיקת גרסת המניפסטים מול התג
         shell: pwsh
