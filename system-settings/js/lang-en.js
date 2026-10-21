@@ -9,6 +9,8 @@
     'ייבוא סדרים מקובץ': 'Import sedarim from a file',
     'לא נמצאו סדרים בקובץ (מצופה JSON עם label/start/end או start-end)': 'No sedarim found in the file (expects JSON with label/start/end or start-end)',
     'סרגל התוכנות: אייקונים בלבד': 'Programs bar: icons only',
+    'סרגל התוכנות: מקלדת וירטואלית': 'Programs bar: on-screen keyboard',
+    'למסך מגע בלי מקלדת: מוסיף לסרגל כפתור שפותח את המקלדת שעל המסך של Windows, והיא מותרת בזמן הנעילה': 'For touch screens without a keyboard: adds a bar button that opens the Windows on-screen keyboard, allowed while locked',
     'סרגל צר יותר, בלי שמות. כבוי (ברירת מחדל): אייקון ולידו שם התוכנה': 'A narrower bar without names. Off (default): icon with the program name next to it',
     'מיקום סרגל התוכנות': 'Programs bar position',
     'לאיזה צד מסך הסרגל מוצמד': 'Which edge of the screen the bar is docked to',

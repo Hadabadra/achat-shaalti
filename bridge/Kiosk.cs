@@ -313,6 +313,7 @@ public static partial class Kiosk
         sideBar = Config.Get("kiosk.sideBar", true),
         barPrograms = Config.Get("kiosk.barPrograms", !Config.Get("kiosk.sideBar", true)), // D4
         sideBarIconsOnly = Config.Get("kiosk.sideBarIconsOnly", false),
+        sideBarKeyboard = Config.Get("kiosk.sideBarKeyboard", false),
         sideBarPosition = Config.Get("kiosk.sideBarPosition", "right"),
         resetOnShutdown = Config.Get("kiosk.resetOnShutdown", false),
         openSections = OpenSections,
@@ -848,7 +849,7 @@ public static partial class Kiosk
         ApplyTempUnlockSettings(b);
         if (b.Has("readOnly")) Config.Set("kiosk.readOnly", b.Bool("readOnly"));
         { string rcv = b.Str("restContent"); if (rcv is "full" or "zmanim" or "clock" or "verse") Config.Set("kiosk.restContent", rcv); }
-        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "barPrograms", "sideBarIconsOnly", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi",
+        foreach (string k in new[] { "clock", "restScreen", "fullscreenOtzaria", "sideBar", "barPrograms", "sideBarIconsOnly", "sideBarKeyboard", "resetOnShutdown", "allowExcelDocs", "showParsha", "showDafYomi",
             "lockScreenImage", "restShowVerse", "restShowClock", "restShowZmanim", "restShowLogo", "restShowDedication", "saverEnabled" })
             if (b.Has(k)) Config.Set("kiosk." + k, b.Bool(k));
         if (b.Has("restDedicationText")) { string dt = (b.Str("restDedicationText") ?? "").Replace("\r", ""); Config.Set("kiosk.restDedicationText", dt.Length > 400 ? dt[..400] : dt); }
@@ -1545,6 +1546,7 @@ public static partial class Kiosk
             if (fgPid == 0) return;
             CloseShellWindow(fgPid, session);
             if (Programs.IsAllowedForeground(fgPid)) return; // תוכנה מותרת (רשימה מוגדרת בסיסמה) בחזית
+            if (Config.Get("kiosk.sideBarKeyboard", false) && IsScreenKeyboardPid(fgPid)) return; // מקלדת וירטואלית שנפתחה מהסרגל (מסך מגע)
             try
             {
                 using var fgp = Process.GetProcessById((int)fgPid);
@@ -1639,6 +1641,17 @@ public static partial class Kiosk
         if (pid == 0) return false;
         var c = _fgAllowedCache;
         return pid == c.Pid && c.Allowed;
+    }
+
+    /// <summary>המקלדת הווירטואלית של Windows (osk / TabTip) — מותרת בחזית כשהמנהל הפעיל אותה בסרגל</summary>
+    private static bool IsScreenKeyboardPid(uint pid)
+    {
+        try
+        {
+            using var p = Process.GetProcessById((int)pid);
+            return p.ProcessName.Equals("osk", StringComparison.OrdinalIgnoreCase) || p.ProcessName.Equals("TabTip", StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
     }
 
     private static bool IsOtzariaPid(uint pid)
