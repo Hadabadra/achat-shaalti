@@ -85,6 +85,9 @@ internal sealed class SideBar : Form
         // #60 (גרסה מינימלית): גישה לחלונות הגשר בנעילה, מתוך הסרגל הקיים
         Bitmap bi = null; try { bi = Icon.ExtractAssociatedIcon(Environment.ProcessPath!)?.ToBitmap(); } catch { }
         // משוב 15.10: בסרגל הנעילה פריט אחד — החלון הראשי עם כל הטאבים (אודות, מה חדש, דיווחים, צימוד, כלים וצילום מסך)
+        // מסך מגע בלי מקלדת: פריט שפותח את המקלדת הווירטואלית של Windows (אופציונלי, כבוי כברירת מחדל)
+        if (Config.Get("kiosk.sideBarKeyboard", false))
+            list.Add(new Item { Name = Lang.T("מקלדת וירטואלית", "On-screen keyboard"), Icon = IconOf(System.IO.Path.Combine(Environment.SystemDirectory, "osk.exe")), UiAction = OpenScreenKeyboard });
         list.Add(new Item { Name = Lang.T(Program.AppName, Program.AppNameEn), Icon = bi, UiAction = () => AboutForm.Open() });
         foreach (var old in _items) old.Icon?.Dispose();
         _items = list;
@@ -93,6 +96,12 @@ internal sealed class SideBar : Form
         if (!Visible) Show();
         _tick.Start();
         Scan();
+    }
+
+    private static void OpenScreenKeyboard()
+    {
+        try { Process.Start(new ProcessStartInfo(System.IO.Path.Combine(Environment.SystemDirectory, "osk.exe")) { UseShellExecute = true }); }
+        catch (Exception ex) { Config.Log("screen keyboard: " + ex.Message); }
     }
 
     /// <summary>האייקון המקורי של קובץ ההפעלה (מה-exe עצמו); null אם אין קובץ או שהשליפה נכשלה</summary>
