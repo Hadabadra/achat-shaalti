@@ -25,9 +25,23 @@ public static class Overlay
     // בעיה #14 סעיף 3: חלון "RestScreen-like" אחד לכל מסך (Screen.AllScreens), כולם מוצגים/מוסתרים יחד
     private static readonly List<RestScreen> _rest = new();
 
-    public static bool RestVisible => _rest.Count > 0 && _rest[0].Visible;
+    public static bool RestVisible => _rest.Any(r => r.Visible);
     /// <summary>מסך המנוחה מוצג בגלל חוסר פעילות (ולא בגלל מזעור) — לא להסתיר אותו כשאוצריא לא ממוזערת</summary>
-    public static bool RestIdle => _rest.Count > 0 && _rest[0] is { Visible: true, Idle: true };
+    public static bool RestIdle => _rest.Any(r => r is { Visible: true, Idle: true });
+
+    /// <summary>
+    /// המסך שעליו חלון ביטול החירום פתוח (null = סגור). רק הוא נשאר בלי כיסוי, כדי שהחירום תמיד נגיש
+    /// וכל שאר המסכים נשארים מכוסים (מינימום חשיפה). חוט הממשק בלבד.
+    /// </summary>
+    private static string EmergencyScreen()
+    {
+        try
+        {
+            var f = Application.OpenForms.OfType<EmergencyForm>().FirstOrDefault(x => x.Visible && !x.IsDisposed);
+            return f == null ? null : Screen.FromControl(f).DeviceName;
+        }
+        catch { return null; }
+    }
 
     public static string HebrewDate(DateTime d)
     {
@@ -52,8 +66,8 @@ public static class Overlay
 
     public static void ShowRest(IntPtr otzaria, bool idle = false) => Tray.Invoke(() =>
     {
-        if (EmergencyForm.IsOpen) return; // חלון ביטול חירום פתוח - לא מכסים אותו
         var screens = Screen.AllScreens;
+        string skip = EmergencyScreen(); // חלון חירום פתוח: מכסים את כל המסכים חוץ מהמסך שלו (לא מכסים את החלון)
         // התאמה למספר המסכים (גם אם השתנה: חיבור/ניתוק מסך בזמן ריצה)
         while (_rest.Count < screens.Length) _rest.Add(new RestScreen());
         while (_rest.Count > screens.Length)
@@ -63,20 +77,19 @@ public static class Overlay
             extra.Dispose();
         }
         bool wasVisible = RestVisible;
-        foreach (var r in _rest)
+        bool shown = false;
+        for (int i = 0; i < _rest.Count; i++)
         {
+            var r = _rest[i];
             r.Target = otzaria;
-            if (!wasVisible) r.Idle = idle;
+            if (screens[i].DeviceName == skip) { if (r.Visible) r.Hide(); continue; }
+            if (r.Visible) continue;
+            if (!wasVisible && !r.Visible) r.Idle = idle;
+            r.Bounds = screens[i].Bounds;
+            r.Show();
+            shown = true;
         }
-        if (!wasVisible)
-        {
-            for (int i = 0; i < _rest.Count; i++)
-            {
-                _rest[i].Bounds = screens[i].Bounds;
-                _rest[i].Show();
-            }
-            if (_rest.Count > 0) _rest[0].Activate();
-        }
+        if (shown) { var first = _rest.FirstOrDefault(x => x.Visible); first?.Activate(); }
     });
 
     public static void HideRest() => Tray.Invoke(() => { foreach (var r in _rest) if (r.Visible) r.Hide(); });
@@ -92,7 +105,37 @@ public static class Overlay
 
     public static void HideSideBar() => Tray.Invoke(() => { _side?.Hide(); });
 
-    public static void HideAll() { HideRest(); HideClock(); HideSideBar(); }
+    private static readonly List<BlackCover> _covers = new();
+
+    /// <summary>
+    /// כיסוי שחור על כל מסך שאוצריא אינה עליו (Screen.AllScreens). בלי זה, במחשב עם כמה מסכים המסך השני נשאר שולחן
+    /// עבודה חשוף. נקרא בכל סבב של השומר; מתאים את מספר הכיסויים גם כשמסך מתחבר/מתנתק. כבוי: kiosk.coverOtherScreens=false.
+    /// </summary>
+    public static void SyncCovers(IntPtr otzaria) => Tray.Invoke(() =>
+    {
+        try
+        {
+            var screens = Screen.AllScreens;
+            // מסך מנוחה כבר מכסה את המסכים (חוץ ממסך החירום, אם פתוח): אין צורך בכיסוי נוסף
+            if (screens.Length < 2 || !Config.Get("kiosk.coverOtherScreens", true) || RestVisible) { HideCovers(); return; }
+            string skip = EmergencyScreen(); // מסך חלון החירום נשאר חשוף, כל השאר מכוסים
+            Screen main = otzaria != IntPtr.Zero ? Screen.FromHandle(otzaria) : Screen.PrimaryScreen;
+            var others = screens.Where(sc => sc.DeviceName != main.DeviceName && sc.DeviceName != skip).ToArray();
+            while (_covers.Count < others.Length) _covers.Add(new BlackCover());
+            while (_covers.Count > others.Length) { var x = _covers[^1]; _covers.RemoveAt(_covers.Count - 1); x.Dispose(); }
+            for (int i = 0; i < others.Length; i++)
+            {
+                var c = _covers[i];
+                if (c.Bounds != others[i].Bounds) c.Bounds = others[i].Bounds;
+                if (!c.Visible) c.Show();
+            }
+        }
+        catch (Exception ex) { Config.Log("covers: " + ex.Message); }
+    });
+
+    public static void HideCovers() { foreach (var c in _covers) if (c.Visible) c.Hide(); }
+
+    public static void HideAll() { HideRest(); HideClock(); HideSideBar(); HideCovers(); }
 
     private static LockCountdown _countdown;
 
@@ -135,9 +178,8 @@ public static class Overlay
     {
         if (hwnd == IntPtr.Zero)
         {
-            string path = Kiosk.OtzariaPath();
-            string name = string.IsNullOrEmpty(path) ? "otzaria" : Path.GetFileNameWithoutExtension(path);
-            hwnd = Process.GetProcessesByName(name).Select(p => p.MainWindowHandle).FirstOrDefault(h => h != IntPtr.Zero);
+            // לפי נתיב התמונה ולא שם בלבד (Kiosk.FindOtzariaProcess)
+            hwnd = Kiosk.FindOtzariaProcess(Process.GetCurrentProcess().SessionId)?.MainWindowHandle ?? IntPtr.Zero;
         }
         if (hwnd == IntPtr.Zero) return;
         Kiosk.BringToFront(hwnd);
@@ -172,7 +214,8 @@ internal sealed class ClockBar : Form
     {
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
-        TopMost = true;
+        // [x2] WHY: Form.TopMost=true גורם ל-WinForms להפעיל/למקד את החלון בהצגה גם עם NOACTIVATE (גניבת פוקוס מהקלדה באוצריא).
+        // TopMost נשאר רק דרך WS_EX_TOPMOST ב-CreateParams
         StartPosition = FormStartPosition.Manual;
         BackColor = Theme.Bar;
         ForeColor = Theme.BarText;
@@ -1088,7 +1131,7 @@ internal sealed class TempUnlockBanner : Form
         _onDismiss = onDismiss;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
-        ShowInTaskbar = false; TopMost = true;
+        ShowInTaskbar = false;   // [x2] בלי Form.TopMost (גניבת פוקוס): WS_EX_TOPMOST ב-CreateParams
         BackColor = Color.FromArgb(24, 28, 34);
         RightToLeft = Lang.En ? RightToLeft.No : RightToLeft.Yes;
         Font = new Font("Segoe UI", 11f);
@@ -1169,5 +1212,29 @@ internal sealed class TempUnlockBanner : Form
     {
         if (disposing) _tick.Dispose();
         base.Dispose(disposing);
+    }
+}
+
+/// <summary>מסך שחור ללא פעילות, למסכים נוספים בנעילה (לא לוקח פוקוס, לא ניתן לבחירה)</summary>
+internal sealed class BlackCover : Form
+{
+    public BlackCover()
+    {
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;   // [x2] בלי Form.TopMost (גניבת פוקוס): WS_EX_TOPMOST ב-CreateParams
+        StartPosition = FormStartPosition.Manual;
+        BackColor = Color.Black;
+    }
+
+    protected override bool ShowWithoutActivation => true;
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ExStyle |= 0x08000000 /* WS_EX_NOACTIVATE */ | 0x00000080 /* WS_EX_TOOLWINDOW */ | 0x00000008 /* WS_EX_TOPMOST */;
+            return cp;
+        }
     }
 }

@@ -41,6 +41,24 @@ public static partial class Kiosk
         _taskbarHidden = !show;
     }
 
+    /// <summary>[w3] מחזיר את חלון אוצריא לחזית (חלופה כשאי אפשר להרוג תהליך מוגבה, וגם תגובה מהירה לתהליך לא מותר)</summary>
+    private static void ReturnOtzariaToFront(int session)
+    {
+        try
+        {
+            string path = OtzariaPath();
+            string on = string.IsNullOrEmpty(path) ? "otzaria" : System.IO.Path.GetFileNameWithoutExtension(path);
+            foreach (var o in Process.GetProcessesByName(on))
+                using (o)
+                {
+                    if (o.SessionId != session || o.MainWindowHandle == IntPtr.Zero) continue;
+                    if (!SetForegroundWindow(o.MainWindowHandle)) SwitchToThisWindow(o.MainWindowHandle, true);
+                    return;
+                }
+        }
+        catch { }
+    }
+
     private static void FastGuard()
     {
         if (!IsActive)
@@ -68,9 +86,9 @@ public static partial class Kiosk
             string cls = sb.ToString();
 
             bool closeIt =
-                (name.Equals("PickerHost", StringComparison.OrdinalIgnoreCase) && cls == "#32770") ||
+                name.Equals("PickerHost", StringComparison.OrdinalIgnoreCase) ||   // [s2] WHY: בלי תלות במחלקה (#32770 בלבד החמיץ חלונות אחרים של PickerHost)
                 (name.Equals("explorer", StringComparison.OrdinalIgnoreCase) &&
-                 (cls is "ApplicationFrameWindow" or "XamlExplorerHostIslandWindow" ||
+                 (cls is "ApplicationFrameWindow" or "XamlExplorerHostIslandWindow" or "#32770" || // [r1] #32770 = חלון Run (Win+R/הפעלה) של explorer, גם בזמן צילום
                   (cls == "CabinetWClass" && !Programs.InForegroundGrace))); // "הצגה בסייר Windows" נפתח בכוונה, עם חלון חסד
             if (closeIt)
             {
@@ -80,8 +98,27 @@ public static partial class Kiosk
             }
             else if (name is "StartMenuExperienceHost" or "SearchHost")
             {
-                p.Kill();
-                LogThrottled("fast:" + name, "watchdog: " + name + " נסגר (תפריט התחל/חיפוש חסומים בנעילה)", 30);
+                // [w3] כשל הריגה (AccessDenied) לא נבלע: נרשם ליומן, ואוצריא מוחזרת לחזית כחלופה
+                if (AppTrust.KillLogged(p, "fast-" + name))
+                    LogThrottled("fast:" + name, "watchdog: " + name + " נסגר (תפריט התחל/חיפוש חסומים בנעילה)", 30);
+                else ReturnOtzariaToFront(p.SessionId);
+            }
+            else if (!IsOtzariaPid(pid) && !(_snipSeen != DateTime.MinValue && ShellPolicy.IsSnipOverlayClass(cls)))
+            {
+                // [r1] בזמן צילום מאושר (עד 120 שניות) הפטור הוא רק למחלקות חלון של שכבת הצילום; כל השאר נסרק כרגיל
+                // [w3] תגובה תוך 300ms (ולא 2 שניות) לכל תהליך בחזית שאינו מותר: מעטפת/LOLBin (לפי OriginalFilename ונתיב) נהרגת,
+                // כל תהליך אחר שאינו ברשימה/בעץ שנפתח דרך הגשר — אוצריא חוזרת לחזית מיד.
+                // לא פועלים בזמן צילום מסך (שכבת הצילום מתארחת ב-explorer) — שם נשאר Watch הרגיל.
+                if (Programs.IsShellHost(p))
+                {
+                    if (!AppTrust.KillLogged(p, "fast-shell")) ReturnOtzariaToFront(p.SessionId);
+                    else LogThrottled("fastshell:" + name, "watchdog: חלון " + name + " נסגר (זיהוי לפי זהות הקובץ)", 30);
+                }
+                else if (!Programs.IsAllowedForeground(pid))
+                {
+                    LogThrottled("fastfg:" + name, "watchdog(fast): מחזיר את אוצריא לחזית מהתהליך " + name, 60);
+                    ReturnOtzariaToFront(p.SessionId);
+                }
             }
         }
         catch { /* חלון/תהליך נסגר באמצע */ }

@@ -46,6 +46,50 @@ public static class Pairing
         catch (Exception ex) { Config.Log("pair prune: " + ex.Message); }
     }
 
+    /// <summary>
+    /// אתגר-תגובה לתוסף (תואם לאחור, תוסף ישן מתעלם): התוסף שולח nonce אקראי ב-X-Otzaria-Challenge ל-/health, והגשר מחזיר לכל צימוד
+    /// HMAC-SHA256(מפתח = SHA-256 hex של הטוקן, הודעה = nonce). התוסף מחשב את אותו דבר מהטוקן שלו ובודק לפני שהוא שולח טוקן/סיסמה.
+    /// WHY: גשר מזויף על פורט נמוך (47917) לא מכיר את הגיבוב, ולכן לא יכול להוכיח — והתוסף לא מוסר לו טוקן וסיסמה. הגשר שומר רק גיבוב,
+    /// והגיבוב עצמו אינו נחשף (רק HMAC). ללא שינוי בתוסף הקיים ההגנה אינה פעילה — נדרש עדכון קטן בצד התוסף
+    /// </summary>
+    public static Dictionary<string, string> Proofs(string nonce)
+    {
+        var res = new Dictionary<string, string>();
+        if (string.IsNullOrEmpty(nonce) || nonce.Length is < 16 or > 128) return res;
+        lock (Gate)
+            foreach (var c in Clients().OfType<JsonObject>())
+            {
+                string id = c["id"]?.ToString(), hash = c["hash"]?.ToString();
+                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(hash)) continue;
+                if (!Trusted(c)) continue;
+                res[id] = ProofFor(hash, nonce);
+            }
+        return res;
+    }
+
+    /// <summary>ההוכחה לגיבוב נתון (hex באותיות גדולות כפי ששמור) — התוסף מחשב את אותו דבר עם SHA-256 hex של הטוקן שלו</summary>
+    public static string ProofFor(string tokenSha256Hex, string nonce)
+    {
+        byte[] key = Encoding.ASCII.GetBytes(tokenSha256Hex.ToUpperInvariant());
+        return Convert.ToHexString(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(nonce))).ToLowerInvariant();
+    }
+
+    /// <summary>הנתונים שנחתמים לכל צימוד: מזהה, שם תוסף וגיבוב הטוקן (לא lastUsed, שמשתנה כל שעה)</summary>
+    internal static string Canon(JsonObject c) =>
+        "pair|" + c["id"] + "|" + c["client"] + "|" + c["hash"];
+
+    /// <summary>
+    /// האם רשומת צימוד מהימנה. WHY (S3): auth.clients.json נשמר ב-config.json הכתיב למשתמש, ורשומה שנוספה לשם ישירות (גיבוב של טוקן שהתוקף בחר)
+    /// הייתה מתקבלת בלי חלון אישור. כשהחתימה נאכפת (שירות שתומך ב-config-sign) רק רשומה עם sig תקף, שנוצרה ב-Request אחרי אישור, מתקבלת.
+    /// בלי שירות/עם שירות ישן: התנהגות קודמת (אין מקור אמון לאכוף)
+    /// </summary>
+    internal static bool Trusted(JsonObject c)
+    {
+        if (!ConfigSeal.Enforced) return true;
+        string sig = c["sig"]?.ToString();
+        return !string.IsNullOrEmpty(sig) && ConfigSeal.Verify(Canon(c), sig);
+    }
+
     private static string Sha(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token ?? "")));
 
@@ -86,7 +130,7 @@ public static class Pairing
             foreach (var c in a.OfType<JsonObject>())
             {
                 byte[] e = Encoding.ASCII.GetBytes(c["hash"]?.ToString() ?? "");
-                if (e.Length == h.Length && CryptographicOperations.FixedTimeEquals(e, h))
+                if (e.Length == h.Length && CryptographicOperations.FixedTimeEquals(e, h) && Trusted(c))
                 {
                     // עדכון "שימוש אחרון" לכל היותר פעם בשעה, כדי לא לכתוב לדיסק בכל בקשה
                     string id = c["id"]?.ToString() ?? "";
@@ -173,13 +217,17 @@ public static class Pairing
         return null;
     }
 
+    private static DateTime _nextDialogAt = DateTime.MinValue;
+
     public static async Task<object> Request(JsonElement b, int remotePort = 0)
     {
         string client = (b.Str("client") ?? "").Trim();
         string name = (b.Str("name") ?? client).Trim();
         string caller = null; try { if (remotePort > 0) caller = CallerProcess(remotePort); } catch { }
-        Config.Log("pair/request מ-" + (caller ?? "לא ידוע") + ": " + client);
+        // WHY (QA-B 9): הבקשה פתוחה לכל תהליך מקומי; הרישום קודם לבדיקת אורך/תווים אפשר הזרקת שורות ליומן ו-16KB לשורה. קודם בודקים ומנקים
         if (client.Length == 0 || client.Length > 60) throw BridgeException.BadRequest("שדה client חסר או ארוך מדי");
+        if (client.Any(char.IsControl)) throw BridgeException.BadRequest("שדה client מכיל תווים לא חוקיים");
+        Config.Log("pair/request מ-" + (caller ?? "לא ידוע") + ": " + client);
         name = new string(name.Where(ch => !char.IsControl(ch)).ToArray()); // בלי שורות חדשות/תווי בקרה בחלון האישור
         if (name.Length > 60) name = name[..60];
         if (caller != null) name += " (" + caller + ")";
@@ -190,6 +238,10 @@ public static class Pairing
             throw new BridgeException("busy", "חלון אישור אחר כבר פתוח במחשב", 409);
         try
         {
+            // הגבלת קצב: חלון TopMost חדש לכל היותר פעם ב-10 שניות (גם אחרי פקיעה, לא רק אחרי דחייה), כדי שתהליך לא יכסה את אוצריא שוב ושוב
+            if (!AutoApproveOpen && DateTime.UtcNow < _nextDialogAt)
+                throw new BridgeException("too_many", "בקשות צימוד תכופות מדי. נסו שוב בעוד רגע", 429);
+            _nextDialogAt = DateTime.UtcNow.AddSeconds(10);
             bool approved = AutoApproveOpen || await PairDialog.AskAsync(name, Kiosk.IsActive);
             if (!approved)
             {
@@ -203,7 +255,7 @@ public static class Pairing
                 // צימוד חדש של אותו תוסף מחליף את הקודמים (התקנה מחדש / מזהה תוסף שהשתנה) — לא נשארים חיבורים כפולים
                 var a = new JsonArray(Clients().OfType<JsonObject>().Where(c => c["client"]?.ToString() != client)
                     .Select(c => (JsonNode)c.DeepClone()).ToArray());
-                a.Add(new JsonObject
+                var entry = new JsonObject
                 {
                     ["id"] = Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant(),
                     ["client"] = client,
@@ -211,7 +263,12 @@ public static class Pairing
                     ["hash"] = Sha(token),
                     ["created"] = DateTime.Now.ToString("s"),
                     ["lastUsed"] = DateTime.Now.ToString("s"),
-                });
+                };
+                // S3: החתימה נעשית רק כאן, אחרי אישור המשתמש. כשהיא נאכפת ואין שירות זמין לחתום: נכשלים (בלי טוקן שלא יתקבל)
+                string sig = ConfigSeal.Sign(Canon(entry));
+                if (sig != null) entry["sig"] = sig;
+                else if (ConfigSeal.Enforced) throw new BridgeException("unsupported", "רכיב ההקשחה אינו זמין לחתימת הצימוד", 503);
+                a.Add(entry);
                 SaveClients(a);
             }
             Config.Log("pair: אושר צימוד ל-" + client + " (" + name + ")");

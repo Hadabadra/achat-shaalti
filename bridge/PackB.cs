@@ -26,7 +26,9 @@ public static class PackB
         if (string.IsNullOrWhiteSpace(p)) throw BridgeException.BadRequest("נתיב ריק");
         p = Environment.ExpandEnvironmentVariables(p.Trim());
         if (!Path.IsPathFullyQualified(p)) throw BridgeException.BadRequest("נדרש נתיב מלא: " + p);
-        string full = Path.GetFullPath(p);
+        string full = PathPolicy.LongName(Path.GetFullPath(p));
+        full = FsApi.StrictNormalize(full);   // S3: בנעילה/הגבלה: ADS/שמות התקן שמורים נדחים (כמו FsApi.FullPath)
+        FsApi.EnsureNotReadable(full);   // W2: סודות הגשר חסומים גם לדחיסה/חילוץ/גודל תיקייה
         FxPolicy.EnsurePathAllowed(full);
         return full;
     }
@@ -57,12 +59,19 @@ public static class PackB
         string dest = Full(b.Req("dest"));
         if (!dest.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) dest += ".zip";
         FsApi.EnsureNotProtected(dest);
+        FsApi.EnsureWriteTargetAllowed(dest);
         dest = Unique(dest);
+        var secret = FsApi.SecretRoots();   // WHY: דחיסת אב של Config.Dir (%LOCALAPPDATA%) לא תכלול את config.json
+        bool strict = Kiosk.IsActive || FxPolicy.IsRestricted;
         using (var zip = ZipFile.Open(dest, ZipArchiveMode.Create))
         {
             foreach (string s in sources)
             {
-                if (File.Exists(s)) zip.CreateEntryFromFile(s, Path.GetFileName(s), CompressionLevel.Optimal);
+                if (File.Exists(s))
+                {
+                    FsApi.EnsureNoHardlink(s);
+                    zip.CreateEntryFromFile(s, Path.GetFileName(s), CompressionLevel.Optimal);
+                }
                 else if (Directory.Exists(s))
                 {
                     string root = Path.GetFileName(s.TrimEnd('\\', '/'));
@@ -71,6 +80,8 @@ public static class PackB
                     foreach (var f in Directory.EnumerateFiles(s, "*", opt))
                     {
                         if (string.Equals(f, dest, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (FsApi.IsSecretItem(f, secret)) continue;
+                        if (strict && PathPolicy.HardLinkCount(f) > 1) continue;
                         string rel = Path.Combine(root, Path.GetRelativePath(s, f)).Replace('\\', '/');
                         try { zip.CreateEntryFromFile(f, rel, CompressionLevel.Optimal); any = true; } catch { }
                     }
@@ -95,10 +106,13 @@ public static class PackB
         int count = 0;
         using (var zip = ZipFile.OpenRead(src))
         {
+            // WHY: בדיקה מראש של כל הרשומות, ודחיית כל הארכיב (fail-closed) לפני שנכתב בייט: פריסה לאב של Startup,
+            // zip-slip, נתיב מוחלט/ADS, או רשומה מריצה בנעילה
+            CheckZipEntries(zip.Entries.Select(x => x.FullName), dest);
+            CheckZipSize(zip.Entries.Select(x => (x.Length, x.CompressedLength)));
             foreach (var e in zip.Entries)
             {
                 string target = Path.GetFullPath(Path.Combine(dest, e.FullName));
-                // הגנה מ-Zip Slip: אין יציאה מתיקיית היעד
                 if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
                 if (e.FullName.EndsWith('/') || e.FullName.EndsWith('\\')) { Directory.CreateDirectory(target); continue; }
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -107,6 +121,50 @@ public static class PackB
             }
         }
         return new { path = dest, files = count };
+    }
+
+    internal const long MaxUnzipBytes = 4L << 30, MaxUnzipRatio = 1000;
+    internal const int MaxUnzipEntries = 50000;
+
+    /// <summary>
+    /// QA-B 15: תקרות חילוץ (פצצת zip ממלאת דיסק גם מתיקייה מותרת): מספר רשומות, גודל כולל מפורק, ויחס דחיסה לרשומה גדולה.
+    /// הגדלים בכותרת ה-zip ניתנים לזיוף כלפי מטה, לכן החילוץ עצמו חותך גם הוא (ExtractToFile כותב רק את הגודל האמיתי; הבדיקה כאן מגבילה את ההצהרה)
+    /// </summary>
+    internal static void CheckZipSize(IEnumerable<(long length, long compressed)> entries)
+    {
+        long total = 0; int n = 0;
+        foreach (var (len, comp) in entries)
+        {
+            if (++n > MaxUnzipEntries) throw BridgeException.Forbidden("הארכיב מכיל יותר מדי קבצים");
+            total += len;
+            if (total > MaxUnzipBytes) throw BridgeException.Forbidden("הארכיב גדול מדי לאחר פריסה");
+            if (len > (64L << 20) && comp > 0 && len / comp > MaxUnzipRatio) throw BridgeException.Forbidden("יחס הדחיסה בארכיב חריג (חשד לפצצת zip)");
+        }
+    }
+
+    /// <summary>שם רשומה בטוח: יחסי, בלי "..", בלי כונן/ADS (:), בלי נתיב מוחלט/UNC</summary>
+    internal static bool IsSafeEntryName(string name)
+    {
+        if (string.IsNullOrEmpty(name) || name.Contains(':') || name.Contains('\0')) return false;
+        string n = name.Replace('\\', '/');
+        if (n.StartsWith('/')) return false;
+        return !n.Split('/').Any(seg => seg == "..");
+    }
+
+    /// <summary>זורק Forbidden אם רשומה כלשהי אינה בטוחה או מגיעה לאזור מוגן/סודי/מריץ. נקרא לפני כל חילוץ</summary>
+    internal static void CheckZipEntries(IEnumerable<string> names, string dest)
+    {
+        var secret = FsApi.SecretRoots();
+        foreach (string name in names)
+        {
+            if (!IsSafeEntryName(name)) throw BridgeException.Forbidden("הארכיב מכיל נתיב לא בטוח: " + name);
+            string target = Path.GetFullPath(Path.Combine(dest, name.Replace('/', '\\')));
+            if (FsGuard.IsUnderAny(target, secret) || FsGuard.IsUnderAny(PathPolicy.LongName(target), secret))
+                throw BridgeException.Forbidden("הארכיב מכיל רשומה באזור מוגן: " + name);
+            FsApi.EnsureNotProtected(target);
+            FxPolicy.EnsurePathAllowed(target);
+            if (!(name.EndsWith('/') || name.EndsWith('\\'))) FsApi.EnsureWriteTargetAllowed(target);
+        }
     }
 
     private static string Unique(string p)
@@ -157,11 +215,44 @@ public static class PackB
         return new { path, keys = bridge.Count };
     }
 
+    /// <summary>מפתחות config שמותר לשחזר מגיבוי: תצוגה/נוחות בלבד. כל השאר (אבטחה, נתיבים, לוח זמנים, תוכנות) לא משוחזר</summary>
+    internal static readonly HashSet<string> ImportWhitelist = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "lang", "diag.autoReport",
+        "kiosk.clock", "kiosk.clockPosition", "kiosk.restScreen", "kiosk.restIdleMinutes", "kiosk.restZmanimSide", "kiosk.fullscreenOtzaria",
+        "kiosk.maximizeOtzaria", "kiosk.coverOtherScreens", "kiosk.dedicationText", "kiosk.venueName", "kiosk.yahrzeitDay", "kiosk.yahrzeitLabel",
+        "kiosk.yahrzeitMonth", "kiosk.sideBar", "kiosk.sideBarIconsOnly", "kiosk.sideBarPosition", "kiosk.showParsha", "kiosk.showDafYomi",
+        "kiosk.candleLightingMinutes", "kiosk.zmanimCity", "kiosk.zmanimDiaspora", "kiosk.zmanimElevation", "kiosk.zmanimFallbackEngine",
+        "kiosk.zmanimLocation", "kiosk.zmanimShow",
+    };
+
+    internal static bool ImportAllowed(string key) => !Skip(key) && ImportWhitelist.Contains(key);
+
+    /// <summary>
+    /// סכמה לערך של מפתח משוחזר. WHY (U3): הרשימה הלבנה בדקה רק שם מפתח; קובץ גיבוי ניתן לעריכה, ולכן ערך בטיפוס/גודל לא צפוי
+    /// (אובייקט מקונן, מחרוזת בת מגה, מספר חריג, מערך ענק) היה נכתב ל-config וגורם לקריסה, לניפוח הקובץ או להזרקת תוכן לממשק.
+    /// טיפוסים: bool / מספר סופי בטווח / מחרוזת עד אורך מרבי / מערך מחרוזות קצר (zmanimShow). אחר = נדחה.
+    /// </summary>
+    internal static bool ImportValueOk(string key, JsonNode v)
+    {
+        if (v is not JsonValue jv) return v is JsonArray arr && key.Equals("kiosk.zmanimShow", StringComparison.OrdinalIgnoreCase) && arr.Count <= 64 &&
+                                          arr.All(x => x is JsonValue xv && xv.TryGetValue<string>(out var xs) && xs != null && xs.Length <= 64);
+        if (jv.TryGetValue<bool>(out _)) return true;
+        if (jv.TryGetValue<string>(out var str))
+        {
+            int max = key.Equals("kiosk.dedicationText", StringComparison.OrdinalIgnoreCase) ? 500 : key.Equals("lang", StringComparison.OrdinalIgnoreCase) ? 16 : 120;
+            return str != null && str.Length <= max && !str.Any(c => char.IsControl(c) && c != '\n');
+        }
+        if (jv.TryGetValue<double>(out var d)) return !double.IsNaN(d) && !double.IsInfinity(d) && Math.Abs(d) <= 1_000_000;
+        return false;
+    }
+
     private static object Import(JsonElement b)
     {
         if (Kiosk.IsActive) throw BridgeException.Locked("אי אפשר לשחזר הגדרות במצב נעילה");
         // שחזור משנה גם את הגדרות הנעילה — דורש את סיסמת הנעילה כשהוגדרה
-        if (!string.IsNullOrEmpty(Config.Get<string>("kiosk.passwordHash", null)))
+        // [w4] לא נשען על hash מקומי: כשהשירות מחזיק את הסיסמה העותק המקומי נמחק (Kiosk.PurgeLocalPassword)
+        if (Kiosk.PasswordConfigured || Kiosk.ServiceDown())
         {
             Kiosk.RequirePassword(b.Str("password"));
             TwoFactor.Require("שחזור הגדרות");
@@ -175,7 +266,9 @@ public static class PackB
         int n = 0;
         foreach (var kv in bridge)
         {
-            if (Skip(kv.Key) || kv.Key.StartsWith("fx.policy")) continue;   // מדיניות הסייר לא משוחזרת מקובץ
+            // S3: רשימה לבנה ולא שחורה. קובץ הגיבוי ניתן לעריכה, ולכן רק מפתחות תצוגה/נוחות משוחזרים: kiosk.otzariaPath/strict/
+            // schedule.*/allowOpenExtensions/openSections/programs/fx.policy וכל מפתח לא מוכר (גם עתידי) נדחים.
+            if (!ImportAllowed(kv.Key) || !ImportValueOk(kv.Key, kv.Value)) continue;
             Config.Set(kv.Key, kv.Value?.DeepClone());
             n++;
         }

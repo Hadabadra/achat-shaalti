@@ -3,13 +3,9 @@ name: Release תוספים בלבד (בלי גשר)
 # מופעל על תג plugins-v<גרסה>. אורז את שני התוספים כמו ב-build.yml (בלי לדרוס את הגרסה במניפסט)
 # ויוצר Release שאינו מסומן latest — כדי לא לשבש את בדיקת העדכונים של הגשר (UpdateApi.cs).
 
+# WHY (מיזוג upstream, מדיניות הקשחה 7): הטריגר על תג/ענף release/plugins-v* הוסר. מי שיכול לדחוף תג/ענף שולט בקוד ה-workflow
+# (נלקח מה-commit שלו) ועם contents:write יכול לפרסם Release. עכשיו: הרצה ידנית בלבד ומ-main בלבד (ר' ה-if בג'וב).
 on:
-  # תג plugins-v<גרסה>, או (כשדחיפת תגים חסומה) ענף release/plugins-v<גרסה> — ואז ה-CI עצמו יוצר את התג
-  push:
-    tags:
-      - "plugins-v*"
-    branches:
-      - "release/plugins-v*"
   workflow_dispatch:
     inputs:
       version:
@@ -24,15 +20,19 @@ permissions:
 
 jobs:
   release:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: שם התג
         shell: pwsh
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") { $t = "plugins-v${{ inputs.version }}" }
-          else { $t = "${{ github.ref_name }}" -replace '^release/', '' }
+          # WHY: הקלט עובר דרך env (לא אינטרפולציה ל-pwsh) ומאומת בתבנית קפדנית
+          if ($env:VERSION_INPUT -notmatch '^\d{1,4}\.\d{1,4}\.\d{1,6}$') { throw "גרסה לא תקינה" }
+          $t = "plugins-v$($env:VERSION_INPUT)"
           "TAG=$t" >> $env:GITHUB_ENV
           Write-Host "tag=$t"
 

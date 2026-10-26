@@ -44,12 +44,59 @@ public static class Sched
         return endToday > now ? endToday : endToday.AddDays(1);
     }
 
+    // ---------- אזור זמן (השירות) ----------
+    // WHY: התזמון נשמר כשעות-שעון ("20:00"), ולכן שינוי אזור הזמן של Windows (מותר למשתמש רגיל) הזיז את חלון הנעילה
+    // ושחרר אותו. השירות שומר את מזהה אזור הזמן ברגע הגדרת התזמון ומחשב לפיו, לא לפי אזור הזמן הנוכחי של המחשב.
+
+    /// <summary>מזהה אזור הזמן הנוכחי של המחשב (עוקף מטמון .NET, שלא מתעדכן בשינוי אזור זמן תוך כדי ריצה של השירות)</summary>
+    public static string LocalTzId()
+    {
+        try { TimeZoneInfo.ClearCachedData(); return TimeZoneInfo.Local.Id; }
+        catch { return ""; }
+    }
+
+    /// <summary>מפענח מזהה אזור זמן שמור. ריק/לא מוכר → האזור הנוכחי של המחשב (שירות ישן שלא שמר מזהה)</summary>
+    public static TimeZoneInfo ResolveTz(string id)
+    {
+        if (!string.IsNullOrWhiteSpace(id))
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById(id.Trim()); } catch { }
+        }
+        try { TimeZoneInfo.ClearCachedData(); } catch { }
+        return TimeZoneInfo.Local;
+    }
+
+    /// <summary>הזמן המקומי באזור tz ברגע מוחלט נתון</summary>
+    public static DateTime LocalIn(TimeZoneInfo tz, DateTimeOffset now) => TimeZoneInfo.ConvertTime(now, tz).DateTime;
+
+    public static bool InWindow(string start, string end, DateTimeOffset now, TimeZoneInfo tz) =>
+        InWindow(start, end, LocalIn(tz, now));
+
+    /// <summary>סוף החלון הנוכחי כרגע מוחלט (לפי אזור הזמן של התזמון), או null מחוץ לחלון</summary>
+    public static DateTimeOffset? CurrentWindowEnd(string start, string end, DateTimeOffset now, TimeZoneInfo tz)
+    {
+        var local = LocalIn(tz, now);
+        if (CurrentWindowEnd(start, end, local) is not DateTime endLocal) return null;
+        endLocal = DateTime.SpecifyKind(endLocal, DateTimeKind.Unspecified);
+        if (tz.IsInvalidTime(endLocal)) endLocal = endLocal.AddHours(1); // "חור" של מעבר לשעון קיץ
+        return new DateTimeOffset(endLocal, tz.GetUtcOffset(endLocal));
+    }
+
     /// <summary>סוף החלון המאוחר ביותר מבין כמה חלונות שבהם 'now' נמצא (הראשי + נוספים); null אם באף אחד</summary>
     public static DateTime? CurrentWindowEnd(IEnumerable<(string start, string end)> windows, DateTime now)
     {
         DateTime? best = null;
         foreach (var (s, e) in windows)
             if (CurrentWindowEnd(s, e, now) is DateTime x && (best == null || x > best)) best = x;
+        return best;
+    }
+
+    /// <summary>כמה חלונות לפי אזור הזמן של התזמון: סוף החלון המאוחר ביותר מבין אלה ש-'now' בהם (כרגע מוחלט), או null</summary>
+    public static DateTimeOffset? CurrentWindowEnd(IEnumerable<(string start, string end)> windows, DateTimeOffset now, TimeZoneInfo tz)
+    {
+        DateTimeOffset? best = null;
+        foreach (var (s, e) in windows)
+            if (CurrentWindowEnd(s, e, now, tz) is DateTimeOffset x && (best == null || x > best)) best = x;
         return best;
     }
 

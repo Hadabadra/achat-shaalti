@@ -32,8 +32,7 @@ internal sealed class SideBar : Form
     public SideBar()
     {
         FormBorderStyle = FormBorderStyle.None;
-        ShowInTaskbar = false;
-        TopMost = true;
+        ShowInTaskbar = false;   // [x2] בלי Form.TopMost (גניבת פוקוס): WS_EX_TOPMOST ב-CreateParams
         StartPosition = FormStartPosition.Manual;
         DoubleBuffered = true;
         BackColor = Color.FromArgb(24, 30, 40);
@@ -337,8 +336,7 @@ internal sealed class SideBar : Form
         {
             _activate = activate;
             FormBorderStyle = FormBorderStyle.None;
-            ShowInTaskbar = false;
-            TopMost = true;
+            ShowInTaskbar = false;   // [x2] בלי Form.TopMost (גניבת פוקוס): WS_EX_TOPMOST ב-CreateParams
             StartPosition = FormStartPosition.Manual;
             DoubleBuffered = true;
             BackColor = Color.FromArgb(24, 30, 40);
@@ -559,7 +557,7 @@ internal sealed class EmergencyForm : Form
 internal static class Diagnostics_
 {
     public const string IssuesUrl = "https://github.com/Hadabadra/achat-shaalti/issues/new";
-    private static readonly Regex Secret = new("(hash|salt|key|secret|password|token|recovery)", RegexOptions.IgnoreCase);
+    private static readonly Regex Secret = new("(hash|salt|key|secret|password|token|recovery|client|auth)", RegexOptions.IgnoreCase);
 
     public static void Report()
     {

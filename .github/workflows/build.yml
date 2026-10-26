@@ -1,30 +1,51 @@
 name: בנייה — גשר + תוספים + קובץ התקנה (Inno Setup)
 
-# פורק אישי: אין כאן שער "חובה לפני אריזה" ואין פרסום אוטומטי לחנות אוצריא/Release רשמי —
-# רק בנייה + אריזת installer כ-artifact להורדה. רץ על כל push לכל ענף, ועל workflow_dispatch ידני.
+# שרשרת אספקה (הקשחה): dotnet test חוסם לפני האריזה (גם על push לענפים ועל pull_request, בלי סודות).
+# workflow זה רק בונה ובודק: אין בו חתימה ואין Release, ותגית לא מפעילה אותו. שחרור וחתימה נמצאים רק ב-
+# release.yml (workflow_dispatch מ-main בלבד, ר' שם), שקורא ל-workflow הזה כ-workflow_call.
+# WHY: workflow מופעל מתגית נלקח מה-commit של התגית, כלומר מי שיכול לדחוף תגית שולט בקוד ה-workflow ובבדיקות שבו.
+# actions מוצמדים ל-SHA מלא (ההערה ליד כל אחד היא התגית שממנה נלקח). לעדכון: git ls-remote <repo> refs/tags/<tag>.
 
 on:
   push:
+    branches:
+      - "**"
     paths:
       - "bridge/**"
       - "system-settings/**"
       - "file-explorer/**"
       - "installer/**"
-      - "tools/**"
       - "tests/**"
+      - "tools/**"
       - "RELEASE_VERSION.txt"
-      - ".github/workflows/build.yml"
+      - ".github/workflows/**"
+  # WHY: pull_request (לא pull_request_target): ב-PR מפורק אין גישה לסודות, ו-dotnet test רץ על הקוד של ה-PR
+  pull_request: {}
   workflow_dispatch: {}
+  workflow_call:
+    inputs:
+      ref:
+        description: "ה-commit (SHA מלא) לבנייה, מאומת מראש כאבא-קדמון של main"
+        type: string
+        required: true
+      tag:
+        description: "תגית ה-Release (vX.Y.Z), מאומתת מראש"
+        type: string
+        required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
           fetch-depth: 0 # נדרש היסטוריה מלאה (לא שכפול רדוד) לחישוב גרסת התוספים למטה
 
       # גרסת התוספים (file-explorer/system-settings): עצמאית מגרסת הגשר ומגרסת ה-Release, ומסונכרנת
@@ -48,32 +69,40 @@ jobs:
       - name: גרסה לתגית ה-Release
         id: ver
         shell: pwsh
+        # WHY: ref_name/run_number עוברים דרך env ולא אינטרפולציה ישירה של ${{ }} בתוך הסקריפט
+        # (שם תגית כמו v1$(calc) היה מוזרק כקוד pwsh). בנוסף התגית מאומתת בתבנית קפדנית.
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           $base = (Get-Content RELEASE_VERSION.txt -Raw).Trim()
           $parts = $base -split '\.'
           $majorMinor = "$($parts[0]).$($parts[1])"
-          $full = "$majorMinor.${{ github.run_number }}"
-          # בשחרור על main (מספר הגרסה הרשמי) — שם הקובץ וגרסת ההתקנה הם גרסת הגשר עצמה, למשל 1.0.0
-          if ("${{ github.ref }}" -eq "refs/heads/main") {
-            $csv = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-            if ($csv) { $full = $csv }
-          }
+          $full = "$majorMinor.$($env:RUN_NUMBER)"
+          # תגית מגיעה רק מ-release.yml (workflow_call, אחרי אימות שה-commit ב-main); בהרצות אחרות התגית היא רק תווית לבנייה
+          if ($env:TAG_INPUT) {
+            if ($env:TAG_INPUT -notmatch '^v\d{1,4}\.\d{1,4}\.\d{1,6}$') { throw "שם תגית לא תקין: רק vX.Y.Z" }
+            $tag = $env:TAG_INPUT; $full = $tag.TrimStart('v')
+          } else { $tag = "v$full" }
           "version=$full" >> $env:GITHUB_OUTPUT
-          "tag=v$full" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "8.0.x"
 
-      - name: בדיקות יחידה
-        run: dotnet test tests/OtzariaBridge.Tests -c Release
+      # שער בדיקות: כשל כאן עוצר את הכול (אריזה, Release). מיד אחרי build כדי שכשל קומפילציה יהיה ברור.
+      - name: בדיקות (xunit)
+        run: dotnet test tests/OtzariaBridge.Tests/OtzariaBridge.Tests.csproj -c Release --nologo
 
       # כותבים את גרסת התוספים המחושבת (steps.pluginver) לתוך שני המניפסטים לפני האריזה - רק בעותק
       # הזמני שב-runner, לא מחזירים commit לריפו (ר' הסבר אצל חישוב הגרסה למעלה)
       - name: אריזת התוספים כמשאב מוטמע
         shell: pwsh
+        env:
+          PV: ${{ steps.pluginver.outputs.version }}
         run: |
-          $pv = "${{ steps.pluginver.outputs.version }}"
+          $pv = $env:PV
           foreach ($f in @("file-explorer/manifest.json", "system-settings/manifest.json")) {
             (Get-Content $f -Raw) -replace '"version":\s*"[^"]*"', ('"version": "' + $pv + '"') | Set-Content $f -Encoding utf8NoBOM -NoNewline
           }
@@ -90,30 +119,35 @@ jobs:
       - name: Publish
         run: dotnet publish bridge/OtzariaBridge.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o out
 
-      - name: התקנת Inno Setup
-        shell: powershell
-        run: choco install innosetup --no-progress --yes
+      # ללא choco בלתי נעול: מורידים גרסה מסוימת ישירות ממאגר הפרויקט ומאמתים SHA256 מוצמד לפני ההרצה.
+      # ה-hash חושב מהקובץ הרשמי innosetup-6.4.3.exe (https://github.com/jrsoftware/issrc/releases/tag/is-6_4_3);
+      # לאימות עצמאי השוו מול jrsoftware.org לפני שינוי.
+      - name: התקנת Inno Setup (גרסה מוצמדת)
+        shell: pwsh
+        env:
+          IS_VERSION: "6.4.3"
+          IS_SHA256: f3c42116542c4cc57263c5ba6c4feabfc49fe771f2f98a79d2f7628b8762723b
+        run: |
+          $f = Join-Path $env:RUNNER_TEMP "innosetup.exe"
+          Invoke-WebRequest "https://github.com/jrsoftware/issrc/releases/download/is-$($env:IS_VERSION -replace '\.','_')/innosetup-$($env:IS_VERSION).exe" -OutFile $f
+          $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne $env:IS_SHA256) { throw "hash של Inno Setup לא תואם: $h" }
+          Start-Process $f -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" -Wait
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { throw "ISCC.exe לא נמצא אחרי ההתקנה" }
 
       # AppVersion של קובץ ההתקנה (וגם שם הקובץ עצמו, OtzariaBridge-Setup-{AppVersion}.exe) הוא מספר
       # ה-Release (steps.ver.outputs.version) - לא Program.Version הפנימי - כדי שמה שרואים בשם הקובץ
       # יתאים תמיד למה שרואים בעמוד ה-Releases בגיטהאב.
       - name: בניית קובץ ההתקנה (Inno Setup)
         shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.ver.outputs.version }}
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-            "/DAppVersion=${{ steps.ver.outputs.version }}" `
+            "/DAppVersion=$($env:APP_VERSION)" `
             "/DExePath=$PWD\out\OtzariaBridge.exe" `
             "installer\OtzariaBridge.iss"
           Get-ChildItem installer\Output
-
-      - name: SHA256 לאימות ההורדה
-        shell: pwsh
-        run: |
-          $setup = Get-ChildItem installer\Output\*.exe | Select-Object -First 1 -ExpandProperty FullName
-          $files = @($setup, "out/OtzariaBridge.exe", "bridge/plugins/system-settings.otzplugin", "bridge/plugins/file-explorer.otzplugin")
-          $lines = foreach ($f in $files) { "{0}  {1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) }
-          $lines | Set-Content SHA256SUMS.txt -Encoding ascii
-          Get-Content SHA256SUMS.txt
 
       # נפרד ממספר ה-Release - UpdateApi.cs בגשר משווה מול הקובץ הזה (גרסת הגשר הפנימית בפועל,
       # OtzariaBridge.csproj) כדי לדעת אם יש עדכון אמיתי לגשר, לא מול מספר ה-Release.
@@ -123,7 +157,22 @@ jobs:
           $ver = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
           Set-Content BRIDGE_VERSION.txt $ver -Encoding ascii -NoNewline
 
-      - uses: actions/upload-artifact@v4
+      # SHA256SUMS.txt הוא הקובץ החתום (בג'וב release). השורה הראשונה "# tag=" קושרת אותו להוצאה אחת,
+      # וכוללת את BRIDGE_VERSION.txt, כך שגם הגרסה שהגשר משווה מולה חתומה.
+      - name: SHA256 לאימות ההורדה
+        shell: pwsh
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          # WHY: גרסת מפתח מפורשת (הגשר דוחה keyver חסר או נמוך מ-UpdateApi.MinKeyVersion). בביטול מפתח מעלים כאן ובקוד יחד.
+          KEY_VERSION: "1"
+        run: |
+          $setup = Get-ChildItem installer\Output\*.exe | Select-Object -First 1 -ExpandProperty FullName
+          $files = @($setup, "out/OtzariaBridge.exe", "bridge/plugins/system-settings.otzplugin", "bridge/plugins/file-explorer.otzplugin", "BRIDGE_VERSION.txt")
+          $lines = @("# tag=$($env:TAG)", "# keyver=$($env:KEY_VERSION)") + (foreach ($f in $files) { "{0}  {1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) })
+          $lines | Set-Content SHA256SUMS.txt -Encoding ascii
+          Get-Content SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: OtzariaBridge-Setup
           path: |
@@ -133,121 +182,3 @@ jobs:
             SHA256SUMS.txt
             BRIDGE_VERSION.txt
           if-no-files-found: error
-
-      - name: האם לשחרר גרסה?
-        id: rel
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ver = ([xml](Get-Content bridge/OtzariaBridge.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-          $tag = "v$ver"
-          gh release view $tag -R ${{ github.repository }} *> $null
-          $exists = $LASTEXITCODE -eq 0
-          $global:LASTEXITCODE = 0
-          $do = ("${{ github.ref }}" -eq "refs/heads/main") -and (-not $exists)
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          "do=$($do.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-          Write-Host "version=$ver tag=$tag exists=$exists release=$do"
-
-      - name: הערות שחרור מתוך CHANGELOG.md
-        if: github.ref == 'refs/heads/main'
-        shell: pwsh
-        env:
-          TAG: ${{ steps.rel.outputs.tag }}
-        run: |
-          $ver = $env:TAG.TrimStart('v')
-          $lines = Get-Content CHANGELOG.md -Encoding UTF8
-          $start = [Array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -like "## $ver *" -or $l -eq "## $ver" })
-          $section = @()
-          if ($start -ge 0) {
-            for ($i = $start + 1; $i -lt $lines.Length; $i++) {
-              if ($lines[$i] -like '## *' -or $lines[$i] -like '# *' -or $lines[$i] -eq '---') { break }
-              $section += $lines[$i]
-            }
-          }
-          $notes = @(
-            "## מה חדש בגרסה $ver"
-            ($section -join "`n").Trim()
-            ""
-            "## התקנה"
-            "1. מורידים את **OtzariaBridge-Setup-*.exe** (קובץ ההתקנה, למטה) ומפעילים: הגשר מותקן, עולה אוטומטית עם Windows, ומתקין את התוספים באוצריא."
-            "2. באוצריא: התקנת תוסף מקובץ → **file-explorer.otzplugin** ו-**system-settings.otzplugin**."
-            ""
-            "> ⚠️ לפני הפעלת *נעילה קפדנית* — לרשום את קוד השחזור."
-            ""
-            "## אם Windows או האנטי-וירוס מזהירים"
-            "הגשר עדיין אינו חתום בחתימת קוד, ולכן SmartScreen עלול להציג 'Windows protected your PC'. לוחצים **More info / מידע נוסף** ← **Run anyway / הפעל בכל זאת**."
-            "הקוד פתוח כולו בריפו, והקובץ נבנה אוטומטית ב-GitHub Actions. לאימות: ב-PowerShell ``Get-FileHash OtzariaBridge.exe`` והשוואה ל-**SHA256SUMS.txt**."
-            "הגשר מאזין רק ל-127.0.0.1 (המחשב המקומי) ואינו נגיש מהרשת."
-            ""
-            "## קבצים"
-            "| קובץ | מה זה |"
-            "|---|---|"
-            "| ``OtzariaBridge-Setup-*.exe`` | **קובץ ההתקנה (Inno Setup) — מומלץ** |"
-            "| ``OtzariaBridge.exe`` | אחת שאלתי — תוכנת הרקע ל-Windows (ללא מתקין) |"
-            "| ``file-explorer.otzplugin`` | תוסף סייר קבצים |"
-            "| ``system-settings.otzplugin`` | תוסף הגדרות מערכת |"
-            "| ``SHA256SUMS.txt`` | טביעות SHA256 לאימות הקבצים (גם העדכון האוטומטי בודק אותן) |"
-            ""
-            "## שימושי"
-            "- אנגלית: תפריט המגש → English, או ``OtzariaBridge.exe --lang en``"
-            "- ביטול נעילה בחירום: ``OtzariaBridge.exe --unlock <קוד שחזור>``"
-            "- הסרה: ``OtzariaBridge.exe --uninstall``"
-            "- הערות ותקלות: כפתור **שליחת הערה** בשני התוספים"
-            "- כל הגרסאות: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)"
-          )
-          $notes -join "`n" | Set-Content release-notes.md -Encoding UTF8
-          Get-Content release-notes.md
-
-      # גרסה חדשה ב-OtzariaBridge.csproj (תג שעוד לא קיים) = Release אוטומטי
-      - name: Release
-        if: steps.rel.outputs.do == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          fail_on_unmatched_files: true  # #55: לא ליצור מהדורה בלי קבצים
-          tag_name: ${{ steps.rel.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          name: כלי מערכת לאוצריא ${{ steps.rel.outputs.tag }}
-          prerelease: false
-          make_latest: true
-          body_path: release-notes.md
-          files: |
-            installer/Output/*.exe
-            out/OtzariaBridge.exe
-            bridge/plugins/system-settings.otzplugin
-            bridge/plugins/file-explorer.otzplugin
-            SHA256SUMS.txt
-
-      # פורק (לא המאגר של המפתח): כל דחיפה לענף שאינו main מפרסמת pre-release מתגלגל "build-<ענף>" עם קובץ ההתקנה (Inno Setup),
-      # כך שלא צריך להוריד artifact ולפרוס zip. לא רץ במאגר המקורי כדי לא ללכלך את עמוד ה-Releases שלו.
-      - name: Pre-release מתגלגל לענף (פורק בלבד)
-        if: github.ref != 'refs/heads/main' && github.repository_owner != 'e0548433917-gif'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $branch = "${{ github.ref_name }}" -replace '[^A-Za-z0-9._-]', '-'
-          $tag = "build-$branch"
-          gh release delete $tag -R ${{ github.repository }} --cleanup-tag -y *> $null
-          $global:LASTEXITCODE = 0
-          $setup = Get-ChildItem installer/Output/*.exe | Select-Object -First 1 -ExpandProperty FullName
-          gh release create $tag -R ${{ github.repository }} --prerelease --target ${{ github.sha }} --title "בנייה — $branch (${{ steps.ver.outputs.version }})" --notes "בנייה אוטומטית של הענף $branch (קומיט ${{ github.sha }}). להתקנה: מורידים ומפעילים את קובץ ההתקנה (Setup)." $setup out/OtzariaBridge.exe bridge/plugins/system-settings.otzplugin bridge/plugins/file-explorer.otzplugin SHA256SUMS.txt
-
-      - name: עדכון הערות של Release קיים
-        if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --notes-file release-notes.md
-
-      # Release שנשאר טיוטה (draft): מעדכנים את הקבצים לבנייה הנוכחית ומפרסמים
-      - name: השלמת Release שנשאר טיוטה
-        if: github.ref == 'refs/heads/main' && steps.rel.outputs.do != 'true'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $draft = gh release view ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --json isDraft -q .isDraft
-          if ($draft -ne 'true') { Write-Host "not a draft"; exit 0 }
-          gh release upload ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --clobber (Get-ChildItem installer/Output/*.exe).FullName out/OtzariaBridge.exe bridge/plugins/system-settings.otzplugin bridge/plugins/file-explorer.otzplugin SHA256SUMS.txt
-          gh release edit ${{ steps.rel.outputs.tag }} -R ${{ github.repository }} --draft=false --latest --target ${{ github.sha }}
