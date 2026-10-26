@@ -25,12 +25,26 @@ internal static class BackupCodes
 
     public static void Register()
     {
-        Server.Route("/kiosk/recovery/backup", Generate);          // { password, mode?: "file"|"print"|"none" }
+        Server.Route("/kiosk/recovery/backup", Generate);          // { password, mode?: "none"(ברירת מחדל)|"print"|"file"+dir על כונן נשלף }
         Server.Route("/kiosk/recovery/backup/status", _ => new { left = Left });
     }
 
     /// <summary>כמה קודי גיבוי שלא נוצלו נשארו</summary>
-    public static int Left => Config.GetList(Key).Length;
+    public static int Left => ServiceHolds ? (HardLock.ServiceBackupLeft() ?? 0) : Config.GetList(Key).Length;
+
+    /// <summary>
+    /// F2 WHY: כשהשירות (SYSTEM) מותקן ועונה, הוא מקור האמת לקודי הגיבוי. config.json כתיב למשתמש: תוקף שכותב לשם גיבוב
+    /// של קוד ידוע היה עובר את הבדיקה המקומית (דילוג על Verify/2FA). שירות ישן שלא מדווח backupLeft: נשארים עם העותק המקומי.
+    /// </summary>
+    internal static bool ServiceHolds => HardLock.Available && HardLock.ServiceBackupLeft() != null;
+
+    /// <summary>מחיקת העותק המקומי כשהשירות מחזיק רשימה (נקרא מ-Kiosk.PurgeLocalPassword). true = נמחק</summary>
+    internal static bool PurgeLocal()
+    {
+        if (Config.GetList(Key).Length == 0 || !ServiceHolds || (HardLock.ServiceBackupLeft() ?? 0) <= 0) return false;
+        Config.Remove(Key);
+        return true;
+    }
 
     /// <summary>"salt|hash" לכל קוד</summary>
     private static string Pack(string code)
@@ -53,11 +67,18 @@ internal static class BackupCodes
     }
 
     /// <summary>האם זה קוד גיבוי בתוקף (בלי לשרוף). שימו לב — לא נבדק מול רכיב ההקשחה; הוא בודק בעצמו</summary>
-    public static bool Matches(string code) => IndexOf(code) >= 0;
+    public static bool Matches(string code)
+    {
+        if (ServiceHolds) return Secret.NormalizeRecovery(code).Length == 12 && HardLock.IsBackupCode(code);
+        // שירות מותקן ורץ אבל לא עונה/מופסק-לא-באמת: fail-closed, בלי עותק מקומי. רק בלי שירות או כשהוא מופסק ב-SCM (מסלול חירום)
+        if (HardLock.ServiceInstalled() && !Kiosk.ServiceStopped()) return false;
+        return IndexOf(code) >= 0;
+    }
 
     /// <summary>שורף את הקוד (אחרי שימוש מוצלח). מחזיר false אם לא היה קוד כזה</summary>
     public static bool Consume(string code)
     {
+        if (ServiceHolds) return false; // השירות שורף בעצמו בזמן disable/set-password; העותק המקומי לא רלוונטי
         int i = IndexOf(code);
         if (i < 0) return false;
         var list = Config.GetList(Key).ToList();
@@ -80,21 +101,47 @@ internal static class BackupCodes
         var codes = Enumerable.Range(0, Count).Select(_ => Secret.NewRecoveryCode()).ToArray();
         var packed = codes.Select(Pack).ToArray();
         // כשרכיב ההקשחה מותקן הוא מקור האמת — אם השמירה שם נכשלת, לא משנים כלום כאן
-        if (HardLock.Available) HardLock.SetBackupCodes(pw, packed);
-        Config.Set(Key, new JsonArray(packed.Select(s => (JsonNode)JsonValue.Create(s)).ToArray()));
+        // F2: שירות מותקן שלא עונה => נכשלים (אחרת הקודים שהוצגו לא היו עובדים בשירות); ובשירות לא שומרים עותק מקומי
+        if (!HardLock.Available && HardLock.ServiceInstalled())
+            throw new BridgeException("unsupported", Lang.T("רכיב ההקשחה לא מגיב; אי אפשר ליצור קודי גיבוי כרגע", "The hardening service is not responding; cannot create backup codes now"), 503);
+        if (HardLock.Available)
+        {
+            HardLock.SetBackupCodes(pw, packed);
+            Config.Remove(Key);
+        }
+        else Config.Set(Key, new JsonArray(packed.Select(s => (JsonNode)JsonValue.Create(s)).ToArray()));
         Config.Save();
         AdminLog.Add("נוצרו " + Count + " קודי גיבוי לשחזור (הקודמים בוטלו)");
 
+        // WHY (qa-final-a #5): ברירת המחדל כבר לא קובץ ב"מסמכים" (קריא לאותו חשבון Windows שהנעילה נועדה נגדו, ונשאר בענן/גיבוי).
+        // הקודים מוצגים פעם אחת בחלון; הדפסה עוברת דרך קובץ זמני שנמחק; קובץ רק לכונן נשלף
         string path = null;
-        string mode = b.Str("mode") ?? "file";
-        if (mode != "none")
+        string mode = ResolveMode(b.Str("mode"));
+        string removableDir = mode == "file" ? RemovableTarget(b.Str("dir"), d => { try { return new DriveInfo(d).DriveType; } catch { return DriveType.Unknown; } }) : null;
+        if (mode == "file" && removableDir == null)
         {
-            path = WriteFile(codes);
-            try
+            Config.Log("backup codes: שמירה לקובץ נדרשת כונן נשלף (dir) — הקודים הוצגו בלבד");
+            mode = "none";
+        }
+        if (mode == "print")
+        {
+            string tmpDir = Path.Combine(Path.GetTempPath(), "otzaria-print-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tmpDir);
+            string tmp = WriteFile(codes, tmpDir);
+            try { Process.Start(new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "notepad.exe"), "/p \"" + tmp + "\"") { UseShellExecute = false }); }
+            catch (Exception ex) { Config.Log("backup codes print: " + ex.Message); }
+            // הדפסה אסינכרונית: מחכים ואז מוחקים (דריסה לפני מחיקה, כדי שלא יישאר בשבבי דיסק קריאים בקלות)
+            System.Threading.Tasks.Task.Run(async () =>
             {
-                if (mode == "print") Process.Start(new ProcessStartInfo("notepad.exe", "/p \"" + path + "\"") { UseShellExecute = false });
-                else Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + path + "\"") { UseShellExecute = false });
-            }
+                await System.Threading.Tasks.Task.Delay(30_000);
+                try { File.WriteAllText(tmp, new string('*', 512)); } catch { }
+                try { Directory.Delete(tmpDir, true); } catch { }
+            }).Observe("backup codes temp cleanup", quiet: true);
+        }
+        else if (mode == "file")
+        {
+            path = WriteFile(codes, removableDir);
+            try { Process.Start(new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), "/select,\"" + path + "\"") { UseShellExecute = false }); }
             catch (Exception ex) { Config.Log("backup codes open: " + ex.Message); }
         }
         return new { ok = true, codes = codes.Select(Pretty).ToArray(), path, left = codes.Length };
@@ -106,10 +153,41 @@ internal static class BackupCodes
         return string.Join("-", Enumerable.Range(0, (c.Length + 3) / 4).Select(i => c.Substring(i * 4, Math.Min(4, c.Length - i * 4))));
     }
 
-    private static string WriteFile(string[] codes)
+    /// <summary>none (ברירת מחדל, גם לערך לא מוכר), print, file. "file" חוקי רק עם dir על כונן נשלף (RemovableTarget)</summary>
+    internal static string ResolveMode(string mode) => (mode ?? "").Trim().ToLowerInvariant() switch { "print" => "print", "file" => "file", _ => "none" };
+
+    /// <summary>תיקיית יעד מאושרת לקובץ קודים: רק שורש/תיקיה על כונן נשלף קיים. null = לא מאושר. typeOf מקבל שורש כונן ("E:\")</summary>
+    internal static string RemovableTarget(string dir, Func<string, DriveType> typeOf, Func<string, bool> isReparse = null)
     {
-        string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        string path = Path.Combine(docs, Program.AppName + " - " + Lang.T("קודי גיבוי לשחזור", "backup recovery codes") + ".txt");
+        if (string.IsNullOrWhiteSpace(dir)) return null;
+        try
+        {
+            string full = Path.GetFullPath(dir);
+            string root = Path.GetPathRoot(full);
+            if (string.IsNullOrEmpty(root) || root.StartsWith(@"\\", StringComparison.Ordinal)) return null;
+            if (typeOf(root) != DriveType.Removable) return null;
+            // junction / symlink / reparse point בכל רכיב בדרך (מהשורש עד היעד) יכול להפנות לכונן קבוע — נדחה
+            isReparse ??= DefaultIsReparse;
+            string cur = root;
+            foreach (var part in full.Substring(root.Length).Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                cur = Path.Combine(cur, part);
+                if (isReparse(cur)) return null;
+            }
+            return full;
+        }
+        catch { return null; }
+    }
+
+    private static bool DefaultIsReparse(string path)
+    {
+        try { return Directory.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0; }
+        catch { return true; }
+    }
+
+    private static string WriteFile(string[] codes, string dir)
+    {
+        string path = Path.Combine(dir, Program.AppName + " - " + Lang.T("קודי גיבוי לשחזור", "backup recovery codes") + ".txt");
         var sb = new StringBuilder();
         sb.Append(Program.AppName).Append(" — ").Append(Lang.T("קודי גיבוי חד-פעמיים לשחזור", "One-time backup recovery codes")).Append("\r\n\r\n");
         for (int i = 0; i < codes.Length; i++) sb.Append($"{i + 1,2}.  ").Append(Pretty(codes[i])).Append("\r\n");

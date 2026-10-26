@@ -1,5 +1,8 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
 using Microsoft.Win32;
 
 namespace OtzariaBridge;
@@ -7,10 +10,10 @@ namespace OtzariaBridge;
 /// <summary>התקנה עצמית ל-%LOCALAPPDATA%\OtzariaBridge, הפעלה אוטומטית, קיצור דרך ופריסת התוספים</summary>
 public static class Installer
 {
-    private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string RunValue = "OtzariaBridge";
-    private const string ShortcutName = "אחת שאלתי.lnk";
-    private static readonly string[] OldShortcutNames = { "גשר אוצריא.lnk", "תורת אסתר.lnk", "תוכנת חסימת אוצריא.lnk" }; // שמות קודמים, עד 3.0.0 ועד שינוי השם
+    internal const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    internal const string RunValue = "OtzariaBridge";
+    private const string ShortcutName = "קיוסק אוצריא.lnk";
+    private static readonly string[] OldShortcutNames = { "גשר אוצריא.lnk", "תורת אסתר.lnk", "תוכנת חסימת אוצריא.lnk" }; // שמות קודמים, עד שינויי השם
 
     public static string InstalledExe => Path.Combine(Config.Dir, "OtzariaBridge.exe");
     public static string PluginsDir => Path.Combine(Config.Dir, "plugins");
@@ -20,15 +23,49 @@ public static class Installer
     public static bool IsRunningFromInstallDir() =>
         string.Equals(Path.GetFullPath(Environment.ProcessPath ?? ""), Path.GetFullPath(InstalledExe), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>פקודת ה-Run של HKLM: ה-exe של השירות (Program Files). --portable: בלי התקנה עצמית מחדש ל-LOCALAPPDATA</summary>
+    internal static string MachineRunCommand => "\"" + HardLock.ServiceExe + "\" --background --portable";
+
+    /// <summary>האם Run של HKLM (שהשירות מגדיר בהתקנה המוגברת) מצביע על ה-exe של השירות</summary>
+    internal static bool MachineRunPointsToService()
+    {
+        try
+        {
+            using var k = Registry.LocalMachine.OpenSubKey(RunKey);
+            return k?.GetValue(RunValue) is string v && v.StartsWith("\"" + HardLock.ServiceExe + "\"", StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// האם ה-exe שעולה בפועל הוא עותק השירות ב-Program Files (שרק מנהל כותב). WHY (S4): במצב הזה --install מעדכן רק
+    /// את LOCALAPPDATA, ולכן עדכון עצמי של הגשר לא מחליף את מה שרץ.
+    /// </summary>
+    internal static bool ServiceOwnsRunningExe() =>
+        HardLock.ServiceInstalled() && File.Exists(HardLock.ServiceExe) && MachineRunPointsToService();
+
+    /// <summary>האם גרסת הקובץ של ServiceExe נמוכה מגרסת התהליך הנוכחי (כלומר "הותקן" לא החליף את מה שיעלה)</summary>
+    internal static bool ServiceExeOlderThanSelf()
+    {
+        try
+        {
+            var svc = UpdateApi.Parse(FileVersionInfo.GetVersionInfo(HardLock.ServiceExe).FileVersion);
+            var self = UpdateApi.Parse(Program.Version);
+            return svc != null && self != null && svc < self;
+        }
+        catch { return false; }
+    }
+
     public static bool HasAutoStart()
     {
         using var k = Registry.CurrentUser.OpenSubKey(RunKey);
-        return k?.GetValue(RunValue) != null;
+        return k?.GetValue(RunValue) != null || MachineRunPointsToService();
     }
 
     public static void Install(bool showMessage)
     {
         Directory.CreateDirectory(Config.Dir);
+        HandleLock.Release(); // X3: נעילת ה-handle (אם התהליך הזה החזיק אותה) לא תחסום החלפת קבצים בהתקנה
 
         if (!IsRunningFromInstallDir())
         {
@@ -47,10 +84,16 @@ public static class Installer
             }
         }
 
-        HardLock.AutoUpdateServiceIfUnlocked(); // #21
+        // כשהשירות מותקן ו-Run של HKLM מצביע על Program Files — הגשר עולה משם (קובץ שרק מנהל כותב), וערך HKCU מיותר ומוסר.
+        // אחרת (בלי שירות) — כמו קודם: HKCU מ-LOCALAPPDATA
+        bool machineRun = HardLock.ServiceInstalled() && File.Exists(HardLock.ServiceExe) && MachineRunPointsToService();
+        HardLock.AutoUpdateServiceIfUnlocked(); // #21 (upstream): self-update של השירות מאמת חתימת ECDSA (SvcUpdate)
 
         using (var k = Registry.CurrentUser.CreateSubKey(RunKey))
-            k.SetValue(RunValue, "\"" + InstalledExe + "\" --background");
+        {
+            if (machineRun) k.DeleteValue(RunValue, false);
+            else k.SetValue(RunValue, "\"" + InstalledExe + "\" --background");
+        }
 
         foreach (string old in OldShortcutNames)
             try { string p = Path.Combine(Path.GetDirectoryName(ShortcutPath)!, old); if (File.Exists(p)) File.Delete(p); } catch { }
@@ -60,12 +103,31 @@ public static class Installer
         int plugins = DeployPlugins();
         bool canInstall = plugins > 0 && OtzariaProtocolRegistered();
 
-        Process.Start(new ProcessStartInfo(InstalledExe, "--background") { UseShellExecute = false, WorkingDirectory = Config.Dir });
+        // WHY (S4): כשהשירות מותקן ההפעלה היא מ-Program Files (ישן). בלי זה "עדכון הצליח" בלי להחליף: מדווחים כשל ברור
+        // (קוד יציאה 3 + הודעה), ולא מעתיקים לשם מהנתיב הזה (העתקה מוגברת מחייבת אימות hash דרך התקנת רכיב ההקשחה).
+        // נקודת חיבור מוצעת לנתיב עדכון אמיתי: op "update-service" ב-pipe של השירות שמקבל נתיב+SHA-256 ומריץ InstallTrust.CopyVerified.
+        bool staleService = machineRun && ServiceExeOlderThanSelf();
+        if (staleService)
+        {
+            Config.Log("install: עותק השירות ב-Program Files ישן מהגרסה המותקנת; לא עודכן. נדרשת התקנת רכיב ההקשחה מחדש כמנהל.");
+            // (Program.cs מחזיר 0 אחרי Install: מוצע שם `return Environment.ExitCode;` כדי שהמתקין השקט יראה כשל)
+            Environment.ExitCode = 3;
+        }
+
+        if (machineRun) Process.Start(new ProcessStartInfo(HardLock.ServiceExe, "--background --portable") { UseShellExecute = false, WorkingDirectory = HardLock.ProgDir });
+        else Process.Start(new ProcessStartInfo(InstalledExe, "--background") { UseShellExecute = false, WorkingDirectory = Config.Dir });
+
+        // X3: אם זה עדכון (UpdateApi.Install הכין גיבוי ומצב ממתין לגשר הזה), ממתינים לסימן תקינות ומשחזרים אם לא הגיע.
+        // WHY כאן: זה התהליך היחיד שחי אחרי שהגשר הישן נהרג ויודע איזה קובץ הוחלף. רק כשהמצב שייך ל-hash של עצמנו.
+        if (!machineRun) WatchUpdateHealth();
 
         if (showMessage)
         {
             string msg = Lang.T(Program.AppFullName + " הותקן ויעלה אוטומטית עם כניסה ל-Windows.",
                 Program.AppFullNameEn + " is installed and will start automatically when you sign in to Windows.");
+            if (staleService)
+                msg += Lang.T("\n\nאזהרה: הגשר מותקן כשירות (Program Files) ולא עודכן. להשלמת העדכון הריצו את קובץ ההתקנה כמנהל או התקינו מחדש את רכיב ההקשחה.",
+                       "\n\nWarning: the bridge runs as a service (Program Files) and was NOT updated. Run the installer as administrator or reinstall the hardening component to finish the update.");
             if (canInstall)
                 msg += Lang.T("\n\nעכשיו אוצריא תיפתח ותציע להתקין את התוספים \"סייר קבצים\" ו\"הגדרות מערכת\" — אשרו בחלון ההתקנה של אוצריא.",
                        "\n\nOtzaria will now open and offer to install the \"File Explorer\" and \"System Settings\" plugins — confirm in Otzaria's install window.");
@@ -85,6 +147,20 @@ public static class Installer
         // גם בהתקנה שקטה (מתקין Inno): מבקשים מאוצריא להתקין את התוספים, ומחכים עד שכולם נשלחו —
         // אחרת התהליך יוצא והחוט ברקע נהרג לפני התוסף השני
         if (canInstall) InstallPluginsInOtzaria(wait: true);
+    }
+
+    private static void WatchUpdateHealth()
+    {
+        try
+        {
+            var st = UpdateRollback.Load(UpdateRollback.DefaultRoot);
+            if (st == null || !string.Equals(st.NewSha, InstallTrust.SelfSha256(), StringComparison.OrdinalIgnoreCase)) return;
+            var v = UpdateRollback.Watch(UpdateRollback.DefaultRoot, InstalledExe, UpdateRollback.DefaultTimeoutSec, () => DateTime.UtcNow, Thread.Sleep,
+                stopNew: () => StopOtherInstances(),
+                startOld: () => Process.Start(new ProcessStartInfo(InstalledExe, "--background") { UseShellExecute = false, WorkingDirectory = Config.Dir }));
+            if (v == UpdateRollback.Verdict.Rollback) Environment.ExitCode = 4;
+        }
+        catch (Exception ex) { Config.Log("update-watch: " + ex.Message); }
     }
 
     /// <summary>האם אוצריא רשמה את סכמת otzaria:// (היא עושה זאת בעלייה הראשונה שלה)</summary>
@@ -145,32 +221,77 @@ public static class Installer
         Process.Start(new ProcessStartInfo("explorer.exe", "\"" + PluginsDir + "\"") { UseShellExecute = true });
     }
 
-    private static void CreateShortcut()
+    // WHY: WScript.Shell מעביר את הנתיב דרך ה-ANSI codepage; כש-ACP אינו עברית 'קיוסק אוצריא.lnk' לא נשמר ("Unable to save shortcut").
+    // IShellLink + IPersistFile.Save הם Unicode מקצה לקצה.
+    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellLinkW
     {
-        var t = Type.GetTypeFromProgID("WScript.Shell");
-        if (t == null) return;
-        dynamic shell = Activator.CreateInstance(t)!;
-        try
-        {
-            dynamic lnk = shell.CreateShortcut(ShortcutPath);
-            lnk.TargetPath = InstalledExe;
-            lnk.Arguments = "--background";
-            lnk.WorkingDirectory = Config.Dir;
-            lnk.Description = Program.AppFullName;
-            lnk.IconLocation = InstalledExe + ",0";
-            lnk.Save();
-            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(lnk);
-        }
-        finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell); }
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder f, int c, IntPtr fd, uint fl);
+        void GetIDList(out IntPtr p);
+        void SetIDList(IntPtr p);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder f, int c);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string s);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder f, int c);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string s);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder f, int c);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string s);
+        void GetHotkey(out short h);
+        void SetHotkey(short h);
+        void GetShowCmd(out int i);
+        void SetShowCmd(int i);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder f, int c, out int i);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string s, int i);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string s, uint r);
+        void Resolve(IntPtr h, uint f);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string s);
     }
 
-    private static void StopOtherInstances()
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    private class ShellLinkCoClass { }
+
+    private static void CreateShortcut()
+    {
+        var link = (IShellLinkW)new ShellLinkCoClass();
+        try
+        {
+            link.SetPath(InstalledExe);
+            link.SetArguments("--background");
+            link.SetWorkingDirectory(Config.Dir);
+            link.SetDescription(Program.AppFullName);
+            link.SetIconLocation(InstalledExe, 0);
+            ((IPersistFile)link).Save(ShortcutPath, true);
+        }
+        finally { Marshal.FinalReleaseComObject(link); }
+    }
+
+    /// <summary>
+    /// WHY (באג VM, שורש "השירות קורס בהסרה"): הלולאה הזו הרגה כל OtzariaBridge.exe, כולל תהליך השירות עצמו (אותו exe, session 0):
+    /// מנהל מורם הרג אותו ישירות, ולא-מנהל קיבל Access denied ואז stop-bridges שגם הוא הרג את השירות. השירות מת באמצע SelfUninstall,
+    /// SCM הפעיל אותו מחדש וההקשחה חזרה. בהסרה (keepService) תהליך של session 0 לא נוגעים בו - הוא מסיים את עצמו.
+    /// </summary>
+    internal static bool ShouldKill(int pid, int sessionId, int selfPid, bool keepService) =>
+        pid != selfPid && !(keepService && sessionId == 0);
+
+    private static void StopOtherInstances(bool keepService = false)
     {
         int self = Environment.ProcessId;
-        foreach (var p in Process.GetProcessesByName("OtzariaBridge"))
+        // גשר שהשירות הפעיל מוגן מהריגה ע"י המשתמש (DACL) כל עוד הנעילה נאכפת. כשהיא לא נאכפת הוא משחרר את ההגנה בתוך ~5 שניות
+        // (HardLock.SyncOwnDacl) — לכן ניסיונות חוזרים, ולא כשל מיידי. נעילה נאכפת = ההתקנה/הסרה לא אמורות לקרות ממילא
+        for (int attempt = 0; attempt < 4; attempt++)
         {
-            if (p.Id == self) continue;
-            try { p.Kill(); p.WaitForExit(3000); } catch { }
+            bool denied = false;
+            foreach (var p in Process.GetProcessesByName("OtzariaBridge"))
+            {
+                int sid = 0; try { sid = p.SessionId; } catch { }
+                if (!ShouldKill(p.Id, sid, self, keepService)) continue;
+                try { p.Kill(); p.WaitForExit(3000); }
+                catch (System.ComponentModel.Win32Exception) { denied = true; }
+                catch { }
+            }
+            if (!denied) return;
+            // גשר שהשירות הפעיל מוגן מהריגה: בקשה מאומתת לשירות (הוא עצמו הורג), מותרת רק כשהנעילה לא נאכפת
+            if (!keepService || attempt == 0) HardLock.Call(new System.Text.Json.Nodes.JsonObject { ["op"] = "stop-bridges" });
+            Thread.Sleep(2000);
         }
     }
 
@@ -201,16 +322,37 @@ public static class Installer
         try { foreach (var f in Directory.GetFiles(Config.Dir, "OtzariaBridge.exe*.old")) try { File.Delete(f); } catch { } } catch { }
     }
 
+    /// <summary>מחכה עד שהשירות נמחק (או לא היה). null = נמחק/לא קיים; אחרת שגיאה</summary>
+    private static string WaitServiceGone()
+    {
+        try
+        {
+            if (!HardLock.ServiceInstalled()) return null;
+            for (int i = 0; i < 480; i++) // עד ~4 דקות: שחרור WinRE/bcdedit איטי
+            {
+                Thread.Sleep(500);
+                if (!HardLock.ServiceInstalled()) return null;
+            }
+            return "השירות לא הוסר בזמן (ייתכן ששחרור הקשחת האתחול נכשל). פרטים ב-" + Path.Combine(HardLock.DataDir, "service.log") + "; אפשר להריץ שוב --uninstall";
+        }
+        catch { return null; }
+    }
+
     /// <summary>מחזיר הודעת שגיאה, או null בהצלחה</summary>
     public static string Uninstall(string password)
     {
+        HandleLock.Release(); // X3: אחרת תיקיית הנתונים/ה-exe נעולים למחיקה (ר' HandleLock)
         // רכיב ההקשחה (אם מותקן) מוסר קודם, עם אותה סיסמה
-        string herr = HardLock.UninstallWithPassword(password);
+        string herr = HardLock.UninstallWithPassword(password, out bool svcAccepted);
         if (herr != null) return herr;
-        string err = Kiosk.ReleaseForUninstall(password);
+        // alreadyVerified רק כשהשירות באמת ענה ok (לא רק "היה מותקן"): אחרת אימות הסיסמה לא דולג (qa-final-a #4)
+        string err = Kiosk.ReleaseForUninstall(password, alreadyVerified: svcAccepted);
         if (err != null) return err;
 
-        StopOtherInstances();
+        // WHY: ההסרה בשירות אסינכרונית; ממתינים שתסתיים (ומאמתים) במקום להכריז הצלחה לפני הזמן
+        string werr = WaitServiceGone();
+        if (werr != null) return werr;
+        StopOtherInstances(keepService: true);
         using (var k = Registry.CurrentUser.OpenSubKey(RunKey, true)) k?.DeleteValue(RunValue, false);
         PdfAssoc.Remove(); // "פתח באמצעות"
         try { if (File.Exists(ShortcutPath)) File.Delete(ShortcutPath); } catch { }
@@ -224,7 +366,7 @@ public static class Installer
         }
         else
         {
-            try { Directory.Delete(Config.Dir, true); } catch (Exception ex) { return "התיקייה לא נמחקה: " + ex.Message; }
+            try { if (Directory.Exists(Config.Dir)) Directory.Delete(Config.Dir, true); } catch (Exception ex) { return "התיקייה לא נמחקה: " + ex.Message; }
         }
         return null;
     }

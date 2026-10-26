@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Net.Http;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -8,8 +10,11 @@ namespace OtzariaBridge;
 
 /// <summary>
 /// בדיקת עדכון והתקנת עדכון: משווה את גרסת הגשר לגרסה האחרונה בעמוד ההוצאות בגיטהאב,
-/// ובבקשה מפורשת מוריד את OtzariaBridge.exe החדש, מאמת את ה-SHA256 מול SHA256SUMS.txt שבהוצאה,
-/// ומריץ אותו עם --install --quiet (המתקין סוגר את הגשר הישן, מחליף את הקובץ ומפעיל מחדש).
+/// ובבקשה מפורשת מוריד את OtzariaBridge.exe החדש ומריץ אותו עם --install --quiet
+/// (המתקין סוגר את הגשר הישן, מחליף את הקובץ ומפעיל מחדש).
+/// שרשרת האמון: SHA256SUMS.txt חתום ב-ECDSA P-256 (SHA256SUMS.txt.sig, base64 של חתימת P1363) מול מפתח
+/// ציבורי שמוטמע כאן (<see cref="PublicKeySpkiBase64"/>, מפתח ייעודי לעדכונים בלבד). אימות hash בלבד
+/// לא מספיק: מי ששולט בחשבון/בטוקן של GitHub שולט גם בקובץ ה-sums. בלי חתימה תקפה: דוחים, תמיד.
 /// </summary>
 public static class UpdateApi
 {
@@ -18,17 +23,27 @@ public static class UpdateApi
     public const string AllReleasesUrl = "https://github.com/" + Repo + "/releases";
     private const string ApiUrl = "https://api.github.com/repos/" + Repo + "/releases?per_page=20";
 
+    /// <summary>
+    /// מפתח ציבורי (SPKI, base64) לאימות חתימת העדכונים. ריק = לא הוגדר מפתח, ואז כל עדכון נדחה (fail-closed).
+    /// יוצרים אותו עם tools\New-UpdateKey.ps1 (הפרטי נשאר בסוד GitHub בשם UPDATE_SIGNING_KEY, לא בריפו).
+    /// </summary>
+    /// <remarks>אפשר כמה מפתחות מופרדים ב-';' לרוטציה (ר' <see cref="VerifySignature"/>).</remarks>
+    public const string PublicKeySpkiBase64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEueF+U0uAtzEeAKnBh6VyQVDYCJ9BGNXDxhtg5MIHk183wBGUkBr0XUAqwhF1nk1ExuhEXTnJxoTQljQkSPgSig==";
+    public const string SumsAssetName = "SHA256SUMS.txt";
+    public const string SigAssetName = "SHA256SUMS.txt.sig";
+
     private static readonly HttpClient Http = Create();
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static DateTime _checked = DateTime.MinValue;
     private static Info _last;
 
-    public record Info(string Current, string Latest, string Tag, bool Newer, string Url, string ExeUrl, string SumsUrl, string Notes);
+    public record Info(string Current, string Latest, string Tag, bool Newer, string Url, string ExeUrl, string SumsUrl, string SigUrl, string Notes, string BridgeVerUrl = null);
 
     /// <summary>
     /// תגית ה-Release בפורק האישי (RELEASE_VERSION.txt, למשל v0.0.5) היא מספור עצמאי של המשתמש,
     /// לא גרסת הגשר עצמה (Program.Version, למשל 3.5.0) - אי אפשר להשוות ביניהן ישירות. לכן ה-CI
     /// מעלה גם קובץ BRIDGE_VERSION.txt עם Program.Version בפועל, וכאן משווים מולו, לא מול התגית.
+    /// הקובץ וגם התגית נכללים בחתום (SHA256SUMS.txt), וגרסת ה-exe עצמה חייבת להיות הגרסה החתומה.
     /// </summary>
     private const string BridgeVersionAssetName = "BRIDGE_VERSION.txt";
 
@@ -57,11 +72,288 @@ public static class UpdateApi
         notes = i.Notes,
     };
 
+    /// <summary>
+    /// WHY: int.Parse על מספר ענק (v99999999999.1) זרק OverflowException מתוך תשובת GitHub/קובץ חתום ופילח את
+    /// הבדיקה (DoS). עכשיו: עד 6 ספרות לכל מקטע, TryParse, וכל כשל = null.
+    /// </summary>
     public static Version Parse(string s)
     {
-        var m = Regex.Match(s ?? "", @"(\d+)\.(\d+)(?:\.(\d+))?");
+        var m = Regex.Match(s ?? "", @"(?<![\d.])(\d{1,6})\.(\d{1,6})(?:\.(\d{1,6}))?(?:\.\d{1,6})?(?!\.?\d)");
         if (!m.Success) return null;
-        return new Version(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : 0);
+        if (!int.TryParse(m.Groups[1].Value, out int a) || !int.TryParse(m.Groups[2].Value, out int b)) return null;
+        int c = 0;
+        if (m.Groups[3].Success && !int.TryParse(m.Groups[3].Value, out c)) return null;
+        return new Version(a, b, c);
+    }
+
+    /// <summary>
+    /// גרסת המפתח החתומה ("# keyver=N", ברירת מחדל 1). הגשר דוחה הוצאה שגרסת המפתח שלה נמוכה מ-<see cref="MinKeyVersion"/>:
+    /// ביטול: מגדילים את MinKeyVersion בגשר חדש וחותמים ממפתח חדש. אחרי שמפתח דלף, הגשרים הישנים עדיין מוגנים רק אם עודכנו.
+    /// </summary>
+    /// <remarks>
+    /// WHY (S4): ברירת מחדל חסר=1 עם Min=1 אומרת שאין ביטול בפועל: תוקף עם מפתח ישן שדלף פשוט משמיט את השורה.
+    /// עכשיו שורת keyver חסרה = 0 (נדחית כשהמינימום >= 1), וה-CI (build.yml) תמיד כותב אותה במפורש.
+    /// נוהל ביטול: (1) מפתח חדש + secret חדש, (2) מעלים כאן MinKeyVersion ל-N+1 ומעלים KEY_VERSION ב-build.yml
+    /// לאותו ערך, (3) משחררים גשר חדש חתום במפתח החדש (גשר ישן לא מכיר את המפתח החדש, ולכן גשר המעבר נחתם במפתח הישן ומכיל
+    /// "ישן;חדש" ב-PublicKeySpkiBase64, ר' רוטציה ב-VerifySignature). ר' docs\SECURITY_NOTES.md.
+    /// </remarks>
+    public const int MinKeyVersion = 1;
+    public static int SignedKeyVersion(string sums)
+    {
+        var m = Regex.Match(sums ?? "", @"^#\s*keyver=(\d{1,6})\s*$", RegexOptions.Multiline);
+        return m.Success && int.TryParse(m.Groups[1].Value, out int v) ? v : 0;
+    }
+
+    // ===== הורדה מוגבלת (S4) =====
+    // WHY: בלי תקרה, הוצאה זדונית/פגומה (או הפניה לשרת אחר) גורמת להורדת קובץ ענק לזיכרון (GetByteArrayAsync) = DoS,
+    // ובלי allowlist browser_download_url יכול להצביע על מארח כלשהו (SSRF/הדלפת IP) עוד לפני אימות החתימה.
+    public const long MaxSmallDownload = 1L << 20;       // sums/sig/BRIDGE_VERSION: 1MB
+    public const long MaxExeDownload = 300L << 20;       // OtzariaBridge.exe (self-contained, single-file): 300MB
+    private static readonly string[] AllowedHosts =
+    {
+        "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com", "github-releases.githubusercontent.com",
+    };
+
+    /// <summary>https בלבד, בלי פורט/משתמש חריגים, ומארח מה-allowlist. ל-github.com גם הנתיב חייב להיות הוצאות הריפו הזה</summary>
+    public static bool IsAllowedDownloadUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return false;
+        if (u.Scheme != Uri.UriSchemeHttps || !u.IsDefaultPort || !string.IsNullOrEmpty(u.UserInfo)) return false;
+        string host = u.IdnHost.ToLowerInvariant();
+        if (!AllowedHosts.Contains(host)) return false;
+        if (host == "github.com")
+            return u.AbsolutePath.StartsWith("/" + Repo + "/releases/download/", StringComparison.OrdinalIgnoreCase);
+        return true;
+    }
+
+    private static readonly HttpClient NoRedirect = CreateNoRedirect();
+    private static HttpClient CreateNoRedirect()
+    {
+        var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromMinutes(10) };
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("OtzariaBridge/" + Program.Version);
+        return c;
+    }
+
+    /// <summary>מוריד עם תקרת גודל (כותרת וגם בפועל), בודק כל קפיצת הפניה מול ה-allowlist (עד 5)</summary>
+    public static async Task<byte[]> DownloadCapped(string url, long maxBytes)
+    {
+        for (int hop = 0; hop < 6; hop++)
+        {
+            if (!IsAllowedDownloadUrl(url)) throw new InvalidOperationException("כתובת הורדה אינה מורשית: " + url);
+            using var res = await NoRedirect.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            if ((int)res.StatusCode is >= 300 and < 400)
+            {
+                var loc = res.Headers.Location;
+                if (loc == null) throw new InvalidOperationException("הפניה בלי יעד");
+                url = new Uri(new Uri(url), loc).ToString();
+                continue;
+            }
+            res.EnsureSuccessStatusCode();
+            if (res.Content.Headers.ContentLength is long cl && cl > maxBytes) throw new InvalidOperationException("הקובץ גדול מהמותר");
+            using var ms = new MemoryStream();
+            await using var st = await res.Content.ReadAsStreamAsync();
+            var buf = new byte[81920]; int n;
+            while ((n = await st.ReadAsync(buf)) > 0)
+            {
+                if (ms.Length + n > maxBytes) throw new InvalidOperationException("הקובץ גדול מהמותר");
+                ms.Write(buf, 0, n);
+            }
+            return ms.ToArray();
+        }
+        throw new InvalidOperationException("יותר מדי הפניות");
+    }
+
+    /// <summary>הוצאה שנבחרה מתוך תשובת GitHub</summary>
+    public record Release(string Tag, Version TagVersion, string Url, string Notes, string ExeUrl, string SumsUrl, string SigUrl, string BridgeVerUrl);
+
+    /// <summary>
+    /// בחירת ההוצאה: לא draft ולא prerelease, והגבוהה ביותר לפי גרסת התגית (הסדר ב-API אינו מובטח).
+    /// WHY: השדה "latest" לא קיים באובייקט release של GitHub, ולכן בחירה שנשענה עליו בחרה בפועל את
+    /// הראשונה ברשימה. תגית בלי מספר גרסה נדלגת.
+    /// </summary>
+    public static Release SelectRelease(string json) => SelectCandidates(json).FirstOrDefault();
+
+    /// <summary>קידומת מותרת ל-html_url של הוצאה (נפתח בדפדפן דרך SS.openUrl בחלון "אודות"): רק עמוד ההוצאות של הריפו הזה</summary>
+    public static bool IsAllowedReleasePage(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps && u.IsDefaultPort && string.IsNullOrEmpty(u.UserInfo) &&
+           u.IdnHost.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
+           u.AbsolutePath.StartsWith("/" + Repo + "/releases", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// כל ההוצאות התקפות (לא draft/prerelease, תגית עם גרסה) בסדר יורד לפי גרסת התגית. html_url שאינו עמוד ההוצאות של הריפו מוחלף ב-null
+    /// (WHY U3: אחרת ה-UI פותח כתובת שרירותית מתשובת רשת).
+    /// </summary>
+    public static List<Release> SelectCandidates(string json)
+    {
+        var list = new List<Release>();
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+        foreach (var rel in doc.RootElement.EnumerateArray())
+        {
+            if (rel.ValueKind != JsonValueKind.Object) continue;
+            string tag = rel.TryGetProperty("tag_name", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
+            var tv = Parse(tag);
+            if (tv == null) continue;
+            if (rel.TryGetProperty("draft", out var d) && d.ValueKind == JsonValueKind.True) continue;
+            if (rel.TryGetProperty("prerelease", out var p) && p.ValueKind == JsonValueKind.True) continue;
+            string exe = null, sums = null, sig = null, bv = null;
+            if (rel.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+                foreach (var a in assets.EnumerateArray())
+                {
+                    string name = a.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+                    string dl = a.TryGetProperty("browser_download_url", out var du) && du.ValueKind == JsonValueKind.String ? du.GetString() : null;
+                    if (name == null || dl == null) continue;
+                    if (!IsAllowedDownloadUrl(dl)) continue; // WHY: מארח/נתיב לא מורשים = כאילו הנכס לא קיים (fail-closed ב-Install)
+                    if (string.Equals(name, "OtzariaBridge.exe", StringComparison.OrdinalIgnoreCase)) exe = dl;
+                    else if (string.Equals(name, SumsAssetName, StringComparison.OrdinalIgnoreCase)) sums = dl;
+                    else if (string.Equals(name, SigAssetName, StringComparison.OrdinalIgnoreCase)) sig = dl;
+                    else if (string.Equals(name, BridgeVersionAssetName, StringComparison.OrdinalIgnoreCase)) bv = dl;
+                }
+            string html = rel.TryGetProperty("html_url", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null;
+            if (!IsAllowedReleasePage(html)) html = null;
+            list.Add(new Release(tag, tv, html,
+                rel.TryGetProperty("body", out var bd) && bd.ValueKind == JsonValueKind.String ? bd.GetString() : null, exe, sums, sig, bv));
+        }
+        return list.OrderByDescending(r => r.TagVersion).ToList();
+    }
+
+    /// <summary>
+    /// ההוצאה הגבוהה ביותר שיש לה sums+sig+bv וחתימתה (על SHA256SUMS) מאומתת מול המפתח, והתגית החתומה תואמת וגרסת המפתח לא בוטלה.
+    /// WHY (U3): בחירה לפי התגית הגבוהה בלבד אפשרה לכל מי שמפרסם הוצאה v999 בלי חתימה (או בחתימה שגויה) לחסום עדכונים לצמיתות (DoS).
+    /// עכשיו הוצאה לא חתומה/פגומה נדלגת ונבחרת הבאה בתור (עד 5 ניסיונות). הורדה נכשלת (רשת) = נדלגת. אין מאומתת = null.
+    /// </summary>
+    public static async Task<Release> SelectVerifiedRelease(string json, Func<string, long, Task<byte[]>> download, string publicKeySpkiBase64, string latestTag = null)
+    {
+        int tried = 0;
+        var cands = SelectCandidates(json);
+        // latest מ-GitHub משמש כמסנן רק אם הוא אכן ברשימה; אחרת (או בלי latest) כל המועמדים
+        if (latestTag != null && cands.Any(c => string.Equals(c.Tag, latestTag, StringComparison.OrdinalIgnoreCase)))
+            cands = cands.Where(c => string.Equals(c.Tag, latestTag, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var r in cands)
+        {
+            if (r.SumsUrl == null || r.SigUrl == null || r.BridgeVerUrl == null || r.ExeUrl == null) continue;
+            if (++tried > 5) break;
+            try
+            {
+                byte[] sums = await download(r.SumsUrl, MaxSmallDownload);
+                string sig = System.Text.Encoding.ASCII.GetString(await download(r.SigUrl, MaxSmallDownload));
+                if (!VerifySignature(sums, sig, publicKeySpkiBase64)) continue;
+                string text = System.Text.Encoding.UTF8.GetString(sums);
+                if (SignedTag(text) != r.Tag || SignedKeyVersion(text) < MinKeyVersion) continue;
+                return r;
+            }
+            catch { /* הורדה/פענוח נכשלו: מועמד זה נדלג */ }
+        }
+        return null;
+    }
+
+    /// <summary>אימות חתימת ECDSA P-256 (SHA-256, פורמט P1363 בגודל 64 בתים, base64) על התוכן. כל כשל = false</summary>
+    public static bool VerifySignature(byte[] data, string sigText, string publicKeySpkiBase64)
+    {
+        try
+        {
+            if (data == null || string.IsNullOrWhiteSpace(sigText) || string.IsNullOrWhiteSpace(publicKeySpkiBase64)) return false;
+            byte[] sig = Convert.FromBase64String(sigText.Trim());
+            // רוטציה: מספר מפתחות מותרים מופרדים ב-';' (ישן + חדש בתקופת מעבר). מספיק אחד תקף.
+            foreach (var k in publicKeySpkiBase64.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                try
+                {
+                    using var ec = ECDsa.Create();
+                    ec.ImportSubjectPublicKeyInfo(Convert.FromBase64String(k), out _);
+                    if (ec.KeySize == 256 && ec.VerifyData(data, sig, HashAlgorithmName.SHA256)) return true;
+                }
+                catch { /* מפתח פגום ברשימה: ממשיכים לבא, לא פותחים */ }
+            }
+            return false;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>hash של קובץ מתוך SHA256SUMS ("hash  name"), או null</summary>
+    public static string FindHash(string sums, string fileName)
+    {
+        foreach (var line in (sums ?? "").Split('\n'))
+        {
+            var m = Regex.Match(line.Trim(), @"^([0-9a-fA-F]{64})\s+\*?(.+)$");
+            if (m.Success && string.Equals(m.Groups[2].Value.Trim(), fileName, StringComparison.OrdinalIgnoreCase))
+                return m.Groups[1].Value.ToLowerInvariant();
+        }
+        return null;
+    }
+
+    /// <summary>התגית שהחתום מצהיר עליה ("# tag=v0.1.5"): קושרת את הקבצים להוצאה אחת ומונעת ערבוב נכסים בין הוצאות</summary>
+    public static string SignedTag(string sums)
+    {
+        var m = Regex.Match(sums ?? "", @"^#\s*tag=(\S+)\s*$", RegexOptions.Multiline);
+        return m.Success ? m.Groups[1].Value : null;
+    }
+
+    public static bool IsPe(byte[] data)
+    {
+        if (data == null || data.Length < 0x40 || data[0] != (byte)'M' || data[1] != (byte)'Z') return false;
+        int pe = BitConverter.ToInt32(data, 0x3C);
+        return pe > 0 && pe + 4 <= data.Length && data[pe] == (byte)'P' && data[pe + 1] == (byte)'E' && data[pe + 2] == 0 && data[pe + 3] == 0;
+    }
+
+    /// <summary>
+    /// כל בדיקות האמון על החבילה, בלי רשת ובלי דיסק. מחזיר את הגרסה החתומה וה-hash של ה-exe, או זורק.
+    /// סדר: חתימה, תגית חתומה = תגית ההוצאה, hash של BRIDGE_VERSION.txt וגרסה גבוהה מהנוכחית, hash ו-PE של ה-exe.
+    /// (גרסת הקובץ של ה-exe מושווית אחר כך מול הגרסה החתומה ב-<see cref="FileVersionMatches"/>.)
+    /// </summary>
+    public static (Version Version, string Sha256) VerifyPackage(byte[] sums, string sigText, string tag, byte[] bridgeVerFile,
+        byte[] exe, string currentVersion, string publicKeySpkiBase64)
+    {
+        static BridgeException Fail(string m) => new("failed", m + " העדכון בוטל.", 500);
+        if (string.IsNullOrWhiteSpace(publicKeySpkiBase64)) throw Fail("לא הוגדר מפתח אימות עדכונים בגשר.");
+        if (!VerifySignature(sums, sigText, publicKeySpkiBase64)) throw Fail("חתימת קובץ האימות של ההוצאה חסרה או אינה תקפה.");
+        string text = System.Text.Encoding.UTF8.GetString(sums);
+        if (SignedTag(text) != tag) throw Fail("התגית החתומה אינה תואמת להוצאה.");
+        if (SignedKeyVersion(text) < MinKeyVersion) throw Fail("גרסת מפתח החתימה בוטלה.");
+        string bvHash = FindHash(text, BridgeVersionAssetName);
+        if (bvHash == null || bridgeVerFile == null || Convert.ToHexString(SHA256.HashData(bridgeVerFile)).ToLowerInvariant() != bvHash)
+            throw Fail("קובץ הגרסה אינו תואם לחתום.");
+        var ver = Parse(System.Text.Encoding.ASCII.GetString(bridgeVerFile).Trim());
+        var cur = Parse(currentVersion);
+        // אי-downgrade: גם הוצאה חתומה ישנה (או חוזרת) לא מתקבלת
+        if (ver == null || cur == null || ver <= cur) throw Fail("הגרסה בהוצאה אינה גבוהה מהגרסה המותקנת.");
+        string exeHash = FindHash(text, "OtzariaBridge.exe");
+        string actual = Convert.ToHexString(SHA256.HashData(exe)).ToLowerInvariant();
+        if (exeHash == null || exeHash != actual) throw Fail("הקובץ שהורד אינו תואם ל-SHA256 החתום.");
+        if (!IsPe(exe)) throw Fail("הקובץ שהורד אינו קובץ הרצה תקין.");
+        return (ver, actual);
+    }
+
+    /// <summary>גרסת הקובץ (FileVersion) של ה-exe חייבת להיות הגרסה החתומה, אחרת זו חבילה אחרת מזו שהוצהרה</summary>
+    public static bool FileVersionMatches(string path, Version expected)
+    {
+        try
+        {
+            var v = Parse(FileVersionInfo.GetVersionInfo(path).FileVersion);
+            return v != null && expected != null && v == expected;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// תיקיית הורדה מוגנת: %LOCALAPPDATA%\OtzariaBridge\update (ההתקנה פר-משתמש), בלי ירושת הרשאות,
+    /// רק המשתמש הנוכחי, SYSTEM ומנהלים. WHY: %TEMP% פתוח לכתיבה לכל תהליך של המשתמש (ולעיתים לאחרים).
+    /// </summary>
+    private static string ProtectedDir()
+    {
+        string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OtzariaBridge", "update");
+        Directory.CreateDirectory(dir);
+        var di = new DirectoryInfo(dir);
+        var ds = di.GetAccessControl();
+        ds.SetAccessRuleProtection(true, false);
+        foreach (var r in ds.GetAccessRules(true, false, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToList()) ds.RemoveAccessRule(r);
+        var inh = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+        foreach (var sid in new[] { WindowsIdentity.GetCurrent().User, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null) })
+            ds.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.FullControl, inh, PropagationFlags.None, AccessControlType.Allow));
+        di.SetAccessControl(ds);
+        // ניקוי שאריות מהורדה קודמת
+        foreach (var f in di.GetFiles()) { try { f.Delete(); } catch { } }
+        return dir;
     }
 
     public static async Task<Info> Check(bool force)
@@ -87,8 +379,8 @@ public static class UpdateApi
                 throw new BridgeException("internal", "בדיקת העדכון נכשלה (אין חיבור לאינטרנט או ש-GitHub לא זמין): " + ex.Message, 502);
             }
 
-            // מועמד יחיד: ה-Release האחרון (latest=true) בפורק האישי, לא "הכי גבוה לפי תגית" - כי
-            // התגית כאן היא מספור עצמאי (RELEASE_VERSION.txt), לא גרסת הגשר, ולכן לא בר-השוואה כסדר.
+            // 1.0.5 (מהמפתח): ה-Release שמסומן ב-GitHub כ-latest קובע, לא "הגבוה לפי מספר" (בריפו יש הוצאות ישנות ממספור 3.x).
+            // כאן זה רק מסנן על המועמדים: ההוצאה עדיין חייבת לעבור אימות חתימה מלא ב-SelectVerifiedRelease (fail-closed).
             string latestTag = null;
             try
             {
@@ -97,57 +389,25 @@ public static class UpdateApi
                 using var lres = await Http.SendAsync(lreq);
                 if (lres.IsSuccessStatusCode)
                     using (var ld = JsonDocument.Parse(await lres.Content.ReadAsStringAsync()))
-                        if (ld.RootElement.TryGetProperty("tag_name", out var lt)) latestTag = lt.GetString();
+                        if (ld.RootElement.ValueKind == JsonValueKind.Object && ld.RootElement.TryGetProperty("tag_name", out var lt) && lt.ValueKind == JsonValueKind.String)
+                            latestTag = lt.GetString();
             }
-            catch { /* בלי latest — נופלים לחדש ביותר לפי זמן */ }
-            if (latestTag != null && !json.Contains("\"" + latestTag + "\"")) latestTag = null;
+            catch { /* בלי latest: ממשיכים לפי הגבוהה שמאומתת */ }
 
-            // 1.0.4: רשימת ה-Releases של GitHub אינה כוללת שדה "latest", והסדר לפי זמן יצירה —
-            // Release עזר (bridge-min, build-next) שנוצר באותה שנייה הגיע לפעמים ראשון, בלי OtzariaBridge.exe,
-            // והעדכון נכשל. עכשיו: רק Release עם OtzariaBridge.exe ותגית גרסה, והגבוה מביניהם.
-            string bestTag = null, bestUrl = null, exeUrl = null, sumsUrl = null, bridgeVerUrl = null, notes = null;
-            Version bestV = null;
-            using (var doc = JsonDocument.Parse(json))
-            {
-                foreach (var rel in doc.RootElement.EnumerateArray())
-                {
-                    string tag = rel.TryGetProperty("tag_name", out var t) ? t.GetString() : null;
-                    if (tag == null) continue;
-                    if (rel.TryGetProperty("draft", out var d) && d.GetBoolean()) continue;
-                    if (rel.TryGetProperty("prerelease", out var p) && p.GetBoolean()) continue;
-                    var tv = Regex.IsMatch(tag, @"^[vV]?\d+\.\d+") ? Parse(tag) : null;
-                    if (tv == null) continue;
-                    string ex = null, su = null, bv = null;
-                    if (rel.TryGetProperty("assets", out var assets))
-                        foreach (var a in assets.EnumerateArray())
-                        {
-                            string name = a.GetProperty("name").GetString();
-                            string dl = a.GetProperty("browser_download_url").GetString();
-                            if (string.Equals(name, "OtzariaBridge.exe", StringComparison.OrdinalIgnoreCase)) ex = dl;
-                            if (string.Equals(name, "SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase)) su = dl;
-                            if (string.Equals(name, BridgeVersionAssetName, StringComparison.OrdinalIgnoreCase)) bv = dl;
-                        }
-                    if (ex == null) continue;
-                    // 1.0.5: ה-Release שמסומן ב-GitHub כ-latest קובע; אחרת החדש ביותר לפי זמן (הרשימה ממוינת מהחדש לישן).
-                    // לא לפי המספר הגבוה — בריפו יש Releases ישנים ממספור קודם (3.x) שאינם חדשים יותר.
-                    if (latestTag != null ? !string.Equals(tag, latestTag, StringComparison.OrdinalIgnoreCase) : bestV != null) continue;
-                    bestV = tv; bestTag = tag; exeUrl = ex; sumsUrl = su; bridgeVerUrl = bv;
-                    bestUrl = rel.TryGetProperty("html_url", out var u) ? u.GetString() : null;
-                    notes = rel.TryGetProperty("body", out var bd) ? bd.GetString() : null;
-                }
-            }
-
+            // WHY (U3): בוחרים הוצאה מאומתת (עם OtzariaBridge.exe, חתימה, תגית ומפתח תקפים), לא פשוט את הגבוהה ביותר
+            var rel = await SelectVerifiedRelease(json, DownloadCapped, PublicKeySpkiBase64, latestTag);
             Version latestBridgeVer = null;
-            if (bridgeVerUrl != null)
+            if (rel?.BridgeVerUrl != null)
             {
-                try { latestBridgeVer = Parse((await Http.GetStringAsync(bridgeVerUrl)).Trim()); }
+                // להצגה בלבד: ההחלטה האמיתית (ב-Install) נשענת על הגרסה החתומה, לא על ההורדה הזו
+                try { latestBridgeVer = Parse(System.Text.Encoding.ASCII.GetString(await DownloadCapped(rel.BridgeVerUrl, MaxSmallDownload)).Trim()); }
                 catch { /* ההשוואה תיכשל בבטחה (לא "newer") אם זה נכשל */ }
             }
             // במאגר הראשי תגית ה-Release היא גרסת הגשר עצמה (v3.7.0) - אם אין BRIDGE_VERSION.txt משווים מול התגית
-            if (latestBridgeVer == null && bestTag != null) latestBridgeVer = Parse(bestTag.TrimStart('v', 'V'));
+            if (latestBridgeVer == null && rel?.Tag != null) latestBridgeVer = Parse(rel.Tag.TrimStart('v', 'V'));
             var cur = Parse(Program.Version);
-            _last = new Info(Program.Version, latestBridgeVer?.ToString(3), bestTag, latestBridgeVer != null && cur != null && latestBridgeVer > cur,
-                bestUrl ?? ReleasesUrl, exeUrl, sumsUrl, notes);
+            _last = new Info(Program.Version, latestBridgeVer?.ToString(3), rel?.Tag, latestBridgeVer != null && cur != null && latestBridgeVer > cur,
+                rel?.Url ?? ReleasesUrl, rel?.ExeUrl, rel?.SumsUrl, rel?.SigUrl, rel?.Notes, rel?.BridgeVerUrl);
             _checked = DateTime.UtcNow;
             return _last;
         }
@@ -158,43 +418,53 @@ public static class UpdateApi
     public static async Task<object> Install()
     {
         if (Kiosk.IsActive) throw BridgeException.Locked("עדכון הגשר אינו זמין בזמן נעילה. בטלו את הנעילה, עדכנו, והפעילו אותה שוב.");
+        // WHY (S4): כשהשירות מותקן, ה-exe שרץ הוא זה שב-Program Files (רק מנהל כותב). --install של המתקין מעדכן רק את עותק
+        // LOCALAPPDATA, והגשר ממשיך לעלות מ-Program Files: "עדכון מצליח" בלי להחליף כלום. עד שיהיה נתיב עדכון דרך השירות
+        // (op "update-service" ב-pipe, ר' docs\SECURITY_NOTES.md) מציגים כשל ברור במקום הצלחה מדומה.
+        if (Installer.ServiceOwnsRunningExe())
+            throw new BridgeException("failed", "הגשר מותקן כשירות (Program Files). עדכון אוטומטי אינו נתמך במצב זה: הריצו את קובץ ההתקנה העדכני כמנהל (או הסירו והתקינו מחדש את רכיב ההקשחה).", 409);
         var info = await Check(true);
         if (!info.Newer) return new { started = false, message = "הגשר מעודכן (" + info.Current + ")" };
         if (info.ExeUrl == null) throw BridgeException.NotFound("בהוצאה " + info.Tag + " אין קובץ OtzariaBridge.exe");
+        // fail-closed: בלי sums, חתימה וקובץ גרסה - לא מורידים בכלל
+        if (info.SumsUrl == null || info.SigUrl == null || info.BridgeVerUrl == null)
+            throw new BridgeException("failed", "בהוצאה " + info.Tag + " חסרים קבצי אימות חתומים (SHA256SUMS.txt, SHA256SUMS.txt.sig, BRIDGE_VERSION.txt). העדכון בוטל.", 500);
 
-        string dir = Path.Combine(Path.GetTempPath(), "OtzariaBridge-update");
-        Directory.CreateDirectory(dir);
-        string exe = Path.Combine(dir, "OtzariaBridge.exe");
-        byte[] data;
-        try { data = await Http.GetByteArrayAsync(info.ExeUrl); }
+        byte[] sums, bv, data; string sig;
+        try
+        {
+            sums = await DownloadCapped(info.SumsUrl, MaxSmallDownload);
+            sig = System.Text.Encoding.ASCII.GetString(await DownloadCapped(info.SigUrl, MaxSmallDownload));
+            bv = await DownloadCapped(info.BridgeVerUrl, MaxSmallDownload);
+            data = await DownloadCapped(info.ExeUrl, MaxExeDownload);
+        }
         catch (Exception ex) { throw new BridgeException("internal", "ההורדה נכשלה: " + ex.Message, 502); }
 
-        string hash = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
+        var (ver, hash) = VerifyPackage(sums, sig, info.Tag, bv, data, Program.Version, PublicKeySpkiBase64);
 
-        // אימות חובה (fail-closed): בלי SHA256SUMS תקין ותואם — לא מריצים דבר.
-        // קודם היה "אם יש sums ותואם"; חוסר קובץ או regex שלא תפס → ריצה בלי אימות.
-        if (info.SumsUrl == null)
-            throw new BridgeException("failed", "בהוצאה " + info.Tag + " אין SHA256SUMS.txt לאימות. העדכון בוטל.", 500);
-        string sums;
-        try { sums = await Http.GetStringAsync(info.SumsUrl); }
-        catch (Exception ex) { throw new BridgeException("internal", "הורדת קובץ האימות נכשלה: " + ex.Message, 502); }
-        var m = Regex.Match(sums, @"([0-9a-fA-F]{64})\s+\*?OtzariaBridge\.exe", RegexOptions.IgnoreCase);
-        if (!m.Success)
-            throw new BridgeException("failed", "קובץ האימות של ההוצאה אינו בפורמט צפוי. העדכון בוטל.", 500);
-        if (!string.Equals(m.Groups[1].Value, hash, StringComparison.OrdinalIgnoreCase))
-            throw new BridgeException("failed", "הקובץ שהורד אינו תואם לחתימת ה-SHA256 שבהוצאה. העדכון בוטל.", 500);
-
+        string dir = ProtectedDir();
+        string exe = Path.Combine(dir, "OtzariaBridge.exe");
         await File.WriteAllBytesAsync(exe, data);
 
-        // מניעת TOCTOU: תיקיית הזמנית ציבורית, אז מאמתים מחדש את הקובץ שעל הדיסק רגע לפני ההרצה —
-        // כך אין חלון שבו תהליך מקומי מחליף את ה-exe בין הכתיבה להרצה.
-        string onDisk = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(exe))).ToLowerInvariant();
-        if (!string.Equals(onDisk, hash, StringComparison.OrdinalIgnoreCase))
-            throw new BridgeException("failed", "הקובץ שנכתב לדיסק שונה מהמאומת. העדכון בוטל.", 500);
-        Config.Log("update: " + info.Current + " -> " + info.Latest + " sha256=" + hash);
+        // מניעת TOCTOU: מחזיקים את הקובץ פתוח לקריאה בלבד (FileShare.Read) - אף תהליך אחר לא יכול לכתוב/למחוק/
+        // להחליף אותו כל עוד הידית פתוחה - ומאמתים hash וגרסה דרכה, רגע לפני ההרצה.
+        using (var lk = new FileStream(exe, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            string onDisk = Convert.ToHexString(await SHA256.HashDataAsync(lk)).ToLowerInvariant();
+            if (!string.Equals(onDisk, hash, StringComparison.OrdinalIgnoreCase))
+                throw new BridgeException("failed", "הקובץ שנכתב לדיסק שונה מהמאומת. העדכון בוטל.", 500);
+            if (!FileVersionMatches(exe, ver))
+                throw new BridgeException("failed", "גרסת הקובץ אינה הגרסה החתומה. העדכון בוטל.", 500);
+            Config.Log("update: " + info.Current + " -> " + ver.ToString(3) + " tag=" + info.Tag + " sha256=" + hash);
 
-        // המתקין החדש סוגר את הגשר הזה, מעתיק את עצמו ומפעיל מחדש
-        Process.Start(new ProcessStartInfo(exe, "--install --quiet") { UseShellExecute = false, WorkingDirectory = dir });
-        return new { started = true, version = info.Latest, sha256 = hash };
+            // X3: גיבוי הגרסה המותקנת + מצב ממתין לפני שהמתקין מחליף; המתקין ישחזר אם הגרסה החדשה לא מדווחת תקינות.
+            // WHY: HandleLock משוחרר כדי שההחלפה לא תיחסם; Kiosk.IsActive כבר נבדק לעיל (נעילה פעילה = אין עדכון).
+            HandleLock.Release();
+            UpdateRollback.Prepare(UpdateRollback.DefaultRoot, Installer.InstalledExe, hash, ver.ToString(3), Program.Version, DateTime.UtcNow);
+
+            // המתקין החדש סוגר את הגשר הזה, מעתיק את עצמו ומפעיל מחדש
+            Process.Start(new ProcessStartInfo(exe, "--install --quiet") { UseShellExecute = false, WorkingDirectory = dir });
+        }
+        return new { started = true, version = ver.ToString(3), sha256 = hash };
     }
 }

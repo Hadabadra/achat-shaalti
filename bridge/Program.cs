@@ -26,6 +26,13 @@ public static class Program
 
     [DllImport("kernel32.dll")] private static extern bool AttachConsole(int pid);
 
+    /// <summary>
+    /// יציאה כשה-mutex תפוס. גשר שהשירות הפעיל לא יוצא: השירות כבר קבע (לפי נתיב) שאין גשר אמיתי בסשן, ולכן mutex תפוס הוא
+    /// תהליך זר שתפס את השם מראש (mutex squat) ולא מופע לגיטימי. WHY: אחרת כל תהליך משתמש היה מונע מהגשר לעלות בנעילה.
+    /// מופע כפול של גשר שהמשתמש הפעיל — עדיין יוצא כמו קודם
+    /// </summary>
+    internal static bool ShouldExitOnMutex(bool first, bool fromService) => !first && !fromService;
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -64,32 +71,45 @@ public static class Program
             if (Has("--unlock"))
             {
                 AttachConsole(-1);
-                bool ok = Kiosk.EmergencyUnlock(Arg("--unlock") ?? "");
-                ok = HardLock.EmergencyDisable(Arg("--unlock") ?? "") || ok;
+                // S1 ממצא 4: קוד השחזור מ-stdin/הקלדה מוסתרת (שורת פקודה נחשפת לכל משתמש). "--unlock CODE" נשאר לתאימות, עם אזהרה
+                string code = CliSecret.Resolve(args, "--unlock",
+                    Lang.T("קוד שחזור: ", "Recovery code: "),
+                    Lang.T("אזהרה: קוד בשורת הפקודה נחשף לתהליכים אחרים. העדיפו --unlock (בלי ערך) או --unlock - עם stdin.",
+                           "Warning: a code on the command line is visible to other processes. Prefer --unlock with no value, or --unlock - with stdin."));
+                bool ok = Kiosk.EmergencyUnlock(code);
+                ok = HardLock.EmergencyDisable(code) || ok;
                 Console.WriteLine(ok ? Lang.T("הנעילה בוטלה.", "Lock mode turned off.") : Lang.T("קוד שחזור שגוי.", "Wrong recovery code."));
                 return ok ? 0 : 2;
             }
             if (Has("--uninstall"))
             {
                 AttachConsole(-1);
-                string err = Installer.Uninstall(Arg("--password"));
+                // S1 ממצא 4: כמו --unlock: סיסמה מ-stdin/הקלדה מוסתרת; "--password X" נשאר לתאימות עם אזהרה
+                string pwd = CliSecret.Resolve(args, "--password",
+                    Lang.T("סיסמה: ", "Password: "),
+                    Lang.T("אזהרה: סיסמה בשורת הפקודה נחשפת לתהליכים אחרים. העדיפו --password (בלי ערך) או --password - עם stdin.",
+                           "Warning: a password on the command line is visible to other processes. Prefer --password with no value, or --password - with stdin."));
+                string err = Installer.Uninstall(pwd);
                 Console.WriteLine(err ?? Lang.T("הגשר הוסר.", "The bridge was removed."));
                 return err == null ? 0 : 2;
             }
             if (Has("--install") || (!Installer.IsRunningFromInstallDir() && !Has("--portable")))
             {
                 Installer.Install(showMessage: !Has("--quiet"));
-                return 0;
+                // WHY (T1): Install מסמן Environment.ExitCode=3 (שירות ישן שלא הוחלף); בלי החזרה כאן המתקין השקט ראה תמיד הצלחה
+                return Environment.ExitCode;
             }
 
             // לפני הכול: אם אין נעילה פעילה — שולחן העבודה חייב לעלות (בעיה #8)
             Kiosk.BootGuard();
 
+            InstallTrust.CaptureSelf(); // גיבוב ה-exe הרץ נתפס עכשיו (לאימות התקנה מוגברת מאוחרת), לפני שמשתמש יספיק להחליף את הקובץ
+
             // "פתח באמצעות ← צופה PDF+OCR": הקובץ נכנס לתור ואוצריא נפתחת בתוסף; אם הגשר כבר רץ — יוצאים, אחרת ממשיכים לעלות כרגיל
             if (Has("--open-pdf")) PdfAssoc.Enqueue(Arg("--open-pdf"));
 
             using var mutex = new Mutex(true, @"Local\OtzariaBridge", out bool first);
-            if (!first) return 0;
+            if (ShouldExitOnMutex(first, Has("--from-service"))) return 0;
             Installer.CleanupOldExe();
 
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
@@ -106,6 +126,8 @@ public static class Program
             Kiosk.RestoreOnStartup();
             HardLock.StartSync();
             Kiosk.StartScheduler();
+            UpdateRollback.StartHealthReporter(); // X3 (נקודת חיבור): סימן תקינות אחרי עדכון
+            HandleLock.StartSync();               // X3 (נקודת חיבור): handle ללא FILE_SHARE_DELETE בזמן נעילה
             Zmanim.StartAlerts(); // #33
             LockScreenImage.Start(); // משוב 15.10
             Saver.Start(); // D2+D3
@@ -138,17 +160,24 @@ public static class Config
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OtzariaBridge");
     public static string FilePath => Path.Combine(Dir, "config.json");
 
+    /// <summary>true כש-config.json וגם הגיבוי לא נקראו (הגדרות ריקות בפועל). מי שנשען על "ריק = לא נעול" צריך לדעת (ר' StatusNode)</summary>
+    public static volatile bool CorruptNoBackup;
+
     private static JsonObject Data
     {
         get
         {
             if (_data != null) return _data;
-            try
+            // WHY (qa-final-a #11): קובץ חתוך/ריק (הפסקת חשמל) לא מפורש יותר בשקט כ"הגדרות ריקות" (kiosk.active=false, בלי סיסמה). קודם גיבוי (.bak),
+            // ואם גם הוא פגום: דגל CorruptNoBackup, והעותק הפגום נשמר ל-.corrupt לפני שה-Save הבא דורס אותו
+            _data = StateStore.Read(FilePath, out var st, out bool restored);
+            if (restored) Log("config: config.json פגום/חסר; שוחזר מ-config.json.bak");
+            if (st == StateLoad.Corrupt)
             {
-                if (File.Exists(FilePath))
-                    _data = JsonNode.Parse(File.ReadAllText(FilePath)) as JsonObject;
+                CorruptNoBackup = true;
+                try { File.Copy(FilePath, FilePath + ".corrupt", true); } catch { }
+                Log("config: config.json וגם הגיבוי פגומים — מתחילים מהגדרות ריקות, העותק הפגום נשמר ב-config.json.corrupt");
             }
-            catch { }
             return _data ??= new JsonObject();
         }
     }
@@ -205,6 +234,12 @@ public static class Config
         lock (Gate) { Data.Remove(key); }
     }
 
+    /// <summary>עותק עמוק של ההגדרות הנוכחיות (לחתימה/אימות ConfigSeal בלי לחשוף את האובייקט המשותף)</summary>
+    public static JsonObject Snapshot()
+    {
+        lock (Gate) { return (JsonObject)Data.DeepClone(); }
+    }
+
     public static void Reload()
     {
         lock (Gate) { _data = null; }
@@ -219,10 +254,9 @@ public static class Config
     {
         lock (Gate)
         {
-            Directory.CreateDirectory(Dir);
-            string tmp = FilePath + ".tmp";
-            File.WriteAllText(tmp, Data.ToJsonString(SaveOptions));
-            File.Move(tmp, FilePath, true);
+            // אטומי: זמני + Flush(true) + גיבוי של התקין האחרון + החלפה (כמו hardlock.json)
+            StateStore.WriteAtomic(FilePath, Data.ToJsonString(SaveOptions));
+            CorruptNoBackup = false;
         }
     }
 
