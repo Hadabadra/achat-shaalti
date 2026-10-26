@@ -120,13 +120,13 @@ jobs:
         run: dotnet publish bridge/OtzariaBridge.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o out
 
       # ללא choco בלתי נעול: מורידים גרסה מסוימת ישירות ממאגר הפרויקט ומאמתים SHA256 מוצמד לפני ההרצה.
-      # ה-hash חושב מהקובץ הרשמי innosetup-6.4.3.exe (https://github.com/jrsoftware/issrc/releases/tag/is-6_4_3);
+      # ה-hash חושב מהקובץ הרשמי innosetup-6.7.3.exe (https://github.com/jrsoftware/issrc/releases/tag/is-6_7_3);
       # לאימות עצמאי השוו מול jrsoftware.org לפני שינוי.
       - name: התקנת Inno Setup (גרסה מוצמדת)
         shell: pwsh
         env:
-          IS_VERSION: "6.4.3"
-          IS_SHA256: f3c42116542c4cc57263c5ba6c4feabfc49fe771f2f98a79d2f7628b8762723b
+          IS_VERSION: "6.7.3"
+          IS_SHA256: 9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732
         run: |
           $f = Join-Path $env:RUNNER_TEMP "innosetup.exe"
           Invoke-WebRequest "https://github.com/jrsoftware/issrc/releases/download/is-$($env:IS_VERSION -replace '\.','_')/innosetup-$($env:IS_VERSION).exe" -OutFile $f
