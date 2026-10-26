@@ -168,7 +168,7 @@ jobs:
         run: |
           $setup = Get-ChildItem installer\Output\*.exe | Select-Object -First 1 -ExpandProperty FullName
           $files = @($setup, "out/OtzariaBridge.exe", "bridge/plugins/system-settings.otzplugin", "bridge/plugins/file-explorer.otzplugin", "BRIDGE_VERSION.txt")
-          $lines = @("# tag=$($env:TAG)", "# keyver=$($env:KEY_VERSION)") + (foreach ($f in $files) { "{0}  {1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) })
+          $lines = @("# tag=$($env:TAG)", "# keyver=$($env:KEY_VERSION)") + @($(foreach ($f in $files) { "{0}  {1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) }))
           $lines | Set-Content SHA256SUMS.txt -Encoding ascii
           Get-Content SHA256SUMS.txt
 
