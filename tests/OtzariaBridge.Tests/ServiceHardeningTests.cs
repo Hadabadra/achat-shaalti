@@ -93,6 +93,9 @@ public class ServiceHardeningTests
     [Fact]
     public void Protected_child_denies_terminate_write_thread_and_dac_but_allows_query()
     {
+        // מורם עם SeDebugPrivilege (כמו runner של CI): OpenProcess עוקף כל DACL, ולכן הבדיקה לא מעידה על דבר בסביבה כזו
+        if (new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent())
+                .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)) return;
         // includeAdmins:false — כך שהבדיקה תקפה גם כשהיא רצה מורמת (אחרת ACE של Administrators נותן גישה למי שמריץ)
         string sddl = ProcessDacl.Sddl(ProcessDacl.UserProcessMask, true, includeAdmins: false);
         bool ok = Native.Launch(IntPtr.Zero, "cmd.exe /c ping -n 8 127.0.0.1 >nul", null, true, out int pid, out IntPtr hProc,
